@@ -9,6 +9,7 @@ import type { AuthoredStoryTime, EntityId, Fact, StoryTimestamp } from './entity
 import type { FrequencyProfile } from './frequency.js';
 import type { GameDialogueChoice } from './game-dialogue.js';
 import type { GreyLine } from './grey-line.js';
+import type { KnowledgeTransaction, RuntimeKnowledgeTransaction } from './knowledge.js';
 import type { NarrativeChecklist } from './narrative-checklist.js';
 import type {
   AbsentApparatus,
@@ -20,9 +21,10 @@ import type {
   SurfaceMode,
   VoiceDissonance,
 } from './narrative-techniques.js';
-import type { RelationshipTransaction } from './relationship.js';
-import type { RuleEffectEntry } from './rule.js';
+import type { RelationshipEffect } from './relationship.js';
+import type { RuleTransaction } from './rule.js';
 import type { SourceContext } from './source-context.js';
+import type { ThreadTransaction } from './thread.js';
 
 // ——— Narrative Event (§7.4.1) ———
 
@@ -58,11 +60,14 @@ export interface NarrativeEvent {
   postconditions: Fact[];
   /** Event-local player choices leading to child game-tree nodes. */
   choices?: GameDialogueChoice[];
-  threadProgress: ThreadProgressEntry[];
+  /** Catalog-checked thread transactions — normalized once by the mapper. */
+  threadProgress: ThreadTransaction[];
   greyLines?: GreyLine[];
   foreshadowing: ForeshadowEntry[];
-  relationshipEffects: RelationshipTransaction[];
-  ruleEffects: RuleEffectEntry[];
+  relationshipEffects: RelationshipEffect[];
+  /** Normalized knowledge effects; absent when the event authors none. */
+  knowledgeTransactions?: RuntimeKnowledgeTransaction[];
+  ruleEffects: RuleTransaction[];
   styleGuidance?: StyleGuidance;
   source: 'event_file' | 'branch_point' | 'system';
   /** Explicit predecessor events injected by trusted internal compilation. */
@@ -133,21 +138,6 @@ export interface ForeshadowEntry {
   thread?: string;
 }
 
-export interface RelationshipChange {
-  participants: [EntityId, EntityId];
-  effect: 'establish' | 'change' | 'dissolve' | 'reinforce' | 'complicate';
-  direction: string;
-  newState?: {
-    type: string;
-    intensity: number;
-  };
-}
-
-// ——— STATE-2 RelationshipTransaction (replaces RelationshipChange) ———
-// RelationshipChange is kept as a backward-compat type; the EntityMapper
-// converts it to RelationshipTransaction at load time.
-// Binary relationships are a specialization of n-ary (2 members, role='member').
-
 export type {
   DimensionScope,
   DimensionState,
@@ -159,16 +149,20 @@ export type {
   IdentityTransitionCarryEntry,
   Membership,
   MembershipId,
+  RelationshipDeclaration,
+  RelationshipEffect,
   RelationshipId,
   RelationshipIdentityTransitionGroup,
   RelationshipRoleDefinition,
   RelationshipRuntimeState,
   RelationshipTransaction,
+  RelationshipTypeCatalog,
   RelationshipTypeDefinition,
 } from './relationship.js';
 // ——— STATE-5 ThreadTransaction ———
-// ThreadProgressEntry is kept as a backward-compat type; the replay engine
-// converts it to ThreadTransaction at application time.
+// ThreadProgressEntry remains the EventFile wire projection; the mapper
+// normalizes it once into catalog-checked ThreadTransaction values, so
+// NarrativeEvent.threadProgress is never a second state source.
 export type {
   GoalLifecycle,
   GoalState,
@@ -279,6 +273,8 @@ export interface EventFile {
     progressAfter: number;
     progressTotal: number;
   }>;
+  /** Explicit knowledge writes, information acts, and common-ground effects. */
+  knowledgeTransactions?: KnowledgeTransaction[];
   /** Grey line motif tracking entries */
   greyLines?: GreyLine[];
   /** Foreshadowing entries */
@@ -288,22 +284,10 @@ export interface EventFile {
     targetRevealChapter: number;
     thread?: string;
   }>;
-  /** Relationship effects */
-  relationshipEffects?: Array<{
-    participants: [string, string];
-    effect: 'establish' | 'change' | 'dissolve' | 'reinforce' | 'complicate';
-    direction: string;
-    newState?: {
-      type: string;
-      intensity: number;
-    };
-  }>;
-  /** Rule effects */
-  ruleEffects?: Array<{
-    rule: string;
-    effect: 'reinforce' | 'weaken' | 'introduce_exception' | 'nullify';
-    evidence: string;
-  }>;
+  /** Canonical relationship effects. */
+  relationshipEffects?: RelationshipEffect[];
+  /** Rule transactions */
+  ruleEffects?: RuleTransaction[];
   /** Entities introduced by this event */
   introduces?: Array<{
     type: 'character' | 'location' | 'item' | 'concept';

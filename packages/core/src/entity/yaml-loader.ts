@@ -46,6 +46,11 @@ export function readYamlFile<T>({
   return parsed.data;
 }
 
+/**
+ * Read only immediate YAML children of a logical directory. Canonical
+ * declaration directories are intentionally not recursive: nested/legacy
+ * paths must not silently become source inputs.
+ */
 export function readYamlFilesInDir<T>(
   dirPath: string,
   schema: ZodType<T>,
@@ -53,18 +58,21 @@ export function readYamlFilesInDir<T>(
 ): T[] {
   const prefix = dirPath.endsWith('/') ? dirPath : `${dirPath}/`;
   return snapshot.documents
-    .filter(
-      (document) =>
-        document.logicalPath.startsWith(prefix) && /\.ya?ml$/i.test(document.logicalPath),
-    )
+    .filter((document) => {
+      if (!document.logicalPath.startsWith(prefix) || !/\.ya?ml$/i.test(document.logicalPath))
+        return false;
+      return !document.logicalPath.slice(prefix.length).includes('/');
+    })
     .sort((a, b) => a.logicalPath.localeCompare(b.logicalPath))
     .map((document) => readYamlFile({ logicalPath: document.logicalPath, schema, snapshot }))
     .filter((value): value is T => value !== null);
 }
 
-export function loadProjectConfig(snapshot: ProjectSourceSnapshotV1): ProjectConfig | null {
+export function loadProjectConfig(snapshot: ProjectSourceSnapshotV1): ProjectConfig {
   const document = documentAt(snapshot, 'nova.yaml');
-  if (!document) return null;
+  if (!document) {
+    throw new ConfigError('Required YAML file is missing', { path: 'nova.yaml' });
+  }
   let value: unknown;
   try {
     value = YAML.parse(document.content);

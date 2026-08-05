@@ -50,6 +50,57 @@ function main() {
   const charsDir = mkdir(defsDir, 'characters');
   const chDir = mkdir(projDir, 'chapters', 'chapter_01');
 
+  // Required catalog roots for the accepted source topology.
+  writeYAML(path.join(defsDir, 'entity-types.yaml'), {
+    types: {
+      character: {
+        typeId: 'character',
+        kind: 'character',
+        attributes: {
+          lifecycle: {
+            attributeId: 'lifecycle',
+            valueType: 'string',
+            requiredAt: 'introduction',
+            writePolicy: 'lifecycle_managed',
+            allowedLifecycleStates: ['active', 'inactive', 'retired'],
+            unsetAllowed: false,
+            semanticRole: 'lifecycle',
+          },
+        },
+        lifecyclePolicy: {
+          allowedTransitions: [
+            ['active', 'inactive'],
+            ['active', 'retired'],
+            ['inactive', 'active'],
+            ['inactive', 'retired'],
+          ],
+        },
+        referenceCapabilities: { defaultEligibility: 'live' },
+        typedInvariants: [],
+      },
+    },
+  });
+  writeYAML(path.join(defsDir, 'thread-types.yaml'), {
+    types: {
+      primary: {
+        typeId: 'primary',
+        description: 'Primary narrative thread type',
+        allowedPhases: ['opening', 'development', 'resolution'],
+        lifecyclePolicy: { reopenPolicy: 'forbidden' },
+        timeDomain: 'story',
+        stableGoals: [],
+        stableMilestones: [],
+      },
+    },
+  });
+  writeYAML(path.join(defsDir, 'propositions.yaml'), {
+    version: 1,
+    propositions: {},
+    dependencyGraph: {},
+  });
+  writeYAML(path.join(defsDir, 'relationship-types.yaml'), { types: {} });
+  writeYAML(path.join(defsDir, 'rule-types.yaml'), { types: {} });
+
   // Extract all unique character names from the story text using simple heuristics
   const charNames = new Set();
   const namePattern = /\b([A-Z][a-z]+)\b/g;
@@ -123,15 +174,17 @@ function main() {
     ],
     threads: [
       {
-        id: 'T1',
+        threadId: 'T1',
         name: 'Causal Chain',
-        type: 'primary',
+        typeId: 'primary',
         description: 'The chain of events linked by cause/enable/prevent relations.',
+        initialPhase: 'opening',
         targetRevealChapter: 1,
         initialProgress: '0.00',
       },
     ],
     worldFacts: [],
+    knowledge: { claims: [], commonGround: [] },
   });
 
   // Write each story as a set of events with causal DAG

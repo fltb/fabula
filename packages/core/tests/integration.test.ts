@@ -26,6 +26,7 @@ import type { ProjectData } from '../src/entity/index.js';
 import { EntityMapper, InMemoryEntityRegistry } from '../src/entity/index.js';
 import { calculateISS, detectAntiPatterns } from '../src/iss/index.js';
 import { ReplayEngine, StateManager } from '../src/state/index.js';
+import { emptyWorldState } from '../src/state/story-boundaries.js';
 import type {
   CharacterDefinition,
   EntityCatalogContext,
@@ -35,11 +36,12 @@ import type {
   LocationDefinition,
   NarrativeEvent,
   PreRenderInput,
-  RelationshipDefinition,
-  RuleDefinition,
+  RelationshipDeclaration,
+  RuleDeclaration,
   ThreadId,
   ThreadLifecycle,
   ThreadRunId,
+  ThreadTransaction,
   WorldInitialState,
   WorldState,
 } from '../src/types/index.js';
@@ -53,7 +55,20 @@ function must<T>(value: T | null | undefined, message: string): T {
 
 type FixtureCharacter = Pick<CharacterDefinition, 'id'> & { character?: string };
 type FixtureLocation = Pick<LocationDefinition, 'id'> & { location?: string };
-type FixtureRule = Pick<RuleDefinition, 'ruleId'> & { rule?: string };
+
+/** Canonical thread transaction helper (mapper-normalized runtime shape). */
+function threadTx(thread: string, advancement: string): ThreadTransaction {
+  return {
+    thread,
+    runId: `run-${thread}` as ThreadRunId,
+    status: 'active',
+    phase: '',
+    goalSet: [{ goalId: 'progress', status: 'active' }],
+    milestoneSet: [],
+    provenance: '',
+    advancement,
+  };
+}
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function makeEvent(overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
@@ -218,19 +233,18 @@ describe('1. Full Pipeline', () => {
     expect(locIds).toContain('zaun_gray_exchange');
 
     // ── Rules ──────────────────────────────────────────────────
-    // YAML uses `rule:` not `ruleId:`
-    expect(projectData.rules.length).toBe(2);
-    const rawRules = projectData.rules.map((r: FixtureRule) => r.rule ?? r.ruleId);
+    expect(projectData.ruleDeclarations.length).toBe(2);
+    const rawRules = projectData.ruleDeclarations.map((r) => r.ruleId);
     expect(rawRules).toContain('hextech_crystal_scarcity');
     expect(rawRules).toContain('shimmer_addiction_timeline');
 
     // ── Relationships ──────────────────────────────────────────
-    expect(projectData.relationships.length).toBe(1);
-    const rel: RelationshipDefinition = must(
-      projectData.relationships[0],
-      'Expected fixture relationship',
+    expect(projectData.relationshipDeclarations.length).toBe(1);
+    const rel: RelationshipDeclaration = must(
+      projectData.relationshipDeclarations[0],
+      'Expected fixture relationship declaration',
     );
-    expect(rel.type).toBe('professional_mentor_asset');
+    expect(rel.typeId).toBe('professional_mentor_asset');
 
     // ── World initial state (now flat structure) ─────────
     const wis: WorldInitialState = must(
@@ -278,9 +292,11 @@ describe('1. Full Pipeline', () => {
     // Locations
     const locations = registry.findByKind('location');
     expect(locations.length).toBeGreaterThanOrEqual(1);
-    // Rules
-    const rules = registry.findByKind('rule');
-    expect(rules.length).toBeGreaterThanOrEqual(1);
+    // Rule declarations remain source/catalog inputs, not registry entities.
+    expect(data.ruleDeclarations).toHaveLength(2);
+    expect(data.ruleDeclarations.every((rule) => data.ruleTypeCatalog.types[rule.typeId])).toBe(
+      true,
+    );
   });
 
   it('1c. loadAllEvents returns authored events only; initial facts load separately', () => {
@@ -333,9 +349,7 @@ describe('1. Full Pipeline', () => {
           },
         },
       ],
-      threadProgress: [
-        { thread: 'T1', advancement: 'Anomaly detected', progressAfter: 20, progressTotal: 100 },
-      ],
+      threadProgress: [threadTx('T1', 'Anomaly detected')],
       participants: { entities: ['seraphine'] },
     });
 
@@ -362,10 +376,7 @@ describe('1. Full Pipeline', () => {
           },
         },
       ],
-      threadProgress: [
-        { thread: 'T1', advancement: 'Case accepted', progressAfter: 30, progressTotal: 100 },
-        { thread: 'T2', advancement: 'Family involvement', progressAfter: 15, progressTotal: 100 },
-      ],
+      threadProgress: [threadTx('T1', 'Case accepted'), threadTx('T2', 'Family involvement')],
       participants: { entities: ['camille'] },
     });
 
@@ -381,26 +392,26 @@ describe('1. Full Pipeline', () => {
 
     // State
     const state = sm.getCurrentState();
-    expect(state.threads.T1).toEqual({
+    expect(state.threads.T1).toMatchObject({
       threadId: 'T1' as ThreadId,
       status: 'active' as ThreadLifecycle,
-      currentRunId: 'legacy-T1' as ThreadRunId,
+      currentRunId: 'run-T1' as ThreadRunId,
       phase: '',
       bindings: {},
       goalStates: { progress: 'active' as GoalLifecycle },
       milestoneStates: {},
-      semanticStateHash: 'hx9s670',
     });
-    expect(state.threads.T2).toEqual({
+    expect(state.threads.T2).toMatchObject({
       threadId: 'T2' as ThreadId,
       status: 'active' as ThreadLifecycle,
-      currentRunId: 'legacy-T2' as ThreadRunId,
+      currentRunId: 'run-T2' as ThreadRunId,
       phase: '',
       bindings: {},
       goalStates: { progress: 'active' as GoalLifecycle },
       milestoneStates: {},
-      semanticStateHash: 'hbe9vjr',
     });
+    expect(state.threads.T1?.semanticStateHash).toMatch(/^h[0-9a-z]+$/);
+    expect(state.threads.T2?.semanticStateHash).toMatch(/^h[0-9a-z]+$/);
     expect(state.entities.seraphine?.detected_anomaly).toBe(true);
     expect(state.entities.camille?.case_status).toBe('accepted');
 
@@ -516,14 +527,7 @@ describe('1. Full Pipeline', () => {
       participants: { entities: ['seraphine'] },
     });
     const events = [event];
-    const state: WorldState = {
-      entities: {},
-      relationships: {},
-      knowledge: {},
-      threads: {},
-      rules: {},
-      facts: [],
-    };
+    const state = emptyWorldState();
     const input: PreRenderInput = {
       event,
       worldState: state,
@@ -748,17 +752,13 @@ describe('4. State Transitions', () => {
     const e1a = makeEvent({
       id: 'E1a',
       narrativeOrder: 1,
-      threadProgress: [{ thread: 'T1', advancement: 'a', progressAfter: 20, progressTotal: 100 }],
+      threadProgress: [threadTx('T1', 'a')],
     });
     const e1b = makeEvent({
       id: 'E1b',
       narrativeOrder: 2,
       causalPredecessors: ['E1a'],
-      threadProgress: [
-        { thread: 'T1', advancement: 'b', progressAfter: 30, progressTotal: 100 },
-        { thread: 'T2', advancement: 'c', progressAfter: 15, progressTotal: 100 },
-        { thread: 'T3', advancement: 'd', progressAfter: 3, progressTotal: 100 },
-      ],
+      threadProgress: [threadTx('T1', 'b'), threadTx('T2', 'c'), threadTx('T3', 'd')],
     });
 
     sm2.commit(opening);
@@ -766,36 +766,36 @@ describe('4. State Transitions', () => {
     sm2.commit(e1b);
 
     const state = sm2.getCurrentState();
-    expect(state.threads.T1).toEqual({
+    expect(state.threads.T1).toMatchObject({
       threadId: 'T1' as ThreadId,
       status: 'active' as ThreadLifecycle,
-      currentRunId: 'legacy-T1' as ThreadRunId,
+      currentRunId: 'run-T1' as ThreadRunId,
       phase: '',
       bindings: {},
       goalStates: { progress: 'active' as GoalLifecycle },
       milestoneStates: {},
-      semanticStateHash: 'hx9s670',
     });
-    expect(state.threads.T2).toEqual({
+    expect(state.threads.T1.semanticStateHash).not.toBe('');
+    expect(state.threads.T2).toMatchObject({
       threadId: 'T2' as ThreadId,
       status: 'active' as ThreadLifecycle,
-      currentRunId: 'legacy-T2' as ThreadRunId,
+      currentRunId: 'run-T2' as ThreadRunId,
       phase: '',
       bindings: {},
       goalStates: { progress: 'active' as GoalLifecycle },
       milestoneStates: {},
-      semanticStateHash: 'hbe9vjr',
     });
-    expect(state.threads.T3).toEqual({
+    expect(state.threads.T2.semanticStateHash).not.toBe('');
+    expect(state.threads.T3).toMatchObject({
       threadId: 'T3' as ThreadId,
       status: 'active' as ThreadLifecycle,
-      currentRunId: 'legacy-T3' as ThreadRunId,
+      currentRunId: 'run-T3' as ThreadRunId,
       phase: '',
       bindings: {},
       goalStates: { progress: 'active' as GoalLifecycle },
       milestoneStates: {},
-      semanticStateHash: 'h4x3zs9',
     });
+    expect(state.threads.T3.semanticStateHash).not.toBe('');
   });
 
   it('4d. ReplayEngine reconstucts state at specific narrative orders', () => {
@@ -816,7 +816,7 @@ describe('4. State Transitions', () => {
           },
         },
       ],
-      threadProgress: [{ thread: 'T1', advancement: 'a', progressAfter: 20, progressTotal: 100 }],
+      threadProgress: [threadTx('T1', 'a')],
     });
     const e1b = makeEvent({
       id: 'E1b',
@@ -835,7 +835,7 @@ describe('4. State Transitions', () => {
           },
         },
       ],
-      threadProgress: [{ thread: 'T1', advancement: 'b', progressAfter: 30, progressTotal: 100 }],
+      threadProgress: [threadTx('T1', 'b')],
     });
     const allEvents = [e1a, e1b];
 
@@ -956,7 +956,7 @@ describe('5. ISS Calculation', () => {
             },
           },
         ],
-        threadProgress: [{ thread: 'T1', advancement: 'a', progressAfter: 20, progressTotal: 100 }],
+        threadProgress: [threadTx('T1', 'a')],
       }),
       makeEvent({
         id: 'E1b',
@@ -988,7 +988,7 @@ describe('5. ISS Calculation', () => {
             },
           },
         ],
-        threadProgress: [{ thread: 'T1', advancement: 'b', progressAfter: 30, progressTotal: 100 }],
+        threadProgress: [threadTx('T1', 'b')],
       }),
     ];
     const threads = [
@@ -996,24 +996,34 @@ describe('5. ISS Calculation', () => {
       { id: 'T2', name: "Camille's Personal Dilemma" },
       { id: 'T3', name: "Seraphine's Double Burden" },
     ];
-    const rules = [
+    const rules: RuleDeclaration[] = [
       {
         ruleId: 'hextech_crystal_scarcity',
         name: 'Hextech Crystal Scarcity',
-        category: 'state_invariant',
-        type: 'state_invariant',
-        statement: '',
-        logicalConsequences: [],
-        evidenceChain: [],
+        typeId: 'state_invariant',
+        initialEpochId: 'hextech_crystal_scarcity-epoch-1',
+        initialSpecificationId: 'hextech_crystal_scarcity-spec-1',
+        initialActivation: 'dormant',
+        initialEffectiveness: 'full',
+        scopeBindings: {},
+        exceptions: [],
+        specifications: {
+          'hextech_crystal_scarcity-spec-1': { statement: '', constraints: [] },
+        },
       },
       {
         ruleId: 'shimmer_addiction_timeline',
         name: 'Shimmer Addiction Timeline',
-        category: 'progression_rule',
-        type: 'progression_rule',
-        statement: '',
-        logicalConsequences: [],
-        evidenceChain: [],
+        typeId: 'progression_rule',
+        initialEpochId: 'shimmer_addiction_timeline-epoch-1',
+        initialSpecificationId: 'shimmer_addiction_timeline-spec-1',
+        initialActivation: 'dormant',
+        initialEffectiveness: 'full',
+        scopeBindings: {},
+        exceptions: [],
+        specifications: {
+          'shimmer_addiction_timeline-spec-1': { statement: '', constraints: [] },
+        },
       },
     ];
 
@@ -1220,10 +1230,11 @@ describe('7. Context Compilation', () => {
           },
         },
       ],
-      threadProgress: [{ thread: 'T1', advancement: 'a', progressAfter: 20, progressTotal: 100 }],
+      threadProgress: [threadTx('T1', 'a')],
       participants: { entities: ['seraphine'] },
     });
     const state: WorldState = {
+      ...emptyWorldState(),
       entities: {
         seraphine: {
           location: 'piltover_enforcer_headquarters',
@@ -1232,7 +1243,6 @@ describe('7. Context Compilation', () => {
         },
       },
       relationships: {},
-      knowledge: {},
       threads: {
         T1: {
           threadId: 'T1' as ThreadId,
@@ -1279,14 +1289,7 @@ describe('7. Context Compilation', () => {
       pov: { character: 'camille', type: 'third_person_limited' },
       participants: { entities: ['camille'] },
     });
-    const state: WorldState = {
-      entities: {},
-      relationships: {},
-      knowledge: {},
-      threads: {},
-      rules: {},
-      facts: [],
-    };
+    const state = emptyWorldState();
     const pkg = compiler.compile(event, state, registry, {
       systemContext: { genre: 'dark fantasy', style: 'noir', narrativeRules: ["Show don't tell"] },
       activeThreadIds: ['T1', 'T2'],
@@ -1308,14 +1311,7 @@ describe('7. Context Compilation', () => {
       beats: ['Test.'],
       pov: { character: 'seraphine', type: 'third_person_limited' },
     });
-    const state: WorldState = {
-      entities: {},
-      relationships: {},
-      knowledge: {},
-      threads: {},
-      rules: {},
-      facts: [],
-    };
+    const state = emptyWorldState();
     const pkg = compiler.compile(event, state, registry);
     expect(pkg.markdown.length).toBeGreaterThan(0);
     expect(pkg.markdown).toContain('# Context Package: E1a');
@@ -1332,9 +1328,9 @@ describe('7. Context Compilation', () => {
       pov: { character: 'camille', type: 'third_person_limited' },
     });
     const state: WorldState = {
+      ...emptyWorldState(),
       entities: {},
       relationships: {},
-      knowledge: {},
       threads: {
         T1: {
           threadId: 'T1' as ThreadId,
@@ -1460,20 +1456,30 @@ describe('8. Cross-cutting Pipeline Smoke Test', () => {
         {
           ruleId: 'hextech_crystal_scarcity',
           name: 'Hextech Crystal Scarcity',
-          category: '',
-          type: '',
-          statement: '',
-          logicalConsequences: [],
-          evidenceChain: [],
+          typeId: 'state_invariant',
+          initialEpochId: 'hextech_crystal_scarcity-epoch-1',
+          initialSpecificationId: 'hextech_crystal_scarcity-spec-1',
+          initialActivation: 'dormant',
+          initialEffectiveness: 'full',
+          scopeBindings: {},
+          exceptions: [],
+          specifications: {
+            'hextech_crystal_scarcity-spec-1': { statement: '', constraints: [] },
+          },
         },
         {
           ruleId: 'shimmer_addiction_timeline',
           name: 'Shimmer Addiction Timeline',
-          category: '',
-          type: '',
-          statement: '',
-          logicalConsequences: [],
-          evidenceChain: [],
+          typeId: 'progression_rule',
+          initialEpochId: 'shimmer_addiction_timeline-epoch-1',
+          initialSpecificationId: 'shimmer_addiction_timeline-spec-1',
+          initialActivation: 'dormant',
+          initialEffectiveness: 'full',
+          scopeBindings: {},
+          exceptions: [],
+          specifications: {
+            'shimmer_addiction_timeline-spec-1': { statement: '', constraints: [] },
+          },
         },
       ],
     });

@@ -28,11 +28,11 @@ export class WorldRuleValidator implements Validator {
     const issues: ValidationIssue[] = [];
     const { event, worldState } = input;
 
-    // Deterministic check: ruleEffects that nullify established rules
+    // Deterministic check: rule transactions that nullify established rules
     // Uses RuleRuntimeState instead of scalar activeEvidence
     for (const re of event.ruleEffects) {
-      if (re.effect === 'nullify') {
-        const ruleId = re.rule;
+      if (re.operation === 'set_effectiveness' && re.newEffectiveness === 'nullified') {
+        const ruleId = re.ruleId;
         const ruleState = worldState.rules[ruleId];
         if (
           ruleState &&
@@ -46,7 +46,7 @@ export class WorldRuleValidator implements Validator {
               ruleId,
               'error',
               `World rule "${ruleId}" is being nullified but its current effectiveness is "${ruleState.effectiveness}"`,
-              'Either remove the nullify effect or add enough weaken/nullify evidence.',
+              'Either remove the nullify transaction or add enough weaken/nullify evidence.',
               'edit_file',
               'ruleEffects',
             ),

@@ -1,31 +1,31 @@
 event: E5
-title: "贺家坳——平静的岁月"
+title: 贺家坳——平静的岁月
 narrativeOrder: 6
 sceneType: flashback
 storyTime: branch_b_quiet_years
 tense: past
 discourseMode: description
 arcPosition: falling
-emotionalValence: "quiet_contentment_hardship"
-conflictType: "person_vs_fate"
-resolutionType: "ongoing"
+emotionalValence: quiet_contentment_hardship
+conflictType: person_vs_fate
+resolutionType: ongoing
 pov:
   character: narrator
   type: first_person
-sceneBrief: "几年过去了。阿毛长成了一个半大小子，能帮贺老六上山打柴了。祥林嫂后来又生了一个女儿——取名春丫头，因为出生在春天。贺老六照旧在山里干活，人瘦了，背也微微驼了，但精神还好。一家人住在贺家坳那间泥墙草顶的屋子里，冬天漏风，夏天漏雨，但灶火总是热的。祥林嫂的手粗糙得像树皮——洗衣、做饭、劈柴、喂猪，从早忙到晚。她偶尔想起鲁镇——想起鲁四老爷，想起四婶，想起那个她曾经拼命干活的地方——但那是另一个世界了。她听不到柳妈的地狱故事，不需要去土地庙捐门槛。她每天最操心的事是：米缸里的米够不够吃到月底。这穷让她安心——穷是具体的、眼前的，不像地狱那样看不见摸不着。有一年冬天，卫老婆子路过贺家坳，看见她在井边洗菜，远远喊了一声'祥林嫂'——她抬起头来，笑了笑，又低下头继续洗。卫老婆子后来对人说：'那个祥林嫂——她倒熬出来了。'但她不知道，'熬出来了'不是因为她做了什么，而是因为这一次，天没有塌下来。"
+sceneBrief: 几年过去了。阿毛长成了一个半大小子，能帮贺老六上山打柴了。祥林嫂后来又生了一个女儿——取名春丫头，因为出生在春天。贺老六照旧在山里干活，人瘦了，背也微微驼了，但精神还好。一家人住在贺家坳那间泥墙草顶的屋子里，冬天漏风，夏天漏雨，但灶火总是热的。祥林嫂的手粗糙得像树皮——洗衣、做饭、劈柴、喂猪，从早忙到晚。她偶尔想起鲁镇——想起鲁四老爷，想起四婶，想起那个她曾经拼命干活的地方——但那是另一个世界了。她听不到柳妈的地狱故事，不需要去土地庙捐门槛。她每天最操心的事是：米缸里的米够不够吃到月底。这穷让她安心——穷是具体的、眼前的，不像地狱那样看不见摸不着。有一年冬天，卫老婆子路过贺家坳，看见她在井边洗菜，远远喊了一声'祥林嫂'——她抬起头来，笑了笑，又低下头继续洗。卫老婆子后来对人说：'那个祥林嫂——她倒熬出来了。'但她不知道，'熬出来了'不是因为她做了什么，而是因为这一次，天没有塌下来。
 beats:
-  - "几年过去了。"
-  - "阿毛长成了一个半大小子，能帮贺老六上山打柴了。"
-  - "祥林嫂后来又生了一个女儿——取名春丫头，因为出生在春天。"
-  - "贺老六照旧在山里干活，人瘦了，背也微微驼了，但精神还好。"
-  - "一家人住在贺家坳那间泥墙草顶的屋子里，冬天漏风，夏天漏雨，但灶火总是热的。"
-  - "祥林嫂的手粗糙得像树皮——洗衣、做饭、劈柴、喂猪，从早忙到晚。"
-  - "她偶尔想起鲁镇——想起鲁四老爷，想起四婶，想起那个她曾经拼命干活的地方——但那是另一个世界了。"
-  - "她听不到柳妈的地狱故事，不需要去土地庙捐门槛。"
-  - "她每天最操心的事是：米缸里的米够不够吃到月底。"
-  - "这穷让她安心——穷是具体的、眼前的，不像地狱那样看不见摸不着。"
-  - "有一年冬天，卫老婆子路过贺家坳，看见她在井边洗菜，远远喊了一声'祥林嫂'——她抬起头来，笑了笑，又低下头继续洗。"
-  - "卫老婆子后来对人说：'那个祥林嫂——她倒熬出来了。"
+  - 几年过去了。
+  - 阿毛长成了一个半大小子，能帮贺老六上山打柴了。
+  - 祥林嫂后来又生了一个女儿——取名春丫头，因为出生在春天。
+  - 贺老六照旧在山里干活，人瘦了，背也微微驼了，但精神还好。
+  - 一家人住在贺家坳那间泥墙草顶的屋子里，冬天漏风，夏天漏雨，但灶火总是热的。
+  - 祥林嫂的手粗糙得像树皮——洗衣、做饭、劈柴、喂猪，从早忙到晚。
+  - 她偶尔想起鲁镇——想起鲁四老爷，想起四婶，想起那个她曾经拼命干活的地方——但那是另一个世界了。
+  - 她听不到柳妈的地狱故事，不需要去土地庙捐门槛。
+  - 她每天最操心的事是：米缸里的米够不够吃到月底。
+  - 这穷让她安心——穷是具体的、眼前的，不像地狱那样看不见摸不着。
+  - 有一年冬天，卫老婆子路过贺家坳，看见她在井边洗菜，远远喊了一声'祥林嫂'——她抬起头来，笑了笑，又低下头继续洗。
+  - 卫老婆子后来对人说：'那个祥林嫂——她倒熬出来了。
   - "'但她不知道，'熬出来了'不是因为她做了什么，而是因为这一次，天没有塌下来。"
 preconditions:
   - entity: xianglins_wife
@@ -47,88 +47,123 @@ expectedPostconditions:
   - entity: xianglins_wife
     attribute: location
     value: he_family_hollow
-    confidence: 1.0
+    confidence: 1
   - entity: xianglins_wife
     attribute: has_ah_mao
     value: true
-    confidence: 1.0
+    confidence: 1
   - entity: xianglins_wife
     attribute: has_second_child
     value: true
-    confidence: 1.0
+    confidence: 1
   - entity: xianglins_wife
     attribute: emotionalState
     value: quietly_content
     confidence: 0.9
   - entity: xianglins_wife
     attribute: appearance
-    value: "weathered_hands_aging_but_healthy"
+    value: weathered_hands_aging_but_healthy
     confidence: 0.9
   - entity: xianglins_wife
     attribute: social_status
-    narrativeHint: "分支B：祥林嫂在贺家坳度过了她一生中最长的平静期。她没有变成二次寡妇，没有被宗族赶出门，没有被宗教恐吓摧毁。但她仍然是穷困的、默默无名的、依附于丈夫存在的。分支B展示的不是'幸福结局'——而是：即使四大绳索中的三条暂时失效，一个底层妇女的生活依然是艰苦的。她的'熬出来了'本身就是一个悲凉的词——谁能说穷苦的生存是一种成功？"
-    confidence: 1.0
+    narrativeHint: 分支B：祥林嫂在贺家坳度过了她一生中最长的平静期。她没有变成二次寡妇，没有被宗族赶出门，没有被宗教恐吓摧毁。但她仍然是穷困的、默默无名的、依附于丈夫存在的。分支B展示的不是'幸福结局'——而是：即使四大绳索中的三条暂时失效，一个底层妇女的生活依然是艰苦的。她的'熬出来了'本身就是一个悲凉的词——谁能说穷苦的生存是一种成功？
+    confidence: 1
   - entity: xianglins_wife
     attribute: relationship_to_lu_zhen
-    narrativeHint: "她彻底脱离了鲁镇的权力系统和信仰系统。没有遭遇柳妈，没有捐门槛，没有冬至喝止。鲁镇的封建礼教对她来说变成了一个遥远的噩梦——她不再活在其中。"
+    narrativeHint: 她彻底脱离了鲁镇的权力系统和信仰系统。没有遭遇柳妈，没有捐门槛，没有冬至喝止。鲁镇的封建礼教对她来说变成了一个遥远的噩梦——她不再活在其中。
     confidence: 0.9
 threadProgress:
   - thread: T1
-    advancement: "分支B：祥林嫂的'平静岁月'——母子平安，丈夫健在，生活贫困但可维持。她没有被任何一条绳索拉回去。但她仍然是'祥林嫂'——仍然没有自己的名字。"
+    advancement: 分支B：祥林嫂的'平静岁月'——母子平安，丈夫健在，生活贫困但可维持。她没有被任何一条绳索拉回去。但她仍然是'祥林嫂'——仍然没有自己的名字。
     progressAfter: 85
     progressTotal: 100
   - thread: T2
-    advancement: "灵魂问题被生活的温饱所搁置——但并未消失。她不再恐惧地狱，因为她不是二次寡妇。她不再需要捐门槛，因为她从未被定义为'不洁'。宗教绳索在她的生活中失效了——而这只是因为一次偶然的康复。"
+    advancement: 灵魂问题被生活的温饱所搁置——但并未消失。她不再恐惧地狱，因为她不是二次寡妇。她不再需要捐门槛，因为她从未被定义为'不洁'。宗教绳索在她的生活中失效了——而这只是因为一次偶然的康复。
     progressAfter: 60
     progressTotal: 100
   - thread: T3
-    advancement: "卫老婆子路过贺家坳时的评价——'她倒熬出来了'——是看客文化在另一个维度的体现。'熬出来了'意味着默认底层女性的正常状态是'熬'——这是一种隐藏在同情之下的残酷。"
+    advancement: 卫老婆子路过贺家坳时的评价——'她倒熬出来了'——是看客文化在另一个维度的体现。'熬出来了'意味着默认底层女性的正常状态是'熬'——这是一种隐藏在同情之下的残酷。
     progressAfter: 60
     progressTotal: 100
   - thread: T4
-    advancement: "祥林嫂在贺家坳不需要祝福仪式——她的'祝福'是灶火烧着、米缸不空、孩子安好。这与鲁镇的盛大祝福形成对比：真正的祝福不需要祭品和仪式。"
+    advancement: 祥林嫂在贺家坳不需要祝福仪式——她的'祝福'是灶火烧着、米缸不空、孩子安好。这与鲁镇的盛大祝福形成对比：真正的祝福不需要祭品和仪式。
     progressAfter: 55
     progressTotal: 100
 foreshadowing:
   - id: old_age_coming
-    hint: "贺老六的脊背微微驼了——他的身体仍然脆弱。平静的岁月并非永恒。但无论将来发生什么，祥林嫂已不再是那个在鲁镇被定义为'不洁'的女人。"
+    hint: 贺老六的脊背微微驼了——他的身体仍然脆弱。平静的岁月并非永恒。但无论将来发生什么，祥林嫂已不再是那个在鲁镇被定义为'不洁'的女人。
     targetRevealChapter: 1
     thread: T1
 relationshipEffects:
-  - participants:
-      - he_laoliu
-      - xianglins_wife
-    effect: reinforce
-    direction: years_of_shared_labor
-    newState:
-      type: weathered_partners
-      intensity: 85
-  - participants:
-      - xianglins_wife
-      - fourth_master_lu
-    effect: dissolve
-    direction: permanent_separation_from_lu_system
-    newState:
-      type: no_relationship
-      intensity: 0
-  - participants:
-      - xianglins_wife
-      - liu_ma
-    effect: establish
-    direction: never_encountered
-    newState:
-      type: no_relationship
-      intensity: 0
+  - type: relationship_transaction
+    effectId: E5:relationship:1
+    relationshipId: he_laoliu_xianglins_wife
+    epochId: he_laoliu_xianglins_wife:epoch-1
+    membershipAfter:
+      - membershipId: he_laoliu_xianglins_wife:member:1
+        entityId: he_laoliu
+        role: member
+      - membershipId: he_laoliu_xianglins_wife:member:2
+        entityId: xianglins_wife
+        role: member
+    lifecycleAfter: active
+    dimensionSet:
+      - dimensionId: intensity
+        scope: global
+        value: 85
+    provenance: years_of_shared_labor (weathered_partners)
+  - type: relationship_transaction
+    effectId: E5:relationship:2
+    relationshipId: fourth_master_lu_xianglins_wife
+    epochId: fourth_master_lu_xianglins_wife:epoch-1
+    membershipAfter:
+      - membershipId: fourth_master_lu_xianglins_wife:member:1
+        entityId: fourth_master_lu
+        role: member
+      - membershipId: fourth_master_lu_xianglins_wife:member:2
+        entityId: xianglins_wife
+        role: member
+    lifecycleAfter: dissolved
+    dimensionSet:
+      - dimensionId: intensity
+        scope: global
+        value: 0
+    provenance: permanent_separation_from_lu_system (no_relationship)
+  - type: relationship_transaction
+    effectId: E5:relationship:3
+    relationshipId: liu_ma_xianglins_wife
+    epochId: liu_ma_xianglins_wife:epoch-1
+    membershipAfter:
+      - membershipId: liu_ma_xianglins_wife:member:1
+        entityId: liu_ma
+        role: member
+      - membershipId: liu_ma_xianglins_wife:member:2
+        entityId: xianglins_wife
+        role: member
+    lifecycleAfter: active
+    dimensionSet:
+      - dimensionId: intensity
+        scope: global
+        value: 0
+    provenance: never_encountered (no_relationship)
 ruleEffects:
-  - rule: patriarchal_clan_authority
-    effect: nullify
-    evidence: "大伯没能收房——贺老六活着。宗族权力没有机会行使。但这是一种'绕过去的胜利'，不是制度的改变。"
-  - rule: religious_authority
-    effect: nullify
-    evidence: "祥林嫂从未听到柳妈的地狱故事。宗教绳索在贺家坳的物理距离中被悬置了——她没有脱离信仰体系，只是没有被它捕获。"
+  - type: rule_transaction
+    ruleId: patriarchal_clan_authority
+    operation: set_effectiveness
+    evidence: 大伯没能收房——贺老六活着。宗族权力没有机会行使。但这是一种'绕过去的胜利'，不是制度的改变。
+    epochId: patriarchal_clan_authority:epoch-1
+    specificationId: patriarchal_clan_authority:specification-1
+    newEffectiveness: nullified
+  - type: rule_transaction
+    ruleId: religious_authority
+    operation: set_effectiveness
+    evidence: 祥林嫂从未听到柳妈的地狱故事。宗教绳索在贺家坳的物理距离中被悬置了——她没有脱离信仰体系，只是没有被它捕获。
+    epochId: religious_authority:epoch-1
+    specificationId: religious_authority:specification-1
+    newEffectiveness: nullified
 styleGuidance:
-  tone: "质朴、平淡、细微的温暖与持续的艰辛并存。不能用浪漫化的笔调写'田园幸福'——这是穷人的日子，每一天都需要用力气去挣。但厨房里的热气、阿毛的叫喊、贺老六扛柴回来的脚步声——这些细节之中有另一种叙述能量：生存的、具体的、不需要救赎的。"
-  scenePacing: "以日常劳作节奏为轴——从早到晚的重复，四季节气的变化。中间插入卫老婆子的路过作为外部视角的映照。结尾回到祥林嫂在井边的画面，形成一个安静的、不煽情的定格。"
+  tone: 质朴、平淡、细微的温暖与持续的艰辛并存。不能用浪漫化的笔调写'田园幸福'——这是穷人的日子，每一天都需要用力气去挣。但厨房里的热气、阿毛的叫喊、贺老六扛柴回来的脚步声——这些细节之中有另一种叙述能量：生存的、具体的、不需要救赎的。
+  scenePacing: 以日常劳作节奏为轴——从早到晚的重复，四季节气的变化。中间插入卫老婆子的路过作为外部视角的映照。结尾回到祥林嫂在井边的画面，形成一个安静的、不煽情的定格。
   characterVoice:
-    xianglins_wife: "她的话少了很多——不需要讲述了。没有'我真傻，真的'的重复。沉默是她新的语言。但沉默不是创伤，是她不再需要向任何人解释自己。"
-    avoid: "不要写任何类似'她终于幸福了'的句子——这不是幸福。这是一条没有被截断的日子。"
+    xianglins_wife: 她的话少了很多——不需要讲述了。没有'我真傻，真的'的重复。沉默是她新的语言。但沉默不是创伤，是她不再需要向任何人解释自己。
+    avoid: 不要写任何类似'她终于幸福了'的句子——这不是幸福。这是一条没有被截断的日子。

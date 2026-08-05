@@ -6,8 +6,8 @@ import type { DiscourseContextProjection, NarratorProfile } from './discourse.js
 import type { EntityId } from './entity.js';
 import type { ThematicIntent } from './idea-ir.js';
 import type { ResolvedNarrativeTechniqueContract } from './narrative-techniques.js';
-import type { RuleDefinition } from './rule.js';
-import type { RelationshipState } from './world.js';
+import type { EpochLifecycle } from './relationship.js';
+import type { RuleDeclaration } from './rule.js';
 
 // ——— Relevance Score ———
 
@@ -39,7 +39,8 @@ export interface ContextPackage {
   activeThreads: ThreadStatus[];
   volumeSummary: string;
   markdown: string;
-  activeRules?: RuleDefinition[];
+  /** Canonical rule declarations active for this event. */
+  activeRules?: RuleDeclaration[];
   /** Resolved narrator profile for this event, when narratorProfileRef is set (S6c). */
   narratorProfile?: NarratorProfile;
   /** Pass 1-safe disclosure state derived from the planned discourse ledger. */
@@ -92,7 +93,10 @@ export interface CharacterSnapshot {
 export interface RelationshipContext {
   id: string;
   participants: [EntityId, EntityId];
-  currentState: RelationshipState;
+  currentState: {
+    lifecycle: EpochLifecycle;
+    dimensions: Record<string, unknown>;
+  };
 }
 
 export interface WorldFact {

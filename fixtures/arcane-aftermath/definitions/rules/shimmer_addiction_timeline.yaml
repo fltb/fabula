@@ -1,0 +1,53 @@
+ruleId: shimmer_addiction_timeline
+name: Shimmer Addiction Timeline
+typeId: rule
+initialEpochId: shimmer_addiction_timeline:epoch-1
+initialSpecificationId: shimmer_addiction_timeline:specification-1
+initialActivation: enabled
+initialEffectiveness: full
+scopeBindings: {}
+exceptions: []
+specifications:
+  shimmer_addiction_timeline:specification-1:
+    statement: Shimmer grants temporary enhancement but causes cumulative
+      physiological damage and dependency.
+    constraints:
+      - constraintId: shimmer_addiction_timeline:constraint:1
+        kind: state_invariant
+        enforcement: hard
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: character.shimmer_addiction_phase >= 3 => extended abstinence
+            produces withdrawal
+      - constraintId: shimmer_addiction_timeline:constraint:2
+        kind: transition_constraint
+        enforcement: hard
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: character.shimmer_addiction_phase changes => minimum phase duration
+            is satisfied
+      - constraintId: shimmer_addiction_timeline:constraint:3
+        kind: postcondition_requirement
+        enforcement: audit
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: character uses shimmer continuously => phase increases on the
+            defined timeline

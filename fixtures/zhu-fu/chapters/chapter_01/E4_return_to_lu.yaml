@@ -1,5 +1,5 @@
 event: E4
-title: "再到鲁镇——我真傻，真的"
+title: 再到鲁镇——我真傻，真的
 narrativeOrder: 5
 sceneType: flashback
 storyTime: autumn_return
@@ -7,34 +7,34 @@ narrationTime: new_year_eve
 tense: past
 discourseMode: exposition
 arcPosition: falling
-emotionalValence: "grief_despair"
-conflictType: "person_vs_fate"
-resolutionType: "negative_resolution"
+emotionalValence: grief_despair
+conflictType: person_vs_fate
+resolutionType: negative_resolution
 pov:
   character: narrator
   type: first_person
-sceneBrief: "有一年的秋季，卫老婆子又带了祥林嫂来到鲁四老爷家。她仍然头上扎着白头绳、乌裙、蓝夹袄、月白背心，脸色青黄——但两颊上已经消失了血色，眼角上带着泪痕，眼光也失去了先前那样的精神。四婶起初踌躇——她已是再寡的人了。但听她讲述阿毛的故事，眼圈也有些红了，便将她留下，但暗中告诫：祭祀时不许她沾手。祥林嫂反复讲述阿毛被狼叼走的事：'我真傻，真的。'她说，'我单知道雪天是野兽在山坳里没有食吃，会到村里来；我不知道春天也会有。我一清早起来开了门，拿小篮盛了一篮豆，叫我们的阿毛坐在门槛上剥豆去。他是很听话的，我的话句句听。他就出去了。我就在屋后劈柴，淘米。米下了锅，要蒸豆。我叫阿毛，没有应。出去一看，只见豆撒得一地，没有我们的阿毛了。各处去一问，都没有。我急了，央人出去寻。直到下半天，寻来寻去寻到山坳里，看见刺柴上挂着一只他的小鞋。大家都说，糟了，怕是遭了狼了。再进去，他果然躺在草窠里，肚里的五脏已经都给吃空了，手上还紧紧的捏着那只小篮呢。……'她接着又讲贺老六的死：伤寒复发，吃了冷饭就走了。而丧夫失子之后，大伯来收房，将她赶了出来——她无处可去了。"
+sceneBrief: 有一年的秋季，卫老婆子又带了祥林嫂来到鲁四老爷家。她仍然头上扎着白头绳、乌裙、蓝夹袄、月白背心，脸色青黄——但两颊上已经消失了血色，眼角上带着泪痕，眼光也失去了先前那样的精神。四婶起初踌躇——她已是再寡的人了。但听她讲述阿毛的故事，眼圈也有些红了，便将她留下，但暗中告诫：祭祀时不许她沾手。祥林嫂反复讲述阿毛被狼叼走的事：'我真傻，真的。'她说，'我单知道雪天是野兽在山坳里没有食吃，会到村里来；我不知道春天也会有。我一清早起来开了门，拿小篮盛了一篮豆，叫我们的阿毛坐在门槛上剥豆去。他是很听话的，我的话句句听。他就出去了。我就在屋后劈柴，淘米。米下了锅，要蒸豆。我叫阿毛，没有应。出去一看，只见豆撒得一地，没有我们的阿毛了。各处去一问，都没有。我急了，央人出去寻。直到下半天，寻来寻去寻到山坳里，看见刺柴上挂着一只他的小鞋。大家都说，糟了，怕是遭了狼了。再进去，他果然躺在草窠里，肚里的五脏已经都给吃空了，手上还紧紧的捏着那只小篮呢。……'她接着又讲贺老六的死：伤寒复发，吃了冷饭就走了。而丧夫失子之后，大伯来收房，将她赶了出来——她无处可去了。
 beats:
-  - "有一年的秋季，卫老婆子又带了祥林嫂来到鲁四老爷家。"
-  - "她仍然头上扎着白头绳、乌裙、蓝夹袄、月白背心，脸色青黄——但两颊上已经消失了血色，眼角上带着泪痕，眼光也失去了先前那样的精神。"
-  - "四婶起初踌躇——她已是再寡的人了。"
-  - "但听她讲述阿毛的故事，眼圈也有些红了，便将她留下，但暗中告诫：祭祀时不许她沾手。"
-  - "祥林嫂反复讲述阿毛被狼叼走的事：'我真傻，真的。"
+  - 有一年的秋季，卫老婆子又带了祥林嫂来到鲁四老爷家。
+  - 她仍然头上扎着白头绳、乌裙、蓝夹袄、月白背心，脸色青黄——但两颊上已经消失了血色，眼角上带着泪痕，眼光也失去了先前那样的精神。
+  - 四婶起初踌躇——她已是再寡的人了。
+  - 但听她讲述阿毛的故事，眼圈也有些红了，便将她留下，但暗中告诫：祭祀时不许她沾手。
+  - 祥林嫂反复讲述阿毛被狼叼走的事：'我真傻，真的。
   - "'她说，'我单知道雪天是野兽在山坳里没有食吃，会到村里来；我不知道春天也会有。"
-  - "我一清早起来开了门，拿小篮盛了一篮豆，叫我们的阿毛坐在门槛上剥豆去。"
-  - "他是很听话的，我的话句句听。"
-  - "他就出去了。"
-  - "我就在屋后劈柴，淘米。"
-  - "米下了锅，要蒸豆。"
-  - "我叫阿毛，没有应。"
-  - "出去一看，只见豆撒得一地，没有我们的阿毛了。"
-  - "各处去一问，都没有。"
-  - "我急了，央人出去寻。"
-  - "直到下半天，寻来寻去寻到山坳里，看见刺柴上挂着一只他的小鞋。"
-  - "大家都说，糟了，怕是遭了狼了。"
-  - "再进去，他果然躺在草窠里，肚里的五脏已经都给吃空了，手上还紧紧的捏着那只小篮呢。"
-  - "……'她接着又讲贺老六的死：伤寒复发，吃了冷饭就走了。"
-  - "而丧夫失子之后，大伯来收房，将她赶了出来——她无处可去了。"
+  - 我一清早起来开了门，拿小篮盛了一篮豆，叫我们的阿毛坐在门槛上剥豆去。
+  - 他是很听话的，我的话句句听。
+  - 他就出去了。
+  - 我就在屋后劈柴，淘米。
+  - 米下了锅，要蒸豆。
+  - 我叫阿毛，没有应。
+  - 出去一看，只见豆撒得一地，没有我们的阿毛了。
+  - 各处去一问，都没有。
+  - 我急了，央人出去寻。
+  - 直到下半天，寻来寻去寻到山坳里，看见刺柴上挂着一只他的小鞋。
+  - 大家都说，糟了，怕是遭了狼了。
+  - 再进去，他果然躺在草窠里，肚里的五脏已经都给吃空了，手上还紧紧的捏着那只小篮呢。
+  - ……'她接着又讲贺老六的死：伤寒复发，吃了冷饭就走了。
+  - 而丧夫失子之后，大伯来收房，将她赶了出来——她无处可去了。
 preconditions:
   - entity: xianglins_wife
     attribute: location
@@ -49,92 +49,113 @@ expectedPostconditions:
   - entity: xianglins_wife
     attribute: location
     value: fourth_master_lu_house
-    confidence: 1.0
+    confidence: 1
   - entity: xianglins_wife
     attribute: marital_status
     value: widowed_twice
-    confidence: 1.0
+    confidence: 1
   - entity: xianglins_wife
     attribute: has_ah_mao
     value: false
-    confidence: 1.0
+    confidence: 1
   - entity: xianglins_wife
     attribute: emotionalState
     value: grief_stricken
-    confidence: 1.0
+    confidence: 1
   - entity: xianglins_wife
     attribute: appearance
-    value: "pale_face_no_red_cheeks_tear_stains_dull_eyes"
-    confidence: 1.0
+    value: pale_face_no_red_cheeks_tear_stains_dull_eyes
+    confidence: 1
   - entity: he_laoliu
     attribute: status
     value: dead
-    confidence: 1.0
+    confidence: 1
   - entity: fourth_aunt
     attribute: attitude_toward_xianglins_wife
     value: pitying_but_cautious
-    confidence: 1.0
+    confidence: 1
   - entity: xianglins_wife
     attribute: social_status
-    narrativeHint: "她回到鲁镇时已是'再寡'的人——比初来时更不洁。四婶虽然出于同情收留了她，但暗中告诫不许她碰祭祀物品——她的社会地位已经永久性地下沉了。"
-    confidence: 1.0
+    narrativeHint: 她回到鲁镇时已是'再寡'的人——比初来时更不洁。四婶虽然出于同情收留了她，但暗中告诫不许她碰祭祀物品——她的社会地位已经永久性地下沉了。
+    confidence: 1
   - entity: xianglins_wife
     attribute: storytelling_mode
-    narrativeHint: "她开启了无穷无尽地重复阿毛故事的阶段——'我真傻，真的'成为她的标志句。全镇人从流泪到厌烦到嘲弄——她的悲恸在重复中被消耗为零。"
+    narrativeHint: 她开启了无穷无尽地重复阿毛故事的阶段——'我真傻，真的'成为她的标志句。全镇人从流泪到厌烦到嘲弄——她的悲恸在重复中被消耗为零。
     confidence: 0.9
 threadProgress:
   - thread: T1
-    advancement: "贺老六死于伤寒，阿毛被狼叼走，大伯收房驱人——她生命中唯一的好日子结束了。她回到鲁镇，但这次是被社会视为'再寡'的污秽之人。"
+    advancement: 贺老六死于伤寒，阿毛被狼叼走，大伯收房驱人——她生命中唯一的好日子结束了。她回到鲁镇，但这次是被社会视为'再寡'的污秽之人。
     progressAfter: 70
     progressTotal: 100
   - thread: T3
-    advancement: "鲁镇人第一次听阿毛故事时掉泪，但很快便厌烦了——'后来全镇的人们几乎都能背诵她的话，一听到就烦厌得头痛'。她的悲剧变成了别人的'趣味'。"
+    advancement: 鲁镇人第一次听阿毛故事时掉泪，但很快便厌烦了——'后来全镇的人们几乎都能背诵她的话，一听到就烦厌得头痛'。她的悲剧变成了别人的'趣味'。
     progressAfter: 50
     progressTotal: 100
 relationshipEffects:
-  - participants:
-      - he_laoliu
-      - xianglins_wife
-    effect: dissolve
-    direction: death_severs_marriage
-    newState:
-      type: widow_again
-      intensity: 100
-  - participants:
-      - fourth_aunt
-      - xianglins_wife
-    effect: change
-    direction: from_satisfied_to_pitying_but_distrustful
-    newState:
-      type: conditional_acceptance
-      intensity: 30
+  - type: relationship_transaction
+    effectId: E4:relationship:1
+    relationshipId: he_laoliu_xianglins_wife
+    epochId: he_laoliu_xianglins_wife:epoch-1
+    membershipAfter:
+      - membershipId: he_laoliu_xianglins_wife:member:1
+        entityId: he_laoliu
+        role: member
+      - membershipId: he_laoliu_xianglins_wife:member:2
+        entityId: xianglins_wife
+        role: member
+    lifecycleAfter: dissolved
+    dimensionSet:
+      - dimensionId: intensity
+        scope: global
+        value: 100
+    provenance: death_severs_marriage (widow_again)
+  - type: relationship_transaction
+    effectId: E4:relationship:2
+    relationshipId: event_fourth_aunt_xianglins_wife
+    epochId: event_fourth_aunt_xianglins_wife:epoch-1
+    membershipAfter:
+      - membershipId: event_fourth_aunt_xianglins_wife:member:1
+        entityId: fourth_aunt
+        role: member
+      - membershipId: event_fourth_aunt_xianglins_wife:member:2
+        entityId: xianglins_wife
+        role: member
+    lifecycleAfter: active
+    dimensionSet:
+      - dimensionId: intensity
+        scope: global
+        value: 30
+    provenance: from_satisfied_to_pitying_but_distrustful (conditional_acceptance)
 ruleEffects:
-  - rule: patriarchal_clan_authority
-    effect: reinforce
-    evidence: "贺老六死后，大伯来收房，赶她出门——没有儿子的寡妇在宗族中没有任何权利。"
+  - type: rule_transaction
+    ruleId: patriarchal_clan_authority
+    operation: enable
+    evidence: 贺老六死后，大伯来收房，赶她出门——没有儿子的寡妇在宗族中没有任何权利。
+    epochId: patriarchal_clan_authority:epoch-1
+    specificationId: patriarchal_clan_authority:specification-1
 styleGuidance:
-  tone: "从温暖的母性讲述（阿毛的故事）到寒冷的丧恸——阿毛的死亡场景（山坳、小鞋、被吃空的身体）是故事中最为残忍的意象。"
+  tone: 从温暖的母性讲述（阿毛的故事）到寒冷的丧恸——阿毛的死亡场景（山坳、小鞋、被吃空的身体）是故事中最为残忍的意象。
   targetWordCount: 1850
-  scenePacing: "以祥林嫂的独白（'我真傻，真的'）为中心——这是全文中唯一以她的声音为主的大段叙述，需要读出节奏感。从她缓慢的讲述过渡到叙述者冷峻的评论。"
+  scenePacing: 以祥林嫂的独白（'我真傻，真的'）为中心——这是全文中唯一以她的声音为主的大段叙述，需要读出节奏感。从她缓慢的讲述过渡到叙述者冷峻的评论。
   characterVoice:
-    xianglins_wife: "她讲阿毛故事时的语气——'我真傻，真的'开头，反复回到同一句话，叙述过程有固定的节奏和停顿。这是创伤后重复性叙述的文学呈现。"
+    xianglins_wife: 她讲阿毛故事时的语气——'我真傻，真的'开头，反复回到同一句话，叙述过程有固定的节奏和停顿。这是创伤后重复性叙述的文学呈现。
 narrativeChecklist:
   items:
-    - dimension: "创伤独白"
+    - dimension: 创伤独白
       description: "'我真傻，真的'——祥林嫂最长的独白段落，创伤叙事的核心。反复讲述既是治疗也是固化。"
       required: true
-    - dimension: "外貌衰变"
+    - dimension: 外貌衰变
       description: "'两颊上已经消失了血色'——与E2的'两颊却还是红的'对照，第二次丧夫后的生命力消退"
       required: true
-    - dimension: "重复结构"
+    - dimension: 重复结构
       description: "'阿毛……豆……篮……狼……鞋……五脏……'——鲁迅用儿童的死亡道具构建最残酷的悲剧叙事"
       required: true
-    - dimension: "看客反应"
+    - dimension: 看客反应
       description: "'四婶起初还踌躇，待到听完她自己的话，眼圈就有些红了'——这是祥林嫂最后一次获得同情"
       required: false
 duration:
   type: scene
-  storyDuration: "祥林嫂再到鲁家当天，约2-3小时"
+  storyDuration: 祥林嫂再到鲁家当天，约2-3小时
   narrativeLength: 1500
 frequency:
   type: singulative
@@ -145,36 +166,36 @@ anachrony:
   type: analepsis
   scope: external
   function: completing
-  distance: "约2年前——丧夫失子后再到鲁家"
+  distance: 约2年前——丧夫失子后再到鲁家
 authorNotes:
-  - "本场以《祝福》原文为唯一表述基准：优先保持 sourceContext 中原句的语序、关键词、对白与留白。"
-  - "阿毛之死以祥林嫂的完整、断续独白呈现；外貌衰变、四婶的踌躇和看客由流泪至冷却均按原文节奏，不作煽情增写。"
+  - 本场以《祝福》原文为唯一表述基准：优先保持 sourceContext 中原句的语序、关键词、对白与留白。
+  - 阿毛之死以祥林嫂的完整、断续独白呈现；外貌衰变、四婶的踌躇和看客由流泪至冷却均按原文节奏，不作煽情增写。
 sourceContext:
   entries:
     - excerpt: "'我真傻，真的，'祥林嫂抬起她没有神采的眼睛来，接着说。'我单知道下雪的时候野兽在山坳里没有食吃，会到村里来；我不知道春天也会有。'"
       classification: STYLE
-      styleNote: "祥林嫂的独白——'我真傻，真的'成为她创伤的核心叙事。鲁迅用这个重复句型标记她的精神创伤固化。"
-    - excerpt: "再进去；他果然躺在草窠里，肚里的五脏已经都给吃空了，手上还紧紧的捏着那只小篮呢。"
+      styleNote: 祥林嫂的独白——'我真傻，真的'成为她创伤的核心叙事。鲁迅用这个重复句型标记她的精神创伤固化。
+    - excerpt: 再进去；他果然躺在草窠里，肚里的五脏已经都给吃空了，手上还紧紧的捏着那只小篮呢。
       classification: STYLE
-      styleNote: "阿毛尸体的细节必须在独白的递进中突现；以事实的平叙保留残酷，不加入抒情评断。"
-    - excerpt: "她仍然头上扎着白头绳，乌裙，蓝夹袄，月白背心，脸色青黄，只是两颊上已经消失了血色，顺着眼，眼角上带些泪痕，眼光也没有先前那样精神了。"
+      styleNote: 阿毛尸体的细节必须在独白的递进中突现；以事实的平叙保留残酷，不加入抒情评断。
+    - excerpt: 她仍然头上扎着白头绳，乌裙，蓝夹袄，月白背心，脸色青黄，只是两颊上已经消失了血色，顺着眼，眼角上带些泪痕，眼光也没有先前那样精神了。
       classification: STYLE
-      styleNote: "第二次出场应沿原句逐层减损生命力，并与初到鲁家的衣着和“两颊却还是红的”形成不解释的对照。"
+      styleNote: 第二次出场应沿原句逐层减损生命力，并与初到鲁家的衣着和“两颊却还是红的”形成不解释的对照。
 greyLines:
   - id: gl_snow
-    imagery: "雪与雪声"
+    imagery: 雪与雪声
     nodes:
       - eventId: E4
-        semanticAccumulation: "雪景作为重复出现的背景——阿毛被狼叼走也是'雪天'"
+        semanticAccumulation: 雪景作为重复出现的背景——阿毛被狼叼走也是'雪天'
         narrativeOrder: 5
   - id: gl_hair
-    imagery: "头发与容貌的逐次褪色"
+    imagery: 头发与容貌的逐次褪色
     nodes:
       - eventId: E4
         semanticAccumulation: "'头上扎着白头绳，脸色青黄，两颊上已经消失了血色'——第二次到鲁家，第二次丧夫"
         narrativeOrder: 5
   - id: gl_foolish
-    imagery: "我真傻，真的——创伤重复"
+    imagery: 我真傻，真的——创伤重复
     nodes:
       - eventId: E4
         semanticAccumulation: "'我真傻，真的'——阿毛之死的首次讲述，催人泪下"

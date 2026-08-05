@@ -195,7 +195,8 @@ export class PromptAssembler {
       parts.push('');
       parts.push('## World Rules');
       for (const rule of context.activeRules) {
-        parts.push(`- ${rule.ruleId}: ${rule.statement}`);
+        const specification = rule.specifications[rule.initialSpecificationId];
+        parts.push(`- ${rule.ruleId}: ${specification?.statement ?? ''}`);
       }
       parts.push('Prose must not contradict these rules.');
     }

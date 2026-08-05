@@ -42,6 +42,10 @@ describe('classifyAuthoringPath', () => {
       'nova.yaml',
       'definitions/state_initial.yaml',
       'definitions/entity-types.yaml',
+      'definitions/thread-types.yaml',
+      'definitions/propositions.yaml',
+      'definitions/relationship-types.yaml',
+      'definitions/rule-types.yaml',
       'definitions/discourse-ledger.yaml',
       'definitions/characters/ada.yaml',
       'definitions/locations/harbor/docks.yaml',
@@ -145,6 +149,11 @@ describe('AuthoringManifest byte policy', () => {
       manifest.validate([
         entry('nova.yaml'),
         entry('definitions/state_initial.yaml'),
+        entry('definitions/entity-types.yaml'),
+        entry('definitions/thread-types.yaml'),
+        entry('definitions/propositions.yaml'),
+        entry('definitions/relationship-types.yaml'),
+        entry('definitions/rule-types.yaml'),
         entry('definitions/characters/ada.yaml'),
         entry('chapters/chapter_01/_chapter.yaml'),
         entry('chapters/chapter_01/E1.yaml'),
@@ -157,6 +166,20 @@ describe('AuthoringManifest byte policy', () => {
         entry('.nova/cache/x.json'),
       ]),
     ).toThrow(ManifestValidationError);
+  });
+  it('rejects an incomplete source bundle before accepting it as a complete tree', () => {
+    const manifest = new AuthoringManifest();
+    let thrown: unknown;
+    try {
+      manifest.validate([entry('nova.yaml')]);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(ManifestValidationError);
+    expect(thrown).toMatchObject({
+      code: 'missing-required-root',
+      path: 'definitions/state_initial.yaml',
+    });
   });
 
   it('rejects unrecognized entry modes with a typed code', () => {

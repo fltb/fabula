@@ -8,15 +8,13 @@ import type {
   EntityId,
   EntityLookup,
   KnowledgeBoundary,
-  LogicalConsequence,
   NarrativeEvent,
   RelationshipContext,
-  RelationshipState,
   RelevanceScore,
-  RuleDefinition,
-  RuleEffectEntry,
+  RuleDeclaration,
   SceneSpecification,
   SystemContext,
+  ThreadDeclaration,
   ThreadStatus,
   WorldFact,
   WorldState,
@@ -43,6 +41,8 @@ export class ContextAssembler {
     volumeSummary = '',
     systemContext?: SystemContext,
     activeThreadIds?: string[],
+    ruleDeclarations: RuleDeclaration[] = [],
+    threadDeclarations: readonly ThreadDeclaration[] = [],
   ): ContextPackage {
     const context: RelevanceContext = {
       currentEvent: event,
@@ -50,6 +50,7 @@ export class ContextAssembler {
       entities,
       recentEntities: this.recentEntities,
       activeThreads: activeThreadIds ?? [],
+      ruleDeclarations,
     };
 
     // Score all entities for relevance
@@ -98,10 +99,10 @@ export class ContextAssembler {
     const knowledgeBoundary = this._buildKnowledgeBoundary(event, state);
 
     // Active Threads
-    const activeThreads = this._buildThreadStatus(event, state);
+    const activeThreads = this._buildThreadStatus(event, state, threadDeclarations);
 
     // Active World Rules
-    const activeRules = this._buildActiveRules(state, entities);
+    const activeRules = this._buildActiveRules(state, ruleDeclarations);
 
     // Track recent entities for recency penalty in next call
     this.recentEntities = [...event.participants.entities, ...this.recentEntities].slice(0, 10);
@@ -200,9 +201,10 @@ export class ContextAssembler {
 
       // Derive participants from active epoch memberships
       const activeEpoch = relData.activeEpochId ? relData.epochs[relData.activeEpochId] : undefined;
-      const entityIds = activeEpoch
-        ? Object.values(activeEpoch.memberships).map((m) => m.entityId)
-        : [];
+      if (!activeEpoch) continue;
+      const entityIds = Object.values(activeEpoch.memberships).map(
+        (membership) => membership.entityId,
+      );
 
       const hasParticipant = event.participants.entities.some((p) => entityIds.includes(p));
       if (!hasParticipant) continue;
@@ -212,14 +214,18 @@ export class ContextAssembler {
         entityIds.length >= 2
           ? [entityIds[0], entityIds[1]]
           : [entityIds[0] ?? '', entityIds[1] ?? ''];
-
       contexts.push({
         id: relKey,
         participants,
-        // TODO(T3-remaining): RelationshipRuntimeState and RelationshipState are structurally
-        // incompatible types. This cast bridges the legacy RelationshipContext API. Requires
-        // either a data transformation or a type unification to eliminate.
-        currentState: relData as unknown as RelationshipState,
+        currentState: {
+          lifecycle: activeEpoch.lifecycle,
+          dimensions: Object.fromEntries(
+            Object.entries(activeEpoch.dimensions).map(([key, dimension]) => [
+              key,
+              dimension.value,
+            ]),
+          ),
+        },
       });
     }
 
@@ -240,47 +246,52 @@ export class ContextAssembler {
   }
 
   private _buildKnowledgeBoundary(event: NarrativeEvent, state: WorldState): KnowledgeBoundary {
-    const povChar = event.pov.character;
-    const charKnowledge = state.knowledge[povChar];
+    const knownFacts = Object.values(state.epistemicLedger.claims)
+      .filter(
+        (claim) =>
+          claim.subject === event.pov.character &&
+          claim.assessment.type === 'settled' &&
+          claim.assessment.polarity === 'affirmative',
+      )
+      .map((claim) => claim.propositionId);
 
-    return {
-      characterId: povChar,
-      knownFacts: charKnowledge?.knownFacts ?? [],
-    };
+    return { characterId: event.pov.character, knownFacts };
   }
 
-  private _buildThreadStatus(event: NarrativeEvent, state: WorldState): ThreadStatus[] {
+  private _buildThreadStatus(
+    event: NarrativeEvent,
+    state: WorldState,
+    declarations: readonly ThreadDeclaration[],
+  ): ThreadStatus[] {
+    const declarationsById = new Map(
+      declarations.map((declaration) => [declaration.threadId, declaration]),
+    );
     return Object.entries(state.threads).map(([id, data]) => {
       const goals = Object.values(data.goalStates);
-      const progressEntry = event.threadProgress.find((tp) => tp.thread === id);
+      const progressEntry = event.threadProgress.find((transaction) => transaction.thread === id);
+      const declaration = declarationsById.get(id);
       return {
         id,
-        name: id,
-        progress: goals.filter((s) => s === 'achieved').length,
+        name: declaration?.name ?? id,
+        progress: goals.filter((status) => status === 'achieved').length,
         total: goals.length,
-        description: progressEntry?.advancement ?? '',
+        description: progressEntry?.advancement ?? declaration?.description ?? '',
       };
     });
   }
 
-  private _buildActiveRules(state: WorldState, entities: EntityLookup): RuleDefinition[] {
-    const activeRules: RuleDefinition[] = [];
-    for (const [ruleId, ruleState] of Object.entries(state.rules)) {
-      // Rule is active if enabled and not nullified
-      if (ruleState.activation === 'enabled' && ruleState.effectiveness !== 'nullified') {
-        const entity = entities.resolve(ruleId);
-        if (entity) {
-          activeRules.push({
-            ruleId,
-            name: (entity.state.name as string) ?? ruleId,
-            statement: (entity.state.statement as string) ?? '',
-            category: (entity.state.category as string) ?? 'unknown',
-            type: (entity.state.type as string) ?? 'unknown',
-            logicalConsequences:
-              (entity.state.logicalConsequences as LogicalConsequence[] | undefined) ?? [],
-            evidenceChain: (entity.state.evidenceChain as RuleEffectEntry[] | undefined) ?? [],
-          });
-        }
+  private _buildActiveRules(
+    state: WorldState,
+    ruleDeclarations: RuleDeclaration[],
+  ): RuleDeclaration[] {
+    const activeRules: RuleDeclaration[] = [];
+    for (const declaration of ruleDeclarations) {
+      const ruleState = state.rules[declaration.ruleId];
+      // Rule is active if it has runtime state and is enabled and not nullified.
+      // Declarations with no runtime state are not yet materialized and cannot
+      // be reported as active.
+      if (ruleState?.activation === 'enabled' && ruleState.effectiveness !== 'nullified') {
+        activeRules.push(declaration);
       }
     }
     return activeRules;
@@ -351,37 +362,9 @@ export class ContextAssembler {
       lines.push('## Relationships');
       for (const rc of pkg.relationshipContext) {
         lines.push(`- ${rc.participants[0]} ↔ ${rc.participants[1]}`);
-        if (
-          rc.currentState &&
-          typeof rc.currentState === 'object' &&
-          'direction' in rc.currentState &&
-          rc.currentState.direction
-        ) {
-          // Old-format (pre STATE-2): direction-based relationship state
-          for (const [dir, data] of Object.entries(
-            rc.currentState.direction as Record<string, unknown>,
-          )) {
-            const dims = Object.entries(data as Record<string, unknown>)
-              .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
-              .join(', ');
-            lines.push(`  ${dir}: { ${dims} }`);
-          }
-        } else if (
-          rc.currentState &&
-          typeof rc.currentState === 'object' &&
-          'activeEpochId' in rc.currentState
-        ) {
-          // New-format (STATE-2): render dimensions from active epoch
-          const rs = rc.currentState as {
-            activeEpochId?: string;
-            epochs?: Record<string, { dimensions?: Record<string, { value: unknown }> }>;
-          };
-          const epoch = rs.activeEpochId ? rs.epochs?.[rs.activeEpochId] : undefined;
-          if (epoch?.dimensions) {
-            for (const [k, v] of Object.entries(epoch.dimensions)) {
-              lines.push(`  ${k}: ${JSON.stringify(v.value)}`);
-            }
-          }
+        lines.push(`  lifecycle: ${rc.currentState.lifecycle}`);
+        for (const [key, value] of Object.entries(rc.currentState.dimensions)) {
+          lines.push(`  ${key}: ${JSON.stringify(value)}`);
         }
       }
       lines.push('');
@@ -400,8 +383,10 @@ export class ContextAssembler {
     if (pkg.activeRules && pkg.activeRules.length > 0) {
       lines.push('## Active World Rules');
       for (const rule of pkg.activeRules) {
-        lines.push(`- **${rule.name}** (${rule.ruleId}) [${rule.category}]`);
-        lines.push(`  Statement: ${rule.statement}`);
+        lines.push(`- **${rule.name}** (${rule.ruleId}) [${rule.typeId}]`);
+        for (const specification of Object.values(rule.specifications)) {
+          lines.push(`  Statement: ${specification.statement}`);
+        }
       }
       lines.push('');
     }

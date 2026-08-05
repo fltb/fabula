@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { InMemoryEntityRegistry } from '../src/entity/index.js';
 import { calculateISS, detectAntiPatterns, validateStrict } from '../src/iss/index.js';
-import type { NarrativeEvent, RuleDefinition } from '../src/types/index.js';
+import type { NarrativeEvent, RuleDeclaration } from '../src/types/index.js';
 
 function makeEvent(overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
   return {
@@ -84,7 +84,7 @@ describe('calculateISS', () => {
     const registry = makeRegistry([{ id: 'alice', traits: ['brave', 'curious', 'determined'] }]);
     const events = [makeEvent()];
     const threads = [{ id: 'T1', name: 'Main Plot' }];
-    const rules: RuleDefinition[] = [];
+    const rules: RuleDeclaration[] = [];
 
     const result = calculateISS({
       entities: registry,
@@ -102,7 +102,7 @@ describe('calculateISS', () => {
     const registry = makeRegistry();
     const events = [makeEvent()];
     const threads: Array<{ id: string; name: string }> = [];
-    const rules: RuleDefinition[] = [];
+    const rules: RuleDeclaration[] = [];
 
     const result = calculateISS({
       entities: registry,
@@ -125,7 +125,7 @@ describe('calculateISS', () => {
     const registry = makeRegistry(); // empty
     const events = [makeEvent({ participants: { entities: ['alice', 'bob'] } })];
     const threads: Array<{ id: string; name: string }> = [];
-    const rules: RuleDefinition[] = [];
+    const rules: RuleDeclaration[] = [];
 
     const result = calculateISS({
       entities: registry,
@@ -146,15 +146,20 @@ describe('calculateISS', () => {
     const registry = makeRegistry();
     const events = [makeEvent()];
     const threads: Array<{ id: string; name: string }> = [];
-    const rules: RuleDefinition[] = [
+    const rules: RuleDeclaration[] = [
       {
         ruleId: 'empty.rule',
         name: 'Empty Rule',
-        category: 'world_rule',
-        type: 'conditional',
-        statement: 'Has no checks.',
-        logicalConsequences: [],
-        evidenceChain: [],
+        typeId: 'world_rule',
+        initialEpochId: 'empty.rule-epoch-1',
+        initialSpecificationId: 'empty.rule-spec-1',
+        initialActivation: 'dormant',
+        initialEffectiveness: 'full',
+        scopeBindings: {},
+        exceptions: [],
+        specifications: {
+          'empty.rule-spec-1': { statement: 'Has no constraints.', constraints: [] },
+        },
       },
     ];
 
@@ -192,7 +197,7 @@ describe('calculateISS', () => {
       }),
     ];
     const threads: Array<{ id: string; name: string }> = [];
-    const rules: RuleDefinition[] = [];
+    const rules: RuleDeclaration[] = [];
 
     const result = calculateISS({
       entities: registry,
@@ -215,7 +220,7 @@ describe('detectAntiPatterns', () => {
     const registry = makeRegistry([{ id: 'alice', traits: ['brave', 'kind'] }]);
     const events = [makeEvent()];
     const threads: Array<{ id: string; name: string }> = [];
-    const rules: RuleDefinition[] = [];
+    const rules: RuleDeclaration[] = [];
 
     const issues = detectAntiPatterns({
       entities: registry,
@@ -232,7 +237,7 @@ describe('detectAntiPatterns', () => {
     const registry = makeRegistry([{ id: 'alice', traits: ['brave_warrior', 'curious_mind'] }]);
     const events = [makeEvent({ postconditions: [] })];
     const threads: Array<{ id: string; name: string }> = [];
-    const rules: RuleDefinition[] = [];
+    const rules: RuleDeclaration[] = [];
 
     const issues = detectAntiPatterns({
       entities: registry,
@@ -257,7 +262,7 @@ describe('validateStrict', () => {
     const registry = makeRegistry([{ id: 'alice', traits: ['brave'] }]);
     const events = [makeEvent()];
     const threads: Array<{ id: string; name: string }> = [];
-    const rules: RuleDefinition[] = [];
+    const rules: RuleDeclaration[] = [];
 
     const issues = validateStrict({
       events,
@@ -276,7 +281,7 @@ describe('validateStrict', () => {
     const registry = makeRegistry([{ id: 'alice', traits: ['brave', 'curious', 'determined'] }]);
     const events = [makeEvent()];
     const threads: Array<{ id: string; name: string }> = [];
-    const rules: RuleDefinition[] = [];
+    const rules: RuleDeclaration[] = [];
 
     const issues = validateStrict({
       events,
@@ -298,7 +303,7 @@ describe('validateStrict', () => {
       makeEvent({ id: 'E2', narrativeOrder: 2, preconditions: [] }),
     ];
     const threads: Array<{ id: string; name: string }> = [];
-    const rules: RuleDefinition[] = [];
+    const rules: RuleDeclaration[] = [];
 
     const issues = validateStrict({
       events,
@@ -317,7 +322,7 @@ describe('validateStrict', () => {
     const registry = makeRegistry([{ id: 'alice', traits: ['brave', 'curious', 'determined'] }]);
     const events = [makeEvent({ id: 'E1', narrativeOrder: 1, preconditions: [] })];
     const threads: Array<{ id: string; name: string }> = [];
-    const rules: RuleDefinition[] = [];
+    const rules: RuleDeclaration[] = [];
 
     const issues = validateStrict({
       events,
@@ -336,15 +341,20 @@ describe('validateStrict', () => {
     const registry = makeRegistry([{ id: 'alice', traits: ['brave', 'curious', 'determined'] }]);
     const events = [makeEvent()];
     const threads: Array<{ id: string; name: string }> = [];
-    const rules: RuleDefinition[] = [
+    const rules: RuleDeclaration[] = [
       {
         ruleId: 'r1',
         name: 'Bad Rule',
-        category: 'world_rule',
-        type: 'conditional',
-        statement: 'no checks',
-        logicalConsequences: [],
-        evidenceChain: [],
+        typeId: 'world_rule',
+        initialEpochId: 'r1-epoch-1',
+        initialSpecificationId: 'r1-spec-1',
+        initialActivation: 'dormant',
+        initialEffectiveness: 'full',
+        scopeBindings: {},
+        exceptions: [],
+        specifications: {
+          'r1-spec-1': { statement: 'no constraints', constraints: [] },
+        },
       },
     ];
 
@@ -366,20 +376,36 @@ describe('validateStrict', () => {
     const registry = makeRegistry([{ id: 'alice', traits: ['brave', 'curious', 'determined'] }]);
     const events = [makeEvent()];
     const threads: Array<{ id: string; name: string }> = [];
-    const rules: RuleDefinition[] = [
+    const rules: RuleDeclaration[] = [
       {
         ruleId: 'good.rule',
         name: 'Good Rule',
-        category: 'world_rule',
-        type: 'conditional',
-        statement: 'has checks',
-        logicalConsequences: [
-          {
-            description: 'd',
-            check: { type: 'state_invariant', filter: 'x', assert: 'y', severity: 'warning' },
+        typeId: 'world_rule',
+        initialEpochId: 'good.rule-epoch-1',
+        initialSpecificationId: 'good.rule-spec-1',
+        initialActivation: 'dormant',
+        initialEffectiveness: 'full',
+        scopeBindings: {},
+        exceptions: [],
+        specifications: {
+          'good.rule-spec-1': {
+            statement: 'has constraints',
+            constraints: [
+              {
+                constraintId: 'c1',
+                kind: 'state_invariant',
+                enforcement: 'audit',
+                applicableEffectiveness: ['full'],
+                scope: {},
+                predicate: {
+                  version: '1.0',
+                  type: 'simple',
+                  expression: 'entity.status exists',
+                },
+              },
+            ],
           },
-        ],
-        evidenceChain: [],
+        },
       },
     ];
 

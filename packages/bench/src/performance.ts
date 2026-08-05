@@ -10,8 +10,11 @@ import type {
   Fact,
   LayeredCacheKey,
   NarrativeEvent,
+  RelationshipDeclaration,
   RelationshipTransaction,
+  RelationshipTypeCatalog,
   RenderCacheRecord,
+  ThreadRunId,
 } from '@novalistically/core';
 import { InMemoryEntityRegistry, MemoryRenderCacheRepository } from '@novalistically/core/testing';
 import {
@@ -161,7 +164,14 @@ function makeSyntheticEvent(): NarrativeEvent {
         },
       },
     ],
-    threadProgress: [{ thread, advancement: `0.${idx}`, progressAfter: idx, progressTotal: 100 }],
+    threadProgress: [
+      {
+        thread,
+        runId: `${thread}:run_1` as ThreadRunId,
+        advancement: `0.${idx}`,
+        provenance: 'bench:performance',
+      },
+    ],
     foreshadowing:
       idx % 3 === 0
         ? [
@@ -176,6 +186,7 @@ function makeSyntheticEvent(): NarrativeEvent {
       idx % 2 === 0
         ? ([
             {
+              type: 'relationship_transaction' as const,
               effectId: `perf_rel_${idx}`,
               relationshipId: `rel_${[char1, char2].sort().join('_')}`,
               epochId: 'epoch_1',
@@ -340,6 +351,53 @@ const syntheticCatalogContext: CatalogContext = {
   entityTypeCatalog: syntheticEntityTypeCatalog,
 };
 
+const syntheticRelationshipTypeCatalog: RelationshipTypeCatalog = {
+  types: {
+    synthetic_bond: {
+      typeId: 'synthetic_bond',
+      label: 'Synthetic benchmark relationship',
+      roles: [
+        {
+          roleId: 'member',
+          label: 'Member',
+          minCardinality: 2,
+          maxCardinality: 2,
+          allowedEntityKinds: ['character'],
+        },
+      ],
+      continuityImpact: 'preserve',
+    },
+  },
+};
+
+const syntheticRelationshipDeclarations: RelationshipDeclaration[] = [
+  ['raincourt', 'zariel'],
+  ['mira', 'doran'],
+  ['carissa', 'theron'],
+  ['lydia', 'balthus'],
+  ['elara', 'finn'],
+].map(([left, right]) => {
+  const relationshipId = `rel_${[left, right].sort().join('_')}`;
+  return {
+    relationshipId,
+    typeId: 'synthetic_bond',
+    initialEpoch: {
+      epochId: 'epoch_1',
+      lifecycle: 'active',
+      memberships: [
+        { membershipId: `${relationshipId}:member:1`, entityId: left, role: 'member' },
+        { membershipId: `${relationshipId}:member:2`, entityId: right, role: 'member' },
+      ],
+      dimensions: [],
+    },
+  } as unknown as RelationshipDeclaration;
+});
+
+const syntheticRelationshipReplayContext = {
+  relationshipDeclarations: syntheticRelationshipDeclarations,
+  relationshipTypeCatalog: syntheticRelationshipTypeCatalog,
+};
+
 /**
  * Initial activation facts for every declared synthetic entity. The write gate
  * requires initial-activated entities to be live (activated via initial facts)
@@ -400,7 +458,10 @@ export async function runPerformanceBench(): Promise<PerfResults> {
     for (let i = 0; i < n; i++) events.push(makeSyntheticEvent());
     const registry = new InMemoryEntityRegistry();
     makeSyntheticEntities(registry);
-    const replay = new ReplayEngine(syntheticCatalogContext as never);
+    const replay = new ReplayEngine(
+      syntheticCatalogContext as never,
+      syntheticRelationshipReplayContext,
+    );
     const state = replay.replay(events, { initialFacts: syntheticInitialFacts });
     const validators = createBuiltInValidators().filter((v) =>
       new Set([
@@ -596,7 +657,10 @@ export function runOfflineCorePathBench(): PerfResults {
   }
 
   // 3. replay — ReplayEngine.replay
-  const replay = new ReplayEngine(syntheticCatalogContext as never);
+  const replay = new ReplayEngine(
+    syntheticCatalogContext as never,
+    syntheticRelationshipReplayContext,
+  );
   {
     const samples = collectSamples(() => {
       replay.replay(events, { initialFacts: syntheticInitialFacts });
@@ -831,7 +895,10 @@ export function runPoolEfficiencyBench(): PoolEfficiencyResult[] {
   for (let i = 0; i < N; i++) events.push(makeSyntheticEvent());
   const registry = new InMemoryEntityRegistry();
   makeSyntheticEntities(registry);
-  const replayEngine = new ReplayEngine(syntheticCatalogContext as never);
+  const replayEngine = new ReplayEngine(
+    syntheticCatalogContext as never,
+    syntheticRelationshipReplayContext,
+  );
   const state = replayEngine.replay(events, { initialFacts: syntheticInitialFacts });
   const aggregator = new ResultAggregator(undefined, syntheticCatalogContext.entityTypeCatalog);
 

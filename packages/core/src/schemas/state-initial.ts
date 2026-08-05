@@ -3,8 +3,10 @@
 // ============================================================================
 
 import { z } from 'zod';
-import { structuralFunctionSchema } from './story-ir.js';
+import { knowledgeInitialStateSchema } from './knowledge.js';
+import { threadDeclarationSchema } from './thread.js';
 import { authoredLocatableStoryTimeSchema } from './timestamp.js';
+
 export const worldInitialStateSchema = z
   .object({
     info: z
@@ -20,23 +22,13 @@ export const worldInitialStateSchema = z
             id: z.string().min(1),
             at: authoredLocatableStoryTimeSchema,
             description: z.string().optional(),
+            significance: z.string().optional(),
           })
           .strict(),
       )
       .optional(),
-    threads: z.array(
-      z
-        .object({
-          id: z.string(),
-          name: z.string(),
-          description: z.string(),
-          type: z.string(),
-          targetRevealChapter: z.number(),
-          initialProgress: z.string(),
-          structuralFunction: structuralFunctionSchema.optional(),
-        })
-        .strict(),
-    ),
+    threads: z.array(threadDeclarationSchema),
+    knowledge: knowledgeInitialStateSchema,
     worldFacts: z.array(
       z
         .object({

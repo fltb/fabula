@@ -113,20 +113,23 @@ export interface ThreadDeclaration {
   name: string;
   description: string;
   typeId: string;
-  /** Optional initial phase (defaults to first allowedPhase of type) */
+  /** Optional initial phase; the compiler checks it against the type catalog. */
   initialPhase?: string;
   /** Initial bindings: role → entity/lineage/epoch/proposition */
   initialBindings?: Record<string, string>;
-  /** Override initial goal states (default: pending) */
+  /** Override initial goal states; IDs must be declared by the thread type. */
   initialGoalStates?: GoalState[];
-  /** Override initial milestone states (default: pending) */
+  /** Override initial milestone states; IDs must be declared by the thread type. */
   initialMilestoneStates?: MilestoneState[];
   provenance?: string;
+  /** Author-facing retained metadata for progress/reveal projections. */
+  targetRevealChapter?: number;
+  initialProgress?: string;
+  structuralFunction?: StructuralFunction;
 }
 
-export interface ThreadDeclarationCatalog {
-  declarations: Record<ThreadId, ThreadDeclaration>;
-}
+/** Canonical state_initial.threads declaration list. */
+export type ThreadDeclarationCatalog = readonly ThreadDeclaration[];
 
 // ============================================================================
 // 7. ThreadRuntimeState — stored in WorldState

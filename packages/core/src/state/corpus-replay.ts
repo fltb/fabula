@@ -23,6 +23,7 @@ import type {
 import type { AdjacencyList, StoryOrderIndex } from './dag.ts';
 import { buildStoryOrderIndex, isProvenBefore } from './dag.ts';
 import { applyInitialFacts, applyNarrativeEvent } from './event-application.ts';
+import type { RelationshipReplayContext } from './relationship-replay.js';
 import { emptyWorldState } from './story-boundaries.ts';
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -77,6 +78,12 @@ export interface DiscourseOracle {
 export interface CorpusReplayOptions {
   /** Shared compiled catalogs; required, no optional fallback. */
   catalogs: EntityCatalogContext;
+  /**
+   * Relationship replay context (declarations + type catalog); required when
+   * any event in the corpus carries relationship effects — replay fails closed
+   * without it.
+   */
+  relationshipReplayContext?: RelationshipReplayContext;
   /** Initial facts applied as baseline before any event replay */
   initialFacts: readonly Fact[];
   /** Active branch path for scope filtering */
@@ -218,6 +225,7 @@ export function computeStateBefore(
 
     applyNarrativeEvent(state, candidateEvent, {
       catalogs: options.catalogs,
+      relationshipReplayContext: options.relationshipReplayContext,
       branchPath: options.branchPath,
       lifecycleChangesByCoordinate,
       storyCoordinate: options.coordinatesByEventId.get(candidateId),

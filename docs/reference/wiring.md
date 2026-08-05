@@ -97,14 +97,18 @@ flowchart TB
 | 路径 | strict schema / 内部落点 | 作者可写顶层键 |
 |---|---|---|
 | `nova.yaml` | `projectConfigSchema` → `ProjectData.config` | identity（必填）：`project`、`title`、`author`；render：`defaultModel?`、`defaultLanguage?`、`genre?`、`synopsis?`、`tense?`（`past`/`present`）、`concurrency?`、`defaultSceneTextTarget?`、`cacheEnabled?`、`snapshotInterval?`；policy：`validatorOverrides?`、`logLevel?`、`traceLevel?`、`circuitBreaker? { maxRetries }`、`reviewExpiry? { enabled, autoResolveDays }`；style：`styleProfile?`、`ideaIR?`；integration：`plugins? { enabled }`、`renderSurface?`。schema 是 strict；**没有** `schemaVersion`、`outputDir`、`plugins.provider`。 |
-| `definitions/state_initial.yaml` | `worldInitialStateSchema` → `ProjectData.worldInitialState`、`timeAnchors` | `info { currentEra, politicalSituation }`、`timeAnchors[] { id, at, description? }`（`at` 是 authored locatable story time：字符串或 `{ at }` / `{ after }` / `{ offset }` / `{ chapter }`，不接受 `indeterminate`）、`threads[] { id, name, description, type, targetRevealChapter, initialProgress, structuralFunction? }`、`worldFacts[] { id, value, description }`。 |
+| `definitions/state_initial.yaml` | `worldInitialStateSchema` → `ProjectData.worldInitialState`、`timeAnchors` | `info { currentEra, politicalSituation }`、`timeAnchors?[] { id, at, description?, significance? }`、`threads[] { threadId, name, description, typeId, initialPhase?, initialBindings?, initialGoalStates?, initialMilestoneStates?, provenance?, targetRevealChapter?, initialProgress?, structuralFunction? }`、`knowledge { claims, commonGround }`、`worldFacts[] { id, value, description }`。 |
 | `definitions/entity-types.yaml` | `entityTypeCatalogSourceSchema` → `ProjectData.entityTypeCatalogSource`（必需文件；序列化 source，编译时经 `compileEntityTypeCatalog` 生成 catalog） | 实体类型/属性/生命周期/引用资格的 author-facing catalog；实体属性与生命周期以项目自带 catalog 为准，不假定历史默认 catalog。 |
+| `definitions/thread-types.yaml` | `threadTypeCatalogSchema` → `ProjectData.threadTypeCatalog` | `types` map keyed by `typeId`; each type supplies `description`、`allowedPhases`、`lifecyclePolicy`、`timeDomain`、`stableGoals` 与 `stableMilestones`。 |
+| `definitions/propositions.yaml` | `propositionCatalogSchema` → `ProjectData.propositionCatalog` | `version: 1`、`propositions` map 与 `dependencyGraph`；initial knowledge 和 event knowledge transactions 引用其中的 proposition ID。 |
+| `definitions/relationship-types.yaml` | `relationshipTypeCatalogSchema` → `ProjectData.relationshipTypeCatalog` | `types` map keyed by `typeId`; each type declares roles and `continuityImpact`。 |
+| `definitions/rule-types.yaml` | `ruleTypeCatalogSchema` → `ProjectData.ruleTypeCatalog` | `types` map keyed by `typeId`; each type declares `name`、`category`、optional `ruleClass` and `defaultConstraints`。 |
 | `definitions/characters/**/*.yaml` | `characterDefinitionSchema` → `ProjectData.characters` → registry character | `id`、`name`、`type`、`description`、`initialState`、`traits`；optional `archetype`、`faction`、`role`、`voiceNotes`、`backstory`、`knownSecrets`、`appearance`、`aliases`、`gender`、`age`、`profession`。 |
 | `definitions/locations/**/*.yaml` | `locationDefinitionSchema` → `ProjectData.locations` → registry location | `id`、`name`、`kind`、`description`、`initialState`；optional `parent`、`notableFeatures`。 |
 | `definitions/items/**/*.yaml` | `itemDefinitionSchema` → `ProjectData.items` → registry item | `id`、`name`、`kind`、`description`、`initialState`。 |
 | `definitions/factions/**/*.yaml` | `factionDefinitionSchema` → `ProjectData.factions` → registry faction | `id`、`name`、`kind`、`description`、`initialState`。 |
-| `definitions/relationships/**/*.yaml` | `relationshipDefinitionSchema` → `ProjectData.relationships` | `id`、`type`、`participants`（恰好两项）、`bidirectional`、`initialState { trust, emotionalDistance, intensity, status, notes? }`；optional `establishedEvent`、`breakingEvent`。 |
-| `definitions/rules/**/*.yaml` | `ruleDefinitionSchema` → `ProjectData.rules` → registry rule | `ruleId`、`name`、`category`、`type`、`statement`、`logicalConsequences[]`、`evidenceChain[]`；optional `ruleClass`、`exceptions[]`。 |
+| `definitions/relationships/**/*.yaml` | `relationshipDeclarationSchema` → `ProjectData.relationshipDeclarations` | `relationshipId`、`typeId`、`initialEpoch { epochId, lifecycle, memberships[], dimensions[] }`；optional `provenance`。 |
+| `definitions/rules/**/*.yaml` | `ruleDeclarationSchema` → `ProjectData.ruleDeclarations` | `ruleId`、`name`、`typeId`、`initialEpochId`、`initialSpecificationId`、`initialActivation`、`initialEffectiveness`、`scopeBindings`、`exceptions[]`、`specifications`。 |
 | `definitions/narrators/**/*.yaml` | `narratorProfileSchema` → `ProjectData.narratorProfiles` map | base `id`、`type`、`access`、`assertion`、`truth`、`fidelity`、`sincerity`；`retrospective_entity` 另需 `knowledgeBoundary`，`omniscient` 另需 `autoReveal: false`。 |
 | `definitions/assertions/**/*.yaml` | `narratorAssertionSchema` → `ProjectData.narratorAssertions` map | `id`、`narrator`、`proposition`、`polarity`、`type`、`status`（`asserted`、`unknown` 或 `contested`）、`narrationBoundary { narratorId, focalizerId?, narrationTime? }`；optional `evidence`。`authoritative_reveal` 必须使用 `asserted` status；重复 assertion ID 是配置错误。 |
 | `definitions/discourse-ledger.yaml` | **可选** `plannedDiscourseLedgerSourceSchema` → `compilePlannedDiscourseLedger()` → `ProjectData.discourseLedger`（恒非空；派生 SHA-256 `hash`） | `id`、`chapters[] { branch, chapter, sceneIds }`（每 branch 至少一章，章节号递增，scene 全局唯一）、`entries[] { id, sceneId, branch, discoursePosition, action }`。`action` 是 `reveal`、`claim`、`hint`、`retraction`、`correction`、`withhold_start` 或 `withhold_end` 的 discriminated union。缺失文件不报错：mapper 替换为 `{ id: 'empty', chapters: [{ branch: 'main', chapter: 1, sceneIds: ['__empty__'] }], entries: [] }` 占位；canonical render 仍要求 ledger 覆盖全部 event_file 场景，否则 `compileDiscourseSceneSequence()` 抛 `ConfigError`（phase `'discourse-sequence'`）。 |
@@ -118,7 +122,7 @@ flowchart TB
 | identity / time | `event`、`narrativeOrder`、`title`、`storyTime?`、`narrationTime?`、`sceneType?`。`storyTime` / `narrationTime` 都接受 authored union（legacy 字符串或 `{ at }` / `{ after }` / `{ offset }` / `{ chapter }` / `{ type: indeterminate }`）；省略 = 运行时 `indeterminate/unspecified`。`causalPredecessors?[]`（非空、唯一）是显式 author-origin 前驱。 |
 | scene / narrative metadata | `beats`（**必填**：至少一个非空字符串条目）、`discourseMode?`、`arcPosition?`、`emotionalValence?`、`conflictType?`、`resolutionType?`、`tense?`、`pov { character, type }`、`sceneBrief`。 |
 | state transition / game choice | `preconditions[]`、`expectedPostconditions[]`、`choices?[] { id, label, description, targetEvent, effects? }`。ordinary Facts 与 choice effects 都复用同一 value / narrativeHint / unset 互斥合同；mapper 将 ordinary Facts 按 derived tree scope 映射，每个 choice effect 由 synthetic transition 在 target 的 stateBefore 前写入。 |
-| context and effects | `styleGuidance?`、`threadProgress?`、`greyLines?`、`foreshadowing?`、`relationshipEffects?`、`ruleEffects?`、`introduces?`、`authorNotes?`、`targetAudience?`、`cast?`。 |
+| context and effects | `styleGuidance?`、`threadProgress?`、`greyLines?`、`foreshadowing?`、`knowledgeTransactions?`、`relationshipEffects?`、`ruleEffects?`、`introduces?`、`authorNotes?`、`targetAudience?`、`cast?`。 |
 | source and narratology | `narrativeChecklist?`、`sourceContext?`、`duration?`、`frequency?`、`anachrony?`、`voice?`、`narratorProfileRef?`、`focalization?`（`type`：`zero`/`internal`/`external`，可带 `variation` 与 `characterSequence`）；narrative-technique 契约：`causalDiscontinuity?`、`surfaceMode?`、`causalMultiplicity?`、`irresolvableIndeterminacy?`、`absentApparatus?`、`voiceDissonance?`、`multiplicity?`、`metanarrativeLevel?`。 |
 
 | Fact YAML 位置 | 必有键 | 允许的完整形式 | 映射语义 |
@@ -126,10 +130,7 @@ flowchart TB
 | `preconditions[]` | `entity`、`attribute` | `value` 与 `narrativeHint` 不可并存；`operator?` 为 `eq`、`neq`、`gt`、`gte`、`lt`、`lte`、`contains`、`not_contains`、`exists` 或 `not_exists`；比较 operator 要求 `value`，`exists` / `not_exists` 禁止 `value`；`confidence?`。 | mapper 加入 `id = entity.attribute`、story-time validity 与 `operator`，作为 render 前 state 条件。 |
 | `expectedPostconditions[]` | `entity`、`attribute` | 三选一：`value`（可附 `operation: set`）；`operation: unset` 且无 `value` / `narrativeHint`；或仅 `narrativeHint`。可有 `confidence?`。`value` 与 `narrativeHint` 绝不共存。 | `value` / `unset` 交给 canonical story replay（写 / 删 `state.entities` 并追加 `state.facts`）；`narrativeHint` 不写 `state.entities`、不产生因果边，但 `applyPostconditions()` 会把 hint-only postcondition 追加到 `WorldState.facts` 事实日志（`ContextAssembler._buildWorldFacts()` 可消费），同时作为 Pass 2 semantic input。 |
 
-`relationshipEffects[]` 为 `{ participants: [a, b], effect, direction, newState? }`；
-`ruleEffects[]` 为 `{ rule, effect, evidence }`；`introduces[]` 为
-`{ type, id, initialState }`。mapper 从两类 Fact、relationship participants 和 `pov.character`
-收集 `NarrativeEvent.participants`，而不是从 prose 推断。
+`relationshipEffects[]` is the canonical `RelationshipEffect` discriminated union: a `relationship_transaction` writes a declared epoch’s complete memberships and scoped dimensions, while `identity_transition` groups an atomic epoch transition. `ruleEffects[]` contains canonical `rule_transaction` entries. `introduces[]` remains `{ type, id, initialState }`. The mapper derives `NarrativeEvent.participants` only from preconditions, postconditions, relationship memberships, and `pov.character`; it never infers participants from prose.
 
 ### 2.2 一份不可变 snapshot，不等于一次读取
 
@@ -165,7 +166,7 @@ flowchart TD
   Parsed --> EventFile[EventFile with logicalPath]
   EventFile --> EventMap[EntityMapper.mapToNarrativeEvent per file]
   EventMap --> Facts[Fact preconditions and postconditions]
-  EventMap --> Effects[thread relationship rule and lifecycle effects]
+  EventMap --> Effects[thread, knowledge, relationship, rule and lifecycle effects]
   EventMap --> Participants[participants derived from facts effects and POV]
   Facts --> Events[authored NarrativeEvent array<br/>no system:genesis]
   Effects --> Events
@@ -174,9 +175,10 @@ flowchart TD
   Snapshot --> Registry[InMemoryEntityRegistry.load<br/>typed definitions + worldFacts-as-concepts<br/>+ entity-type catalog]
   Registry --> RegistryState[entity state for initialFacts]
   Events --> Runtime[canonical kernel: loadCanonicalProject<br/>runtimeEvents = authored + system:introduction + system:branch-choice]
-  Runtime --> Initial[initialFacts + initialThreads from state_initial.threads]
-  RegistryState --> Initial
-  Initial --> Boundaries[compileCanonicalRuntime<br/>compileStoryBoundariesFromGraph]
+  Data --> Baseline[NarrativeStateBaseline<br/>threads + knowledge + relationships + rules]
+  Runtime --> Boundaries[compileCanonicalRuntime<br/>compileStoryBoundariesFromGraph]
+  RegistryState --> Boundaries
+  Baseline --> Boundaries
   Data --> Anchors[timeAnchors TimeAnchor[]]
   RenderOpts[render opts: branchPath + discourseBranch] --> Boundaries
   Anchors --> Boundaries
@@ -219,10 +221,9 @@ flowchart TD
 |---|---|---|
 | `nova.yaml` | `config` | 形成 model、language、style、cache、surface plan 与 validator policy 的 project-level inputs。 |
 | character、location、item、faction definitions | `characters`、`locations`、`items`、`factions` arrays | fresh `InMemoryEntityRegistry` 创建对应实体；character 的 aliases/gender/appearance/age/profession/traits 与各类 `initialState` 被 canonicalize 为 runtime state。 |
-| relationship definitions | `relationships` array | 作为 relationship state 与 event `relationshipEffects` 的定义侧输入；不被伪装成 generic entity definition。 |
-| rule definitions | `rules` array | registry 创建 rule entity；category/type 被提升为 runtime state，事件的 `ruleEffects` 再记录其变化/evidence。 |
-| `state_initial.yaml`（必需） | `worldInitialState`、`timeAnchors` | canonical kernel（`loadCanonicalProject`）中，`worldFacts` 以 concept entity 状态进入 registry，不合成 `system:genesis`；threads 生成 `initialThreads`；anchors 保留为 `TimeAnchor[]`（`at` 是 authored locatable story time，`indeterminate` anchor 在 mapper 直接拒绝），由 `resolveTemporalContext()` 解析成 `coordinatesByAnchorId` / `coordinatesByEventId` / `narrationCoordinatesByEventId`（story 与 narration 坐标分开存放，后者仅为带 `narrationTime` 的事件填充）。`compileProject()` 返回这些规范化数据及编译后的 boundaries 快照，不暴露内部运行时。 |
-| `entity-types.yaml`（必需） | `entityTypeCatalogSource` | `compileEntityTypeCatalog()` 编译为 `EntityTypeCatalog`，与 `EntityDeclarationCatalog` 一起构成 `catalogContext` 供 replay / context / validators 使用；实体属性、生命周期与引用资格以项目自带 catalog 为准。 |
+| thread, proposition, relationship and rule catalogs/declarations | `threadTypeCatalog`、`propositionCatalog`、`relationshipTypeCatalog`、`ruleTypeCatalog` and declaration arrays | `loadCanonicalProject()` builds one `NarrativeCatalogContext`; `materializeNarrativeBaseline()` materializes every declared thread, initial knowledge/common ground, relationship, and rule before replay. |
+| `state_initial.yaml`（必需） | `worldInitialState`、`timeAnchors` | `worldFacts` enter the registry as concept entities and become initial entity facts; `threads` and required `knowledge` contribute to the canonical baseline; anchors remain `TimeAnchor[]` and `resolveTemporalContext()` resolves their story coordinates. No `system:genesis` event is synthesized. |
+| `entity-types.yaml`（必需） | `entityTypeCatalogSource` | `compileEntityTypeCatalog()` compiles `EntityTypeCatalog`; together with `EntityDeclarationCatalog` it forms the entity write-policy context used by replay, context assembly, and validators. |
 | narrator profiles、assertions、discourse ledger | `narratorProfiles` map、`narratorAssertions` map、恒非空 `discourseLedger`（来自 `definitions/discourse-ledger.yaml`，缺省时是 `id: 'empty'` 占位） | `compileDiscourseBoundaries()` 与 `compileDiscourseSceneSequence()` 消费这些已校验的记录；canonical render 要求实际 ledger 覆盖全部 event_file 场景，否则 `ConfigError`（phase `'discourse-sequence'` / `'discourse-branch-resolve'`）。 |
 | `_chapter.yaml`（可选）+ `E*.yaml` | `Map<chapter, { metadata, events }>`；每个 event 有 `logicalPath` | canonical kernel 逐文件 `mapToNarrativeEvent()`，`introduces` 生成 `system:introduction:<eventId>:<entityId>` transition（在 host event 前、同 story coordinate、同 branch scope；若该实体定义仍声明 `initialState` 则抛 `ConfigError`，phase `'introductions'`），`choices` 生成 `system:branch-choice:<eventId>:<choiceId>` transition；`compileProject()` 编译 source snapshot 并返回不可变投影。 |
 
@@ -231,7 +232,7 @@ flowchart TD
 
 1. `ProjectData` 与 `NarrativeEvent[]` 按 `(snapshot.sourceHash)` 记忆化（`loadCanonicalProject` 的内容缓存，上限 8 项），缓存内容是不可变 source data；等价字节产生等价身份。
 2. 每次 `compileProject()` 都在 API 边界对 source data/events、catalog、实体查询结果与 boundaries 做 `structuredClone` 分离；`entities` 是冻结的 `EntityLookup` 普通对象，每次查询返回新鲜克隆，调用不能共享可变 state。editorial render 路径经 `loadCanonicalProject()` 拿到 fresh clones，同样不共享可变 state。
-3. `compileStoryBoundariesFromGraph()` 用 initial facts/threads 和 branch-filtered 事件序列（经 `compileNarrativeGraphs` 的选择结果）计算，给每个 event 固定 `stateBeforeByEventId`。
+3. `compileStoryBoundariesFromGraph()` applies the canonical baseline and initial facts, then replays the branch-filtered event sequence to compute each `stateBeforeByEventId`.
 4. `compileDiscourseBoundaries()` 独立给每个 event 固定 disclosure projection 与 cursor。
 5. 后续 render job 只读取这两个编译结果；LLM prose、Pass 2、cache 和 surface packet 都不能反向修改它们。
 

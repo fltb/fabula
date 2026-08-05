@@ -62,7 +62,12 @@ function source(ids: string[], surface?: string): ProjectSourceSnapshotV1 {
         : ''
     }\n`,
     'definitions/state_initial.yaml':
-      'info:\n  currentEra: contemporary\n  politicalSituation: stable\ntimeAnchors:\n  - { id: day_1, at: day_1, description: Day 1 }\nthreads: []\nworldFacts: []\n',
+      'info:\n  currentEra: contemporary\n  politicalSituation: stable\ntimeAnchors:\n  - { id: day_1, at: day_1, description: Day 1 }\nthreads: []\nworldFacts: []\nknowledge: { claims: [], commonGround: [] }\n',
+    'definitions/thread-types.yaml':
+      'types:\n  primary:\n    typeId: primary\n    description: Primary narrative thread type\n    allowedPhases: [opening, development, resolution]\n    lifecyclePolicy: { reopenPolicy: forbidden }\n    timeDomain: story\n    stableGoals: []\n    stableMilestones: []\n',
+    'definitions/propositions.yaml': 'version: 1\npropositions: {}\ndependencyGraph: {}\n',
+    'definitions/relationship-types.yaml': 'types: {}\n',
+    'definitions/rule-types.yaml': 'types: {}\n',
     'definitions/entity-types.yaml':
       'types:\n  character:\n    typeId: character\n    kind: character\n    attributes:\n      lifecycle:\n        attributeId: lifecycle\n        valueType: string\n        requiredAt: introduction\n        writePolicy: lifecycle_managed\n        allowedLifecycleStates: [active, inactive, retired]\n        unsetAllowed: false\n        semanticRole: lifecycle\n      traits:\n        attributeId: traits\n        valueType: string_list\n        requiredAt: never\n        writePolicy: immutable\n        unsetAllowed: true\n    lifecyclePolicy:\n      allowedTransitions:\n        - [active, inactive]\n        - [active, retired]\n        - [inactive, active]\n        - [inactive, retired]\n    referenceCapabilities:\n      defaultEligibility: live\n    typedInvariants: []\n',
     'definitions/characters/narrator.yaml':

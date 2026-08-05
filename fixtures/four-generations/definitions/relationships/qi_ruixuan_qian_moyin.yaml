@@ -1,13 +1,28 @@
-id: qi_ruixuan_qian_moyin
-type: friendship_mentorship
-participants:
-  - qi_ruixuan
-  - qian_moyin
-bidirectional: true
-initialState:
-  trust: 60
-  emotionalDistance: 30
-  intensity: 70
-  status: "忘年之交——诗人与教员"
-  notes: "瑞宣与钱默吟是小羊圈胡同的邻居，也是忘年之交。钱先生年长二十多岁，是瑞宣敬重的文人——他爱诗、爱花、爱酒，与世无争。瑞宣常去钱家坐坐，听钱先生谈诗论文，那是他精神上最舒服的时刻。瑞宣觉得钱先生活得像一首诗——比他的英文课、比祁家的日常都更像真的生活。但钱默吟被捕后经历了非人的酷刑，出狱后从吟诗的隐士变成了铁一般的抗日宣传者。这个转变让瑞宣既震撼又惭愧——他最敬佩的人变成了最勇敢的战士，而他自己还困在书斋里。钱默吟也看重瑞宣的正直与善良，出狱后通过瑞宣散布抗日传单。他们的关系从邻里与诗友，变成了地下抗日的同志。"
-establishedEvent: mid_autumn_festival
+relationshipId: qi_ruixuan_qian_moyin
+typeId: friendship_mentorship
+initialEpoch:
+  epochId: qi_ruixuan_qian_moyin:epoch-1
+  lifecycle: active
+  memberships:
+    - membershipId: qi_ruixuan_qian_moyin:member:1
+      entityId: qi_ruixuan
+      role: member
+    - membershipId: qi_ruixuan_qian_moyin:member:2
+      entityId: qian_moyin
+      role: member
+  dimensions:
+    - dimensionId: trust
+      scope: global
+      value: 60
+    - dimensionId: emotionalDistance
+      scope: global
+      value: 30
+    - dimensionId: intensity
+      scope: global
+      value: 70
+    - dimensionId: status
+      scope: global
+      value: 忘年之交——诗人与教员
+    - dimensionId: notes
+      scope: global
+      value: 瑞宣与钱默吟是小羊圈胡同的邻居，也是忘年之交。钱先生年长二十多岁，是瑞宣敬重的文人——他爱诗、爱花、爱酒，与世无争。瑞宣常去钱家坐坐，听钱先生谈诗论文，那是他精神上最舒服的时刻。瑞宣觉得钱先生活得像一首诗——比他的英文课、比祁家的日常都更像真的生活。但钱默吟被捕后经历了非人的酷刑，出狱后从吟诗的隐士变成了铁一般的抗日宣传者。这个转变让瑞宣既震撼又惭愧——他最敬佩的人变成了最勇敢的战士，而他自己还困在书斋里。钱默吟也看重瑞宣的正直与善良，出狱后通过瑞宣散布抗日传单。他们的关系从邻里与诗友，变成了地下抗日的同志。

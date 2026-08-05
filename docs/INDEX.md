@@ -5,6 +5,7 @@ Novalistically 是一个叙事工程系统：结构化 YAML 定义 → 事件溯
 ## 当前状态
 
 源码核验的现状基线见 **[当前系统状态](./current-state.md)**。current implementation checkpoints and their verification scope are stated there; current source wins over historical plans and design docs.
+- **[Dream of Red Chamber fixture manifest](../fixtures/dream-of-red-chamber/fixture-manifest.json)** — 当前 authored fixture 的可复现清单；执行 `npm run count:drc -- fixtures/dream-of-red-chamber --check` 核验四章 E01–E36。80 章 corpus source 是独立 acquisition artifact。
 
 ## 我想...
 

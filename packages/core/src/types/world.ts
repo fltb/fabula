@@ -2,11 +2,17 @@
 // Novalistically — World State, Knowledge, Relationship & State Transition Types
 // ============================================================================
 
-import type { AuthoredLocatableStoryTime, EntityId, Fact, FactId } from './entity.js';
+import type { AuthoredLocatableStoryTime, EntityId, Fact } from './entity.js';
 import type { NarrativeEvent } from './event.js';
-import type { EpistemicLedger, PropositionCatalog } from './knowledge.js';
+import type {
+  CommonGroundRecord,
+  EpistemicLedger,
+  KnowledgeInitialState,
+  PropositionCatalog,
+} from './knowledge.js';
 import type { RelationshipId, RelationshipRuntimeState } from './relationship.js';
-import type { ThreadRuntimeState } from './thread.js';
+import type { RuleRuntimeState } from './rule.js';
+import type { ThreadDeclaration, ThreadRuntimeState } from './thread.js';
 
 // ——— Relationship System (§7.4.3) ———
 
@@ -33,25 +39,17 @@ export interface RelationshipState {
   >;
 }
 
-export interface RelationshipEffect {
-  relationshipId: string;
-  dimension: string;
-  change:
-    | { type: 'numeric'; delta: number }
-    | { type: 'qualitative'; trigger: string; from: string; to: string };
-}
-
 // ——— World State ———
-import type { RuleRuntimeState } from './rule.js';
 
 export interface WorldState {
   entities: Record<EntityId, Record<string, unknown>>;
   relationships: Record<RelationshipId, RelationshipRuntimeState>;
-  knowledge: Record<EntityId, { knownFacts: FactId[] }>;
-  /** STATE-4 EpistemicLedger — character knowledge attitudes toward propositions */
-  epistemicLedger?: EpistemicLedger;
-  /** STATE-4 PropositionCatalog — immutable catalog of propositions */
-  propositionCatalog?: PropositionCatalog;
+  /** Explicit proposition knowledge; indexes are compiler-owned ledger data. */
+  epistemicLedger: EpistemicLedger;
+  /** Immutable project proposition catalog. */
+  propositionCatalog: PropositionCatalog;
+  /** Explicit common-ground records, in deterministic declaration/event order. */
+  commonGround: CommonGroundRecord[];
   threads: Record<string, ThreadRuntimeState>;
   rules: Record<string, RuleRuntimeState>;
   facts: Fact[];
@@ -74,15 +72,14 @@ export interface WorldInitialState {
     currentEra: string;
     politicalSituation: string;
   };
-  timeAnchors?: Array<{ id: string; at: AuthoredLocatableStoryTime; description?: string }>;
-  threads: Array<{
+  timeAnchors?: Array<{
     id: string;
-    name: string;
-    description: string;
-    type: string;
-    targetRevealChapter: number;
-    initialProgress: string;
+    at: AuthoredLocatableStoryTime;
+    description?: string;
+    significance?: string;
   }>;
+  threads: ThreadDeclaration[];
+  knowledge: KnowledgeInitialState;
   worldFacts: Array<{
     id: string;
     value: unknown;

@@ -1,43 +1,91 @@
 ruleId: gender_roles_marriage
-name: "Victorian Gender Roles in Marriage"
-category: social_structure
-type: constraint
-statement: "Victorian marriage was governed by the doctrine of coverture: a wife's legal identity was subsumed by her husband's. She could not own property, sign contracts, keep her own wages, or sue or be sued separately. The ideal wife was the 'Angel in the House' — a domestic, pious, submissive, and nurturing figure who managed the household, bore children, and provided moral refuge for her husband from the corrupting world of commerce. A wife was expected to be ignorant of business, finances, and worldly affairs. Intellectual companionship was not required; the ideal was complementary spheres: man in the public world, woman in the private home. A woman who failed to meet these ideals — by being too independent, too intellectual, too worldly, or unable to manage a household — was deemed a failure as a wife. The double standard was absolute: male sexual transgression was winked at; female transgression was social death."
-ruleClass: social_norm
-logicalConsequences:
-  - description: "A wife cannot own property separately from her husband"
-    check:
-      type: state_invariant
-      filter: "entity.gender='female' AND entity.marital_status='married'"
-      assert: "entity.can_own_separate_property=false"
-      severity: error
-  - description: "A wife is expected to manage the household but have no knowledge of business"
-    check:
-      type: state_invariant
-      filter: "entity.gender='female' AND entity.role='wife'"
-      assert: "entity.household_knowledge>50 AND entity.business_knowledge<20"
-      severity: warning
-  - description: "A wife who cannot manage a household is considered a failure"
-    check:
-      type: state_invariant
-      filter: "entity.gender='female' AND entity.role='wife' AND entity.household_management<30"
-      assert: "entity.social_approval<30 AND entity.husband.satisfaction<40"
-      severity: warning
+name: Victorian Gender Roles in Marriage
+typeId: constraint
+initialEpochId: gender_roles_marriage:epoch-1
+initialSpecificationId: gender_roles_marriage:specification-1
+initialActivation: enabled
+initialEffectiveness: full
+scopeBindings: {}
 exceptions:
-  - condition: "An unmarried woman with independent means may enjoy greater freedom than a married woman"
-    note: "Aunt Betsey Trotwood lives independently with her own property and no male guardian — her eccentricity is tolerated because of her class and independence"
-  - condition: "A widow regains legal personhood and control of property"
-    note: "Clara Copperfield, as a widow, controlled her own household until she remarried Murdstone, at which point she lost all legal and practical autonomy"
-evidenceChain:
-  - rule: gender_roles_marriage
-    effect: reinforce
-    evidence: "Dora Spenlow, as David's wife, is incapable of managing a household — she cannot keep accounts, supervise servants, or cook. David tries to 'form her mind' and fails utterly, illustrating the collision between ideal and reality"
-  - rule: gender_roles_marriage
-    effect: reinforce
-    evidence: "Agnes Wickfield is the ideal Victorian woman — she manages her father's house from age twelve; she is wise, gentle, selfless, and morally perceptive. She never declares her love for David, waiting patiently until he recognises it himself"
-  - rule: gender_roles_marriage
-    effect: reinforce
-    evidence: "Clara Copperfield, David's mother, is a 'pretty, weak' woman who is remade by Murdstone after marriage — she loses control of her household, her son, and eventually her will, dying broken and submissive"
-  - rule: gender_roles_marriage
-    effect: reinforce
-    evidence: "Little Emily's seduction by Steerforth is an absolute social catastrophe — as a 'fallen woman,' she is irredeemable in Victorian eyes and must flee England to start a new life in Australia"
+  - exceptionId: gender_roles_marriage:exception:1
+    status: active
+    constraintIds:
+      - gender_roles_marriage:constraint:1
+      - gender_roles_marriage:constraint:2
+      - gender_roles_marriage:constraint:3
+    scopeBindings: {}
+    condition:
+      type: expression
+      expression: An unmarried woman with independent means may enjoy greater freedom
+        than a married woman
+    effect:
+      type: exempt
+  - exceptionId: gender_roles_marriage:exception:2
+    status: active
+    constraintIds:
+      - gender_roles_marriage:constraint:1
+      - gender_roles_marriage:constraint:2
+      - gender_roles_marriage:constraint:3
+    scopeBindings: {}
+    condition:
+      type: expression
+      expression: A widow regains legal personhood and control of property
+    effect:
+      type: exempt
+specifications:
+  gender_roles_marriage:specification-1:
+    statement: "Victorian marriage was governed by the doctrine of coverture: a
+      wife's legal identity was subsumed by her husband's. She could not own
+      property, sign contracts, keep her own wages, or sue or be sued
+      separately. The ideal wife was the 'Angel in the House' — a domestic,
+      pious, submissive, and nurturing figure who managed the household, bore
+      children, and provided moral refuge for her husband from the corrupting
+      world of commerce. A wife was expected to be ignorant of business,
+      finances, and worldly affairs. Intellectual companionship was not
+      required; the ideal was complementary spheres: man in the public world,
+      woman in the private home. A woman who failed to meet these ideals — by
+      being too independent, too intellectual, too worldly, or unable to manage
+      a household — was deemed a failure as a wife. The double standard was
+      absolute: male sexual transgression was winked at; female transgression
+      was social death."
+    constraints:
+      - constraintId: gender_roles_marriage:constraint:1
+        kind: state_invariant
+        enforcement: hard
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.gender='female' AND entity.marital_status='married' =>
+            entity.can_own_separate_property=false
+      - constraintId: gender_roles_marriage:constraint:2
+        kind: state_invariant
+        enforcement: audit
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.gender='female' AND entity.role='wife' =>
+            entity.household_knowledge>50 AND entity.business_knowledge<20
+      - constraintId: gender_roles_marriage:constraint:3
+        kind: state_invariant
+        enforcement: audit
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.gender='female' AND entity.role='wife' AND
+            entity.household_management<30 => entity.social_approval<30 AND
+            entity.husband.satisfaction<40

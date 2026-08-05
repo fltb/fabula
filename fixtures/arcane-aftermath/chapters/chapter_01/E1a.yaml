@@ -1,36 +1,48 @@
 event: E1a
-title: "Seraphine Detects the Anomalous Signal"
+title: Seraphine Detects the Anomalous Signal
 narrativeOrder: 1
 sceneType: linear
 storyTime: day_0
 pov:
   character: seraphine
   type: third_person_limited
-sceneBrief: "The narrative opens in Seraphine's temporary workspace on the third floor of the Enforcer Headquarters. She is attempting to meditate — a futile exercise in a building full of anxious minds — when she feels it: a pulse of emotional energy so dissonant and strange that it cuts through the ambient noise like a razor. It is not anger, not fear, not grief — it is something she has never encountered before. A frequency that feels like broken glass wrapped in silk. She tries to pinpoint its origin, but it fades as quickly as it appeared, leaving only a headache and an overwhelming sense of wrongness."
+sceneBrief: "The narrative opens in Seraphine's temporary workspace on the third
+  floor of the Enforcer Headquarters. She is attempting to meditate — a futile
+  exercise in a building full of anxious minds — when she feels it: a pulse of
+  emotional energy so dissonant and strange that it cuts through the ambient
+  noise like a razor. It is not anger, not fear, not grief — it is something she
+  has never encountered before. A frequency that feels like broken glass wrapped
+  in silk. She tries to pinpoint its origin, but it fades as quickly as it
+  appeared, leaving only a headache and an overwhelming sense of wrongness."
 beats:
-  - "The narrative opens in Seraphine's temporary workspace on the third floor of the Enforcer Headquarters."
-  - "She is attempting to meditate — a futile exercise in a building full of anxious minds — when she feels it: a pulse of emotional energy so dissonant and strange that it cuts through the ambient noise like a razor."
-  - "It is not anger, not fear, not grief — it is something she has never encountered before."
-  - "A frequency that feels like broken glass wrapped in silk."
-  - "She tries to pinpoint its origin, but it fades as quickly as it appeared, leaving only a headache and an overwhelming sense of wrongness."
+  - The narrative opens in Seraphine's temporary workspace on the third floor of
+    the Enforcer Headquarters.
+  - "She is attempting to meditate — a futile exercise in a building full of
+    anxious minds — when she feels it: a pulse of emotional energy so dissonant
+    and strange that it cuts through the ambient noise like a razor."
+  - It is not anger, not fear, not grief — it is something she has never
+    encountered before.
+  - A frequency that feels like broken glass wrapped in silk.
+  - She tries to pinpoint its origin, but it fades as quickly as it appeared,
+    leaving only a headache and an overwhelming sense of wrongness.
 preconditions:
   - entity: seraphine
     attribute: location
     value: piltover_enforcer_headquarters
-    confidence: 1.0
+    confidence: 1
   - entity: seraphine
     attribute: status
     value: alive
-    confidence: 1.0
+    confidence: 1
 expectedPostconditions:
   - entity: seraphine
     attribute: has_detected_anomaly
     value: true
-    confidence: 1.0
+    confidence: 1
   - entity: seraphine
     attribute: knows_mysterious_signal
     value: true
-    confidence: 1.0
+    confidence: 1
   - entity: seraphine
     attribute: knows_anomalous_frequency
     value: true
@@ -42,16 +54,17 @@ expectedPostconditions:
 threadProgress:
   - thread: T1
     advancement: "0.05"
-    progressAfter: 0.20
+    progressAfter: 0.2
     progressTotal: 1
 foreshadowing:
   - id: anomalous_signal_introduced
-    hint: "Seraphine detects an emotional frequency that feels like 'broken glass wrapped in silk' — something deeply wrong that she cannot identify."
+    hint: Seraphine detects an emotional frequency that feels like 'broken glass
+      wrapped in silk' — something deeply wrong that she cannot identify.
     targetRevealChapter: 3
     thread: T1
 relationshipEffects: []
 ruleEffects: []
 styleGuidance:
-  tone: "Unsettling discovery"
-  scenePacing: "Build slow tension, then shatter it with the anomaly."
-  atmosphere: "Quiet, intimate, and emotionally disorienting."
+  tone: Unsettling discovery
+  scenePacing: Build slow tension, then shatter it with the anomaly.
+  atmosphere: Quiet, intimate, and emotionally disorienting.

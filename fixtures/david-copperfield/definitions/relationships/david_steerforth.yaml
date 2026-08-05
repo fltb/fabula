@@ -1,14 +1,43 @@
-id: david_steerforth
-type: friendship_betrayed
-participants:
-  - david_copperfield
-  - steerforth
-bidirectional: false
-initialState:
-  trust: 70
-  emotionalDistance: 15
-  intensity: 60
-  status: "hero_worship"
-  notes: "At Salem House school, David — lonely, sensitive, bullied — is singled out for protection by the older, charismatic James Steerforth. Steerforth is everything David is not: confident, handsome, aristocratic, effortlessly commanding. David worships him with the uncritical devotion of a younger boy. Steerforth nicknames him 'Daisy' and treats him with an affectionate condescension that David mistakes for true friendship. As adults, they rekindle their bond, and David introduces Steerforth into the Peggotty household in Yarmouth. There Steerforth seduces and abandons Little Emily, destroying her family and her future. The betrayal is absolute: Steerforth has taken David's love and trust and used it to gain access to innocent people he then destroys. David's retrospective narration is haunted by guilt — he introduced the wolf into the fold. The relationship ends with Steerforth's death in a shipwreck off Yarmouth, his body washed ashore beside the body of Ham Peggotty, who died trying to save him. David's final feeling is not hatred but a sorrowful, aching pity."
-establishedEvent: E02
-breakingEvent: E17
+relationshipId: david_steerforth
+typeId: friendship_betrayed
+initialEpoch:
+  epochId: david_steerforth:epoch-1
+  lifecycle: active
+  memberships:
+    - membershipId: david_steerforth:member:1
+      entityId: david_copperfield
+      role: member
+    - membershipId: david_steerforth:member:2
+      entityId: steerforth
+      role: member
+  dimensions:
+    - dimensionId: trust
+      scope: global
+      value: 70
+    - dimensionId: emotionalDistance
+      scope: global
+      value: 15
+    - dimensionId: intensity
+      scope: global
+      value: 60
+    - dimensionId: status
+      scope: global
+      value: hero_worship
+    - dimensionId: notes
+      scope: global
+      value: "At Salem House school, David — lonely, sensitive, bullied — is singled
+        out for protection by the older, charismatic James Steerforth.
+        Steerforth is everything David is not: confident, handsome,
+        aristocratic, effortlessly commanding. David worships him with the
+        uncritical devotion of a younger boy. Steerforth nicknames him 'Daisy'
+        and treats him with an affectionate condescension that David mistakes
+        for true friendship. As adults, they rekindle their bond, and David
+        introduces Steerforth into the Peggotty household in Yarmouth. There
+        Steerforth seduces and abandons Little Emily, destroying her family and
+        her future. The betrayal is absolute: Steerforth has taken David's love
+        and trust and used it to gain access to innocent people he then
+        destroys. David's retrospective narration is haunted by guilt — he
+        introduced the wolf into the fold. The relationship ends with
+        Steerforth's death in a shipwreck off Yarmouth, his body washed ashore
+        beside the body of Ham Peggotty, who died trying to save him. David's
+        final feeling is not hatred but a sorrowful, aching pity."

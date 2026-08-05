@@ -13,7 +13,8 @@ import type { CompiledDiscourseRenderContext } from './discourse-context.ts';
 import { compileDiscourseBoundaries } from './discourse-context.ts';
 import type { CompiledNarrativeGraphs } from './graph-adapter.ts';
 import { compileNarrativeGraphs } from './graph-adapter.ts';
-import type { StoryBoundaries } from './story-boundaries.ts';
+import type { RelationshipReplayContext } from './relationship-replay.ts';
+import type { NarrativeStateBaseline, StoryBoundaries } from './story-boundaries.ts';
 import { compileStoryBoundariesFromGraph } from './story-boundaries.ts';
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -39,6 +40,10 @@ export interface CompileNarrativeRuntimeInput {
   /** The one shared catalog pair; required, no optional fallback. */
   readonly catalogs: EntityCatalogContext;
   readonly initialThreads?: readonly { id: string }[];
+  /** Relationship declarations/types, required if an event uses relationship effects. */
+  readonly relationshipReplayContext?: RelationshipReplayContext;
+  /** Materialized domain state for the deterministic initial story boundary. */
+  readonly baseline?: NarrativeStateBaseline;
 }
 
 /**
@@ -79,6 +84,9 @@ export function compileNarrativeRuntime(
     input.catalogs,
     branchPath,
     input.initialThreads,
+    undefined,
+    input.relationshipReplayContext,
+    input.baseline,
   );
 
   // Step 3 — compile discourse render contexts

@@ -57,7 +57,12 @@ function source(): ProjectSourceSnapshotV1 {
   const entries: Record<string, string> = {
     'nova.yaml': `project: ${PROJECT_ID}\ntitle: Test Novel\nauthor: Test Author\ndefaultModel: mock-pass2\ndefaultLanguage: en\n`,
     'definitions/state_initial.yaml':
-      'info:\n  currentEra: contemporary\n  politicalSituation: stable\ntimeAnchors:\n  - { id: day_1, at: day_1, description: Day 1 }\nthreads: []\nworldFacts: []\n',
+      'info:\n  currentEra: contemporary\n  politicalSituation: stable\ntimeAnchors:\n  - { id: day_1, at: day_1, description: Day 1 }\nthreads: []\nworldFacts: []\nknowledge: { claims: [], commonGround: [] }\n',
+    'definitions/thread-types.yaml':
+      'types:\n  primary:\n    typeId: primary\n    description: Primary narrative thread type\n    allowedPhases: [opening, development, resolution]\n    lifecyclePolicy: { reopenPolicy: forbidden }\n    timeDomain: story\n    stableGoals: []\n    stableMilestones: []\n',
+    'definitions/propositions.yaml': 'version: 1\npropositions: {}\ndependencyGraph: {}\n',
+    'definitions/relationship-types.yaml': 'types: {}\n',
+    'definitions/rule-types.yaml': 'types: {}\n',
     'definitions/characters/narrator.yaml':
       'id: narrator\nname: Narrator\ntype: person\ndescription: The narrator\ninitialState: {}\ntraits: []\n',
     'definitions/entity-types.yaml':

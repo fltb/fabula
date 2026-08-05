@@ -498,7 +498,18 @@ project
     }
     const root = path.resolve(process.cwd(), name);
     mkdirSync(path.join(root, 'definitions'), { recursive: true });
-    mkdirSync(path.join(root, 'definitions', 'characters'), { recursive: true });
+    for (const directory of [
+      'characters',
+      'locations',
+      'items',
+      'factions',
+      'relationships',
+      'rules',
+      'narrators',
+      'assertions',
+    ]) {
+      mkdirSync(path.join(root, 'definitions', directory), { recursive: true });
+    }
     mkdirSync(path.join(root, 'chapters', 'chapter_01'), { recursive: true });
     writeFileSync(
       path.join(root, 'nova.yaml'),
@@ -506,12 +517,19 @@ project
     );
     writeFileSync(
       path.join(root, 'definitions', 'state_initial.yaml'),
-      'info:\n  currentEra: initial\n  politicalSituation: undeclared\nthreads: []\nworldFacts: []\n',
+      'info:\n  currentEra: initial\n  politicalSituation: undeclared\nthreads: []\nknowledge:\n  claims: []\n  commonGround: []\nworldFacts: []\n',
     );
     writeFileSync(
       path.join(root, 'definitions', 'entity-types.yaml'),
       'types:\n  character:\n    typeId: character\n    kind: character\n    attributes:\n      lifecycle:\n        attributeId: lifecycle\n        valueType: string\n        requiredAt: introduction\n        writePolicy: lifecycle_managed\n        allowedLifecycleStates: [active, inactive, retired]\n        unsetAllowed: false\n        semanticRole: lifecycle\n      traits:\n        attributeId: traits\n        valueType: string_list\n        requiredAt: never\n        writePolicy: immutable\n        unsetAllowed: true\n    lifecyclePolicy:\n      allowedTransitions: []\n    referenceCapabilities:\n      defaultEligibility: live\n    typedInvariants: []\n',
     );
+    writeFileSync(path.join(root, 'definitions', 'thread-types.yaml'), 'types: {}\n');
+    writeFileSync(
+      path.join(root, 'definitions', 'propositions.yaml'),
+      'version: 1\npropositions: {}\ndependencyGraph: {}\n',
+    );
+    writeFileSync(path.join(root, 'definitions', 'relationship-types.yaml'), 'types: {}\n');
+    writeFileSync(path.join(root, 'definitions', 'rule-types.yaml'), 'types: {}\n');
     writeFileSync(
       path.join(root, 'definitions', 'characters', 'narrator.yaml'),
       'id: narrator\nname: Narrator\ntype: character\ndescription: The initial point-of-view character.\ntraits: []\n',

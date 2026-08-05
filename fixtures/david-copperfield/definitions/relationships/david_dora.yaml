@@ -1,14 +1,40 @@
-id: david_dora
-type: love_interest
-participants:
-  - david_copperfield
-  - dora_spenlow
-bidirectional: true
-initialState:
-  trust: 50
-  emotionalDistance: 20
-  intensity: 80
-  status: "infatuation"
-  notes: "David first sees Dora Spenlow at the home of his employer, Mr Spenlow, and falls instantly and hopelessly in love. Dora is a 'child-wife' — beautiful, playful, impractical, devoted to her lapdog Jip. She embodies everything youthful and charming, and David's love for her is the passionate, undisciplined love of first youth. Their courtship is conducted in secret (Mr Spenlow disapproves), and they marry after a period of separation following Mr Spenlow's sudden death. The marriage is happy but strained: Dora cannot manage a household, has no head for practical matters, and remains childlike. David tries to 'form her mind' and fails. She falls ill, miscarries, and dies slowly, tenderly — her last act being to ask Agnes to take her place. David's love for Dora is genuine but immature; it burns bright and ends in grief, teaching him the difference between love and compatibility."
-establishedEvent: E09
-breakingEvent: E14
+relationshipId: david_dora
+typeId: love_interest
+initialEpoch:
+  epochId: david_dora:epoch-1
+  lifecycle: active
+  memberships:
+    - membershipId: david_dora:member:1
+      entityId: david_copperfield
+      role: member
+    - membershipId: david_dora:member:2
+      entityId: dora_spenlow
+      role: member
+  dimensions:
+    - dimensionId: trust
+      scope: global
+      value: 50
+    - dimensionId: emotionalDistance
+      scope: global
+      value: 20
+    - dimensionId: intensity
+      scope: global
+      value: 80
+    - dimensionId: status
+      scope: global
+      value: infatuation
+    - dimensionId: notes
+      scope: global
+      value: "David first sees Dora Spenlow at the home of his employer, Mr Spenlow,
+        and falls instantly and hopelessly in love. Dora is a 'child-wife' —
+        beautiful, playful, impractical, devoted to her lapdog Jip. She embodies
+        everything youthful and charming, and David's love for her is the
+        passionate, undisciplined love of first youth. Their courtship is
+        conducted in secret (Mr Spenlow disapproves), and they marry after a
+        period of separation following Mr Spenlow's sudden death. The marriage
+        is happy but strained: Dora cannot manage a household, has no head for
+        practical matters, and remains childlike. David tries to 'form her mind'
+        and fails. She falls ill, miscarries, and dies slowly, tenderly — her
+        last act being to ask Agnes to take her place. David's love for Dora is
+        genuine but immature; it burns bright and ends in grief, teaching him
+        the difference between love and compatibility."

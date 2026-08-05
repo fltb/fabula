@@ -199,7 +199,19 @@ describe('Constraint evaluation — evaluation records', () => {
 
 describe('Constraint evaluation — transaction with constraintEvaluation', () => {
   it('should produce evaluation records from transaction', () => {
-    const rules: Record<string, RuleRuntimeState> = {};
+    // Canonical materialized baseline: the declared rule is seeded as dormant
+    // before any transaction is applied.
+    const rules: Record<string, RuleRuntimeState> = {
+      test_rule: {
+        ruleId: 'test_rule',
+        currentEpoch: 'epoch-0',
+        specificationId: 'spec-v0',
+        activation: 'dormant',
+        effectiveness: 'full',
+        scopeBindings: {},
+        exceptions: [],
+      },
+    };
     const tx = {
       type: 'rule_transaction' as const,
       ruleId: 'test_rule',
@@ -224,7 +236,17 @@ describe('Constraint evaluation — transaction with constraintEvaluation', () =
   it('should throw on hard violation from transaction', () => {
     // Hard violation cannot happen with current simple predicate evaluation
     // (all simple predicates return true). This test verifies the mechanism.
-    const rules: Record<string, RuleRuntimeState> = {};
+    const rules: Record<string, RuleRuntimeState> = {
+      test_rule: {
+        ruleId: 'test_rule',
+        currentEpoch: 'epoch-0',
+        specificationId: 'spec-v0',
+        activation: 'dormant',
+        effectiveness: 'full',
+        scopeBindings: {},
+        exceptions: [],
+      },
+    };
     // With a hard constraint that always passes, no error is thrown
     const tx = {
       type: 'rule_transaction' as const,

@@ -1,0 +1,13 @@
+relationshipId: event_fourth_aunt_xianglins_wife
+typeId: event_relationship
+initialEpoch:
+  epochId: event_fourth_aunt_xianglins_wife:epoch-1
+  lifecycle: active
+  memberships:
+    - membershipId: event_fourth_aunt_xianglins_wife:member:1
+      entityId: fourth_aunt
+      role: member
+    - membershipId: event_fourth_aunt_xianglins_wife:member:2
+      entityId: xianglins_wife
+      role: member
+  dimensions: []

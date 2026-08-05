@@ -171,7 +171,7 @@ describe('EpistemicLedger wiring during replay', () => {
     const state = engine.replay([]);
 
     expect(state.propositionCatalog).toBeDefined();
-    expect(state.propositionCatalog?.version).toBe(0);
+    expect(state.propositionCatalog?.version).toBe(1);
     expect(state.propositionCatalog?.propositions).toEqual({});
     expect(state.propositionCatalog?.dependencyGraph).toEqual({});
   });

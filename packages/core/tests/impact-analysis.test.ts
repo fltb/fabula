@@ -20,7 +20,12 @@ function project(events: Record<string, string> = {}): ProjectSourceSnapshotV1 {
   const base: Record<string, string> = {
     'nova.yaml': 'project: test\ntitle: "Test"\nauthor: "Tester"\n',
     'definitions/state_initial.yaml':
-      'info:\n  currentEra: modern\n  politicalSituation: stable\nthreads: []\nworldFacts: []\n',
+      'info:\n  currentEra: modern\n  politicalSituation: stable\nthreads: []\nworldFacts: []\nknowledge: { claims: [], commonGround: [] }\n',
+    'definitions/thread-types.yaml':
+      'types:\n  primary:\n    typeId: primary\n    description: Primary narrative thread type\n    allowedPhases: [opening, development, resolution]\n    lifecyclePolicy: { reopenPolicy: forbidden }\n    timeDomain: story\n    stableGoals: []\n    stableMilestones: []\n',
+    'definitions/propositions.yaml': 'version: 1\npropositions: {}\ndependencyGraph: {}\n',
+    'definitions/relationship-types.yaml': 'types: {}\n',
+    'definitions/rule-types.yaml': 'types: {}\n',
     'definitions/entity-types.yaml': [
       'types:',
       '  narrator:',

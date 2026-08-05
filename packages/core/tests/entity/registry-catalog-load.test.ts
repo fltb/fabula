@@ -5,8 +5,8 @@
 // STATE-3a: Verifies that the canonical project load (loadCanonicalProject)
 // drives registry construction from ProjectData — never from a filesystem
 // path — so all entity kinds get lifecycle/typeRef fields. Specifically tests
-// the zhu-fu fixture to confirm character promoted fields survive and rules
-// get category/type.
+// the zhu-fu fixture to confirm character promoted fields survive while rule
+// declarations remain in the canonical project data/catalog boundary.
 // ============================================================================
 
 import path from 'node:path';
@@ -99,15 +99,19 @@ describe('registry catalog-driven load', () => {
       }
     });
 
-    it('loads rule entities with lifecycle, typeRef, category and type', () => {
-      const rules = registry.findByKind('rule');
-      expect(rules.length).toBeGreaterThanOrEqual(1);
-      for (const rule of rules) {
-        expect(rule.lifecycle).toBe('active');
-        expect(rule.typeRef).toEqual({ typeId: 'rule', schemaVersion: 1 });
-        // Rules get category and type from definition fields (no longer hardcoded 2-field)
-        expect(rule.state.category).toBeDefined();
-        expect(rule.state.type).toBeDefined();
+    it('loads canonical rule declarations and catalog types', () => {
+      const ir = loadCanonicalProject(materializeFixtureSnapshot(ZHU_FU_FIXTURE));
+      expect(ir.data.ruleDeclarations).toHaveLength(4);
+      const ruleIds = ir.data.ruleDeclarations.map((declaration) => declaration.ruleId).sort();
+      expect(ruleIds).toEqual([
+        'husbands_authority',
+        'patriarchal_clan_authority',
+        'religious_authority',
+        'widow_purity',
+      ]);
+      for (const declaration of ir.data.ruleDeclarations) {
+        expect(ir.data.ruleTypeCatalog.types[declaration.typeId]).toBeDefined();
+        expect(declaration.specifications[declaration.initialSpecificationId]).toBeDefined();
       }
     });
 

@@ -32,8 +32,8 @@ import {
   narratorProfileSchema,
   plannedDiscourseLedgerSourceSchema,
   projectConfigSchema,
-  relationshipDefinitionSchema,
-  ruleDefinitionSchema,
+  relationshipDeclarationSchema,
+  ruleDeclarationSchema,
   worldInitialStateSchema,
 } from '../../src/schemas/index.ts';
 import {
@@ -52,6 +52,10 @@ const TOPOLOGY_RULES: readonly TopologyRule[] = [
   { re: /^nova\.yaml$/, schema: projectConfigSchema },
   { re: /^definitions\/state_initial\.yaml$/, schema: worldInitialStateSchema },
   { re: /^definitions\/entity-types\.yaml$/, schema: null },
+  { re: /^definitions\/thread-types\.yaml$/, schema: null },
+  { re: /^definitions\/propositions\.yaml$/, schema: null },
+  { re: /^definitions\/relationship-types\.yaml$/, schema: null },
+  { re: /^definitions\/rule-types\.yaml$/, schema: null },
   {
     re: /^definitions\/(characters|locations|items|factions|relationships|rules|narrators|assertions)\/[^/]+\.(yaml|yml)$/,
     schema: null,
@@ -66,8 +70,8 @@ const SCHEMA_BY_DIRECTORY: Record<string, ZodType<unknown>> = {
   locations: locationDefinitionSchema,
   items: itemDefinitionSchema,
   factions: factionDefinitionSchema,
-  relationships: relationshipDefinitionSchema,
-  rules: ruleDefinitionSchema,
+  relationships: relationshipDeclarationSchema,
+  rules: ruleDeclarationSchema,
   narrators: narratorProfileSchema,
   assertions: narratorAssertionSchema,
 };

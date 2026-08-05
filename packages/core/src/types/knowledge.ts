@@ -3,7 +3,13 @@
 // Knowledge = subject's attitude toward immutable proposition
 // ============================================================================
 
-import type { EntityId, FactId, LocatableStoryTimestamp, StoryTimestamp } from './entity.js';
+import type {
+  AuthoredStoryTime,
+  EntityId,
+  FactId,
+  LocatableStoryTimestamp,
+  StoryTimestamp,
+} from './entity.js';
 
 // ─── Proposition ─────────────────────────────────────────────────────────────
 
@@ -82,7 +88,7 @@ export type Proposition =
 // Intensional propositions are recognised but do NOT provide world-truth access.
 
 export interface PropositionCatalog {
-  version: number;
+  version: 1;
   propositions: Record<PropositionId, Proposition>;
   /**
    * Dependency graph: edges from one proposition to propositions it references.
@@ -212,6 +218,94 @@ export interface CommonGroundRecord {
   establishedAt: StoryTimestamp;
   establishedBy: string; // eventId
 }
+// ─── Source declarations and event transactions ─────────────────────────────
+
+/** Author-wire evidence; the mapper normalizes its timestamp exactly once. */
+export interface SourceClaimEvidence {
+  source: EvidenceSource;
+  acquiredAt: AuthoredStoryTime;
+  warrant?: string;
+  provider?: EntityId;
+  provenance: string[];
+}
+
+/** Explicit initial claim declaration; no derived ledger indexes are authored. */
+export interface KnowledgeClaimDeclaration {
+  subject: EntityId;
+  propositionId: PropositionId;
+  assessment: ClaimAssessment;
+  evidence: SourceClaimEvidence[];
+}
+
+/** Explicit initial common-ground declaration; no ledger indexes are authored. */
+export interface KnowledgeCommonGroundDeclaration {
+  propositionId: PropositionId;
+  participants: EntityId[];
+  establishedAt: AuthoredStoryTime;
+  establishedBy?: string;
+}
+
+export interface KnowledgeInitialState {
+  claims: KnowledgeClaimDeclaration[];
+  commonGround: KnowledgeCommonGroundDeclaration[];
+}
+
+export interface ClaimWriteTransaction {
+  type: 'claim_write';
+  subject: EntityId;
+  propositionId: PropositionId;
+  assessment: ClaimAssessment;
+  evidence: SourceClaimEvidence[];
+}
+
+export interface InformationActTransaction {
+  type: 'information_act';
+  actType: InformationActType;
+  actor: EntityId;
+  recipients: EntityId[];
+  contentPropositions: PropositionId[];
+  timestamp: AuthoredStoryTime;
+  storyBoundary?: string;
+  inWorldSource?: string;
+  corpusProvenance?: string;
+  warrantJustification?: string;
+}
+
+export interface CommonGroundTransaction {
+  type: 'common_ground';
+  propositionId: PropositionId;
+  participants: EntityId[];
+  establishedAt: AuthoredStoryTime;
+  establishedBy?: string;
+}
+
+/** Canonical source EventFile knowledge effect union. */
+export type KnowledgeTransaction =
+  | ClaimWriteTransaction
+  | InformationActTransaction
+  | CommonGroundTransaction;
+
+/** Runtime counterpart after authored timestamps are normalized. */
+export interface RuntimeClaimWriteTransaction extends Omit<ClaimWriteTransaction, 'evidence'> {
+  evidence: ClaimEvidenceRecord[];
+}
+
+export interface RuntimeInformationActTransaction
+  extends Omit<InformationActTransaction, 'timestamp'> {
+  timestamp: StoryTimestamp;
+  eventId: string;
+}
+
+export interface RuntimeCommonGroundTransaction
+  extends Omit<CommonGroundTransaction, 'establishedAt'> {
+  establishedAt: StoryTimestamp;
+  provenance?: string;
+}
+
+export type RuntimeKnowledgeTransaction =
+  | RuntimeClaimWriteTransaction
+  | RuntimeInformationActTransaction
+  | RuntimeCommonGroundTransaction;
 
 // ─── NarrativeKnowledgeBoundary ──────────────────────────────────────────────
 // Focalizer's accessible claims at a specific event stateBefore.

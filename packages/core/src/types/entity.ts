@@ -9,7 +9,7 @@ import type { BranchSet } from './branch.js';
 
 export type EntityId = string;
 
-export type EntityKind = 'character' | 'location' | 'item' | 'concept' | 'faction' | 'rule';
+export type EntityKind = 'character' | 'location' | 'item' | 'concept' | 'faction';
 
 // ——— Type Reference ———
 
@@ -96,6 +96,7 @@ export interface TimeAnchor {
   id: string;
   at: LocatableStoryTimestamp;
   description?: string;
+  significance?: string;
 }
 
 export interface InitialStoryCoordinate {

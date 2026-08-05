@@ -1,4 +1,3 @@
-import { ConfigError } from '../errors.ts';
 import type { CharacterDefinition } from '../types/character.js';
 import type {
   Entity,
@@ -7,7 +6,6 @@ import type {
   EntityRegistry,
   EntityTypeRef,
 } from '../types/index.js';
-import type { RuleDefinition } from '../types/rule.js';
 import { canonicalizeFactValue } from './fact-value.js';
 import type { ProjectData } from './types.js';
 
@@ -43,17 +41,6 @@ function buildCharacterState(char: CharacterDefinition): Record<string, unknown>
     }
   }
 
-  return state;
-}
-
-/**
- * Build the entity state for a rule by promoting definition-level
- * fields (category, type) into state.
- */
-function buildRuleState(rule: RuleDefinition): Record<string, unknown> {
-  const state: Record<string, unknown> = {};
-  state.category = canonicalizeFactValue(rule.category);
-  state.type = canonicalizeFactValue(rule.type);
   return state;
 }
 
@@ -135,26 +122,6 @@ export class InMemoryEntityRegistry implements EntityRegistry {
         lifecycle: 'active',
         typeRef: makeTypeRef('faction'),
         state: buildGenericState(fac.initialState),
-      });
-    }
-
-    // Load rules as entities with deterministic ids (ruleId is required by
-    // the current contract — never a random fallback).
-    for (const rule of data.rules) {
-      if (!rule.ruleId) {
-        throw new ConfigError(`Rule definition "${rule.name}" is missing the required ruleId`, {
-          path: `definitions/rules/${rule.name}.yaml`,
-          phase: 'registry',
-        });
-      }
-      this.entities.set(rule.ruleId, {
-        id: rule.ruleId,
-        kind: 'rule',
-        name: rule.name,
-        definitionFile: `definitions/rules/${rule.ruleId.split('.').pop() ?? rule.ruleId}.yaml`,
-        lifecycle: 'active',
-        typeRef: makeTypeRef('rule'),
-        state: buildRuleState(rule),
       });
     }
 

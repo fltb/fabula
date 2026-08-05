@@ -1,0 +1,39 @@
+ruleId: hextech_crystal_scarcity
+name: Hextech Crystal Scarcity
+typeId: rule
+initialEpochId: hextech_crystal_scarcity:epoch-1
+initialSpecificationId: hextech_crystal_scarcity:specification-1
+initialActivation: enabled
+initialEffectiveness: full
+scopeBindings: {}
+exceptions: []
+specifications:
+  hextech_crystal_scarcity:specification-1:
+    statement: Hextech crystals are scarce and tightly controlled after Piltover's
+      Season 1 crisis.
+    constraints:
+      - constraintId: hextech_crystal_scarcity:constraint:1
+        kind: state_invariant
+        enforcement: hard
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: character.traits includes hextech_augmented => maintenance overdue
+            implies degradation status
+      - constraintId: hextech_crystal_scarcity:constraint:2
+        kind: state_invariant
+        enforcement: audit
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: faction.hextech_crystal_count > 10 => threat level is elevated

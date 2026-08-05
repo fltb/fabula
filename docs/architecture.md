@@ -80,7 +80,7 @@ Core 的依赖。
 
 ### `entity/` — snapshot 映射
 
-- **`EntityMapper`** — 消费 `ProjectSourceSnapshotV1` 中的逻辑文档与解析结果，通过 Zod 验证并映射为 `NarrativeEvent`、`Entity`、`Fact`、`RuleDefinition`。读取目录和生成 snapshot 是 Host adapter 的职责。
+- **`EntityMapper`** — 消费 `ProjectSourceSnapshotV1` 中的逻辑文档与解析结果，通过 Zod 验证并映射为 `NarrativeEvent`、`Entity`、`Fact` 及 canonical thread / proposition / relationship / rule catalogs 与 declarations。读取目录和生成 snapshot 是 Host adapter 的职责。
 - **`InMemoryEntityRegistry`** — 从 mapper 的项目数据填充的内存注册表。提供 `getAll()`、`findByKind()`、`resolve()`。
 - **`compareFact()`** — 严格 `===` 相等比较函数，返回 `'match' | 'mismatch' | 'deferred'`（仅 hint 时）。实际调用方是 causality / branch-merge 验证器与 deferred resolver；重放前置条件校验不走它，`validatePreconditions()` 通过私有 `preconditionMatches()` 按全部 10 个 operator 分派。
 

@@ -18,7 +18,7 @@ import type {
   ContextPackage,
   KnowledgeBoundary,
   NarrativeEvent,
-  RuleDefinition,
+  RuleDeclaration,
   SceneSpecification,
   SystemContext,
 } from '../../src/types/index.ts';
@@ -162,11 +162,17 @@ function makeContext(): ContextPackage {
       {
         ruleId: 'rule_1',
         name: 'Rule One',
-        category: 'physical',
-        type: 'invariant',
-        statement: SENTINEL_RULE_STATEMENT,
-        logicalConsequences: [],
-      } satisfies RuleDefinition,
+        typeId: 'physical',
+        initialEpochId: 'rule_1-epoch-1',
+        initialSpecificationId: 'rule_1-spec-1',
+        initialActivation: 'enabled',
+        initialEffectiveness: 'full',
+        scopeBindings: {},
+        exceptions: [],
+        specifications: {
+          'rule_1-spec-1': { statement: SENTINEL_RULE_STATEMENT, constraints: [] },
+        },
+      } satisfies RuleDeclaration,
     ],
     narrativeTechniques: [],
     narratorProfile: {

@@ -3,7 +3,11 @@
 // ============================================================================
 
 import { z } from 'zod';
-import { locatableStoryTimestampSchema, storyTimestampSchema } from './timestamp.js';
+import {
+  authoredStoryTimeSchema,
+  locatableStoryTimestampSchema,
+  storyTimestampSchema,
+} from './timestamp.js';
 
 // ─── Proposition Schemas ─────────────────────────────────────────────────────
 
@@ -74,7 +78,7 @@ export const propositionSchema = z.discriminatedUnion('kind', [
 
 export const propositionCatalogSchema = z
   .object({
-    version: z.number().int().nonnegative(),
+    version: z.literal(1),
     propositions: z.record(z.string(), propositionSchema),
     dependencyGraph: z.record(z.string(), z.array(z.string())),
   })
@@ -190,6 +194,84 @@ export const commonGroundRecordSchema = z
     establishedBy: z.string().min(1),
   })
   .strict();
+// ─── Source declarations and event transactions ─────────────────────────────
+
+/** Author-wire evidence; timestamps are normalized by the mapper. */
+export const sourceClaimEvidenceSchema = z
+  .object({
+    source: evidenceSourceSchema,
+    acquiredAt: authoredStoryTimeSchema,
+    warrant: z.string().optional(),
+    provider: z.string().min(1).optional(),
+    provenance: z.array(z.string().min(1)),
+  })
+  .strict();
+
+export const knowledgeClaimDeclarationSchema = z
+  .object({
+    subject: z.string().min(1),
+    propositionId: z.string().min(1),
+    assessment: claimAssessmentSchema,
+    evidence: z.array(sourceClaimEvidenceSchema),
+  })
+  .strict();
+
+export const knowledgeCommonGroundDeclarationSchema = z
+  .object({
+    propositionId: z.string().min(1),
+    participants: z.array(z.string().min(1)),
+    establishedAt: authoredStoryTimeSchema,
+    establishedBy: z.string().min(1).optional(),
+  })
+  .strict();
+
+export const knowledgeInitialStateSchema = z
+  .object({
+    claims: z.array(knowledgeClaimDeclarationSchema),
+    commonGround: z.array(knowledgeCommonGroundDeclarationSchema),
+  })
+  .strict();
+
+export const claimWriteTransactionSchema = z
+  .object({
+    type: z.literal('claim_write'),
+    subject: z.string().min(1),
+    propositionId: z.string().min(1),
+    assessment: claimAssessmentSchema,
+    evidence: z.array(sourceClaimEvidenceSchema),
+  })
+  .strict();
+
+export const informationActTransactionSchema = z
+  .object({
+    type: z.literal('information_act'),
+    actType: informationActTypeSchema,
+    actor: z.string().min(1),
+    recipients: z.array(z.string().min(1)),
+    contentPropositions: z.array(z.string().min(1)),
+    timestamp: authoredStoryTimeSchema,
+    storyBoundary: z.string().optional(),
+    inWorldSource: z.string().optional(),
+    corpusProvenance: z.string().optional(),
+    warrantJustification: z.string().optional(),
+  })
+  .strict();
+
+export const commonGroundTransactionSchema = z
+  .object({
+    type: z.literal('common_ground'),
+    propositionId: z.string().min(1),
+    participants: z.array(z.string().min(1)),
+    establishedAt: authoredStoryTimeSchema,
+    establishedBy: z.string().min(1).optional(),
+  })
+  .strict();
+
+export const knowledgeTransactionSchema = z.discriminatedUnion('type', [
+  claimWriteTransactionSchema,
+  informationActTransactionSchema,
+  commonGroundTransactionSchema,
+]);
 
 // ─── NarrativeKnowledgeBoundary Schema ───────────────────────────────────────
 

@@ -34,6 +34,10 @@ export const ROOT_AUTHORING_FILES = [
   'nova.yaml',
   'definitions/state_initial.yaml',
   'definitions/entity-types.yaml',
+  'definitions/thread-types.yaml',
+  'definitions/propositions.yaml',
+  'definitions/relationship-types.yaml',
+  'definitions/rule-types.yaml',
 ] as const;
 
 /** Optional root authoring file; Core treats a missing ledger as empty. */
@@ -99,7 +103,6 @@ export function adoptClaimFromEnvelope(envelope: AdoptSceneEnvelopeSubset): Adop
     acceptedAt: envelope.createdAt,
   };
 }
-
 export type ManifestRejectionCode =
   | 'empty-path'
   | 'control-character'
@@ -114,6 +117,7 @@ export type ManifestRejectionCode =
   | 'non-authoring-path'
   | 'unknown-extension'
   | 'duplicate-path'
+  | 'missing-required-root'
   | 'adopt-scene-unproven'
   | 'adopt-claim-invalid'
   | 'adopt-claim-event-mismatch'
@@ -424,6 +428,16 @@ export class AuthoringManifest {
       }
       seen.add(entry.path);
       this.validateEntry(entry);
+    }
+    const paths = new Set(entries.map((entry) => entry.path));
+    for (const requiredPath of ROOT_AUTHORING_FILES) {
+      if (!paths.has(requiredPath)) {
+        throw new ManifestValidationError(
+          'missing-required-root',
+          `Complete authoring source is missing required root ${requiredPath}`,
+          requiredPath,
+        );
+      }
     }
   }
   /** Validate a single entry, throwing {@link ManifestValidationError} on rejection. */

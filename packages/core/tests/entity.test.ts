@@ -56,17 +56,25 @@ describe('EntityMapper.loadProject()', () => {
     expect(camille?.initialState).toBeDefined();
   });
 
-  it('should load relationship definitions', () => {
-    expect(data.relationships).toHaveLength(1);
-    const rel = data.relationships[0];
-    expect(rel.participants).toEqual(['camille', 'seraphine']);
-    expect(rel.type).toBe('professional_mentor_asset');
+  it('should load canonical relationship declarations', () => {
+    expect(data.relationshipDeclarations).toHaveLength(1);
+    const rel = data.relationshipDeclarations[0];
+    expect(rel?.relationshipId).toBe('camille_seraphine');
+    expect(rel?.typeId).toBe('professional_mentor_asset');
+    expect(rel?.initialEpoch.memberships.map((membership) => membership.entityId)).toEqual([
+      'camille',
+      'seraphine',
+    ]);
   });
 
-  it('should load rule definitions (hextech, shimmer)', () => {
-    expect(data.rules).toHaveLength(2);
-    const ruleIds = data.rules.map((r) => r.ruleId).sort();
+  it('should load canonical rule declarations (hextech, shimmer)', () => {
+    expect(data.ruleDeclarations).toHaveLength(2);
+    const ruleIds = data.ruleDeclarations.map((rule) => rule.ruleId).sort();
     expect(ruleIds).toEqual(['hextech_crystal_scarcity', 'shimmer_addiction_timeline']);
+    expect(data.ruleTypeCatalog.types.rule).toBeDefined();
+    expect(
+      data.ruleDeclarations.every((rule) => rule.specifications[rule.initialSpecificationId]),
+    ).toBe(true);
   });
 
   it('should load location definitions', () => {
@@ -87,7 +95,7 @@ describe('EntityMapper.loadProject()', () => {
     const threads = wis.threads;
     expect(Array.isArray(threads)).toBe(true);
     expect(threads.length).toBeGreaterThanOrEqual(3);
-    const threadIds = threads.map((t) => (t as { id: string }).id);
+    const threadIds = threads.map((thread) => thread.threadId);
     expect(threadIds).toContain('T1');
     expect(threadIds).toContain('T2');
     expect(threadIds).toContain('T3');
@@ -195,15 +203,30 @@ describe('EntityMapper.loadAllEvents()', () => {
       ],
       relationshipEffects: [
         {
-          participants: ['seraphine', 'camille'] as [string, string],
-          effect: 'change',
-          direction: 'seraphine_to_camille',
+          type: 'relationship_transaction',
+          effectId: 'E1a_rel_0',
+          relationshipId: 'camille_seraphine',
+          epochId: 'camille_seraphine:epoch-1',
+          lifecycleAfter: 'active',
+          membershipAfter: [
+            {
+              membershipId: 'camille_seraphine:member:1',
+              entityId: 'camille',
+              role: 'member',
+            },
+            {
+              membershipId: 'camille_seraphine:member:2',
+              entityId: 'seraphine',
+              role: 'member',
+            },
+          ],
         },
       ],
       ruleEffects: [
         {
-          rule: 'hextech_crystal_scarcity',
-          effect: 'reinforce',
+          type: 'rule_transaction',
+          ruleId: 'hextech_crystal_scarcity',
+          operation: 'amend',
           evidence: 'Signal suggests hextech misuse',
         },
       ],
@@ -297,6 +320,7 @@ describe('EntityMapper.loadAllEvents()', () => {
 
 describe('EntityMapper.mapToNarrativeEvent()', () => {
   const mapper = new EntityMapper(SNAPSHOT);
+  mapper.loadProject();
 
   it('should map preconditions to Fact objects', () => {
     const eventFile: EventFile = {
@@ -374,10 +398,14 @@ describe('EntityMapper.mapToNarrativeEvent()', () => {
       expectedPostconditions: [{ entity: 'seraphine', attribute: 'status', value: 'alert' }],
       relationshipEffects: [
         {
-          participants: ['camille', 'seraphine'] as [string, string],
-          effect: 'change',
-          direction: 'camille_to_seraphine',
-          newState: { type: 'trust', intensity: 0.6 },
+          type: 'relationship_transaction',
+          effectId: 'participants_rel_0',
+          relationshipId: 'camille_seraphine',
+          epochId: 'camille_seraphine:epoch-1',
+          membershipAfter: [
+            { membershipId: 'camille_seraphine:member:1', entityId: 'camille', role: 'member' },
+            { membershipId: 'camille_seraphine:member:2', entityId: 'seraphine', role: 'member' },
+          ],
         },
       ],
     };
@@ -487,16 +515,22 @@ describe('EntityMapper.mapToNarrativeEvent()', () => {
       foreshadowing: [{ id: 'foreshadow_01', hint: 'Something is wrong', targetRevealChapter: 3 }],
       relationshipEffects: [
         {
-          participants: ['camille', 'seraphine'] as [string, string],
-          effect: 'reinforce',
-          direction: 'camille_to_seraphine',
-          newState: { type: 'trust', intensity: 0.55 },
+          type: 'relationship_transaction',
+          effectId: 'full_event_rel_0',
+          relationshipId: 'camille_seraphine',
+          epochId: 'camille_seraphine:epoch-1',
+          membershipAfter: [
+            { membershipId: 'camille_seraphine:member:1', entityId: 'camille', role: 'member' },
+            { membershipId: 'camille_seraphine:member:2', entityId: 'seraphine', role: 'member' },
+          ],
+          dimensionSet: [{ dimensionId: 'trust', scope: 'global', value: 55 }],
         },
       ],
       ruleEffects: [
         {
-          rule: 'hextech_crystal_scarcity',
-          effect: 'reinforce',
+          type: 'rule_transaction',
+          ruleId: 'hextech_crystal_scarcity',
+          operation: 'amend',
           evidence: 'Crystals still missing',
         },
       ],
@@ -509,11 +543,12 @@ describe('EntityMapper.mapToNarrativeEvent()', () => {
     expect(ne.threadProgress[0].thread).toBe('T1');
     expect(ne.foreshadowing).toHaveLength(1);
     expect(ne.foreshadowing[0].id).toBe('foreshadow_01');
-    expect(ne.relationshipEffects).toHaveLength(1);
+    expect(ne.relationshipEffects).toEqual(eventFile.relationshipEffects);
     expect(ne.relationshipEffects[0].effectId).toBe('full_event_rel_0');
-    expect(ne.relationshipEffects[0].provenance).toBe('compat:RelationshipChange:reinforce');
-    expect(ne.ruleEffects).toHaveLength(1);
-    expect(ne.ruleEffects[0].rule).toBe('hextech_crystal_scarcity');
+    expect(ne.relationshipEffects[0].type).toBe('relationship_transaction');
+    expect(ne.ruleEffects).toEqual(eventFile.ruleEffects);
+    expect(ne.ruleEffects[0].ruleId).toBe('hextech_crystal_scarcity');
+    expect(ne.ruleEffects[0].operation).toBe('amend');
     expect(ne.styleGuidance).toEqual({ tone: 'suspenseful', scenePacing: 'deliberate' });
     expect(ne.causalDiscontinuity).toEqual(eventFile.causalDiscontinuity);
     expect(ne.surfaceMode).toEqual(eventFile.surfaceMode);
@@ -604,26 +639,6 @@ function createFixtureRegistry(): InMemoryEntityRegistry {
     state: { status: 'operational', controlled_by: 'zaun_underground', security_level: 'medium' },
   });
 
-  // Rules
-  registry.register({
-    id: 'hextech_crystal_scarcity',
-    kind: 'rule',
-    name: 'Hextech Crystal Scarcity',
-    definitionFile: 'definitions/rules/hextech.yaml',
-    lifecycle: 'active',
-    typeRef: { typeId: 'rule', schemaVersion: 1 },
-    state: { category: 'state_invariant', type: 'state_invariant' },
-  });
-  registry.register({
-    id: 'shimmer_addiction_timeline',
-    kind: 'rule',
-    name: 'Shimmer Addiction Timeline',
-    definitionFile: 'definitions/rules/shimmer.yaml',
-    lifecycle: 'active',
-    typeRef: { typeId: 'rule', schemaVersion: 1 },
-    state: { category: 'progression_rule', type: 'progression_rule' },
-  });
-
   // World facts (concepts)
   registry.register({
     id: 'council_disarray',
@@ -644,11 +659,8 @@ function createFixtureRegistry(): InMemoryEntityRegistry {
 describe('InMemoryEntityRegistry', () => {
   describe('load() with fixture project', () => {
     it('should populate entities from fixture data', () => {
-      // Note: The fixture YAML files use snake_case keys (e.g. `rule`, `character`, `display_name`)
-      // while the TypeScript interfaces expect camelCase keys (e.g. `ruleId`, `id`, `name`).
-      // Due to this mismatch, registry.load() from disk will fail on field accesses.
       // This test uses an equivalent in-memory fixture to validate load-like behavior
-      // and demonstrates how entities are populated.
+      // and demonstrates how character, location, and concept entities are populated.
       const registry = createFixtureRegistry();
 
       const camille = registry.resolve('camille');
@@ -685,10 +697,6 @@ describe('InMemoryEntityRegistry', () => {
       const locations = registry.findByKind('location');
       expect(locations).toHaveLength(2);
       expect(locations.every((e) => e.kind === 'location')).toBe(true);
-
-      const rules = registry.findByKind('rule');
-      expect(rules).toHaveLength(2);
-      expect(rules.every((e) => e.kind === 'rule')).toBe(true);
     });
 
     it('findByAttribute() should filter by state attribute', () => {
@@ -707,11 +715,11 @@ describe('InMemoryEntityRegistry', () => {
       expect(result.size).toBe(3);
     });
 
-    it('getAll() should return all entities', () => {
+    it('getAll() should return all loaded entities', () => {
       const registry = createFixtureRegistry();
+      // 3 characters + 2 locations + 1 concept = 6
       const all = registry.getAll();
-      // 3 characters + 2 locations + 2 rules + 1 concept = 8
-      expect(all).toHaveLength(8);
+      expect(all).toHaveLength(6);
     });
   });
 

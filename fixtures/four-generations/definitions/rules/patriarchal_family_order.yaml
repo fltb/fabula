@@ -1,61 +1,105 @@
 ruleId: patriarchal_family_order
-name: "四世同堂的宗法家庭秩序"
-category: social_structure
-type: constraint
-statement: "祁家四世同堂——祁老人、祁天佑夫妇、瑞宣瑞丰瑞全三兄弟及其家眷——是北平传统大家庭的缩影。宗法秩序以年齿和辈分为轴心：祁老人是最高权威，但他的权威不是靠暴力而是靠年资和家族伦理维持的。长孙瑞宣在最中间的夹层——他是孙辈的长兄，又是家里的主要经济支柱，既受老人的管束又有管束弟弟的责任。瑞丰夫妇好吃懒做，理所当然地被全家养活。韵梅作为长孙媳妇，伺候老人、操持家务是她的天职，天经地义，没人觉得不公平。这个秩序不是法律条文而是日用不知的准则——它让每个人都有其位、各安其位。但当战争打破了这个封闭体系，这种温情脉脉的秩序也暴露出它的脆弱：传统尊老爱幼在饥饿面前不堪一击，家庭责任变成了套在瑞宣脖子上的枷锁。"
-ruleClass: social_norm
-logicalConsequences:
-  - description: "祁老人作为最高长辈拥有最终决策权"
-    check:
-      type: state_invariant
-      filter: "entity.id='sr_qi'"
-      assert: "entity.authority>=90 AND entity.final_decision_maker=true"
-      severity: warning
-  - description: "长孙瑞宣承担家庭经济主要责任"
-    check:
-      type: state_invariant
-      filter: "entity.id='qi_ruixuan'"
-      assert: "entity.financial_responsibility>=80 AND entity.status='teaching'"
-      severity: warning
-  - description: "长孙媳妇韵梅承担所有家务劳动"
-    check:
-      type: state_invariant
-      filter: "entity.id='yunmei'"
-      assert: "entity.housework_burden>=90"
-      severity: warning
-  - description: "未分家之前，已婚兄弟的收入归家庭共有"
-    check:
-      type: state_invariant
-      filter: "entity.family='qi_family' AND entity.marital_status='已婚'"
-      assert: "entity.income_shares_with_family=true"
-      severity: error
-  - description: "饥饿来临后传统秩序开始瓦解"
-    check:
-      type: transition_constraint
-      filter: "event.id='famine_winter'"
-      assert: "sr_qi.authority<50 OR qi_ruixuan.confidence_in_order<30"
-      severity: warning
+name: 四世同堂的宗法家庭秩序
+typeId: constraint
+initialEpochId: patriarchal_family_order:epoch-1
+initialSpecificationId: patriarchal_family_order:specification-1
+initialActivation: enabled
+initialEffectiveness: full
+scopeBindings: {}
 exceptions:
-  - condition: "瑞全离家出走的决定违背了祁老人的意愿，但最终被容忍"
-    note: "国难当头时宗法秩序的约束力减弱——民族危机超越家族伦理"
-  - condition: "瑞丰夫妇好吃懒做，但在饥荒中其寄生性暴露无遗"
-    note: "宗法制度维护懒惰者——这是旧式大家庭的内在矛盾"
-evidenceChain:
-  - rule: patriarchal_family_order
-    effect: reinforce
-    evidence: "祁老人坚信'忍为高'、'过不了三个月'，全家以他的意志为准绳"
-  - rule: patriarchal_family_order
-    effect: reinforce
-    evidence: "瑞宣想离城抗日却放不下养家的责任——'我是长子长孙，我得撑起这一家子'"
-  - rule: patriarchal_family_order
-    effect: reinforce
-    evidence: "韵梅在书中连名字都很少被叫——她永远是'小顺儿的妈'，她的身份附着在家庭角色上"
-  - rule: patriarchal_family_order
-    effect: reinforce
-    evidence: "瑞丰夫妇不务正业，但全家仍然供给他们吃穿——大家庭不能把自家人赶出去"
-  - rule: patriarchal_family_order
-    effect: weaken
-    evidence: "饥荒来临后祁家面临断粮危机，传统尊老爱幼在饥饿面前摇摇欲坠"
-  - rule: patriarchal_family_order
-    effect: weaken
-    evidence: "瑞全毅然出走投奔抗日——国家召唤的力量已经超过了家族伦理的约束"
+  - exceptionId: patriarchal_family_order:exception:1
+    status: active
+    constraintIds:
+      - patriarchal_family_order:constraint:1
+      - patriarchal_family_order:constraint:2
+      - patriarchal_family_order:constraint:3
+      - patriarchal_family_order:constraint:4
+      - patriarchal_family_order:constraint:5
+    scopeBindings: {}
+    condition:
+      type: expression
+      expression: 瑞全离家出走的决定违背了祁老人的意愿，但最终被容忍
+    effect:
+      type: exempt
+  - exceptionId: patriarchal_family_order:exception:2
+    status: active
+    constraintIds:
+      - patriarchal_family_order:constraint:1
+      - patriarchal_family_order:constraint:2
+      - patriarchal_family_order:constraint:3
+      - patriarchal_family_order:constraint:4
+      - patriarchal_family_order:constraint:5
+    scopeBindings: {}
+    condition:
+      type: expression
+      expression: 瑞丰夫妇好吃懒做，但在饥荒中其寄生性暴露无遗
+    effect:
+      type: exempt
+specifications:
+  patriarchal_family_order:specification-1:
+    statement: 祁家四世同堂——祁老人、祁天佑夫妇、瑞宣瑞丰瑞全三兄弟及其家眷——是北平传统大家庭的缩影。宗法秩序以年齿和辈分为轴心：祁老人是最高权威，但他的权威不是靠暴力而是靠年资和家族伦理维持的。长孙瑞宣在最中间的夹层——他是孙辈的长兄，又是家里的主要经济支柱，既受老人的管束又有管束弟弟的责任。瑞丰夫妇好吃懒做，理所当然地被全家养活。韵梅作为长孙媳妇，伺候老人、操持家务是她的天职，天经地义，没人觉得不公平。这个秩序不是法律条文而是日用不知的准则——它让每个人都有其位、各安其位。但当战争打破了这个封闭体系，这种温情脉脉的秩序也暴露出它的脆弱：传统尊老爱幼在饥饿面前不堪一击，家庭责任变成了套在瑞宣脖子上的枷锁。
+    constraints:
+      - constraintId: patriarchal_family_order:constraint:1
+        kind: state_invariant
+        enforcement: audit
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.id='sr_qi' => entity.authority>=90 AND
+            entity.final_decision_maker=true
+      - constraintId: patriarchal_family_order:constraint:2
+        kind: state_invariant
+        enforcement: audit
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.id='qi_ruixuan' => entity.financial_responsibility>=80 AND
+            entity.status='teaching'
+      - constraintId: patriarchal_family_order:constraint:3
+        kind: state_invariant
+        enforcement: audit
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.id='yunmei' => entity.housework_burden>=90
+      - constraintId: patriarchal_family_order:constraint:4
+        kind: state_invariant
+        enforcement: hard
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.family='qi_family' AND entity.marital_status='已婚' =>
+            entity.income_shares_with_family=true
+      - constraintId: patriarchal_family_order:constraint:5
+        kind: transition_constraint
+        enforcement: audit
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: event.id='famine_winter' => sr_qi.authority<50 OR
+            qi_ruixuan.confidence_in_order<30

@@ -1,115 +1,159 @@
 event: E3
-title: "The First Day of the Hunt"
+title: The First Day of the Hunt
 narrativeOrder: 4
-sceneType: action
+sceneType: linear
 storyTime: day_2_evening
 pov:
   character: rainsford
   type: third_person_limited
-sceneBrief: "The château gates clang shut behind Rainsford, and he is alone in the jungle with nothing but a hunting knife and a sack of food. Zaroff has given him a three-hour head start. Rainsford runs — not blindly, but with a hunter's calculation: doubling back, executing intricate loops to confuse his trail. When night falls, he climbs a great tree with a thick trunk and spreading crown, settling into its crotch to rest. Toward morning, he hears the careful approach of footsteps: Zaroff tracking with preternatural skill. Zaroff stops beneath the tree, studies the ground, then looks up — inch by inch — but stops before reaching Rainsford's branch. He smiles, blows a smoke ring, and walks away. Rainsford realizes with horror: Zaroff is playing with him. At dawn, Rainsford climbs down and forces himself to think. He finds a huge dead tree leaning on a living one and constructs a Malay man-catcher — a trap that will drop the dead tree on anyone who trips its trigger. He hides and waits. Zaroff returns, tracking with bloodhound precision. He steps on the trigger bough and senses danger at the last instant, leaping back — but the dead tree strikes him a glancing blow on the shoulder. Zaroff laughs, congratulates Rainsford, and retreats to dress his wound. Rainsford presses deeper into the island as dusk falls, reaching the treacherous ground of Death Swamp."
+sceneBrief: "The château gates clang shut behind Rainsford, and he is alone in
+  the jungle with nothing but a hunting knife and a sack of food. Zaroff has
+  given him a three-hour head start. Rainsford runs — not blindly, but with a
+  hunter's calculation: doubling back, executing intricate loops to confuse his
+  trail. When night falls, he climbs a great tree with a thick trunk and
+  spreading crown, settling into its crotch to rest. Toward morning, he hears
+  the careful approach of footsteps: Zaroff tracking with preternatural skill.
+  Zaroff stops beneath the tree, studies the ground, then looks up — inch by
+  inch — but stops before reaching Rainsford's branch. He smiles, blows a smoke
+  ring, and walks away. Rainsford realizes with horror: Zaroff is playing with
+  him. At dawn, Rainsford climbs down and forces himself to think. He finds a
+  huge dead tree leaning on a living one and constructs a Malay man-catcher — a
+  trap that will drop the dead tree on anyone who trips its trigger. He hides
+  and waits. Zaroff returns, tracking with bloodhound precision. He steps on the
+  trigger bough and senses danger at the last instant, leaping back — but the
+  dead tree strikes him a glancing blow on the shoulder. Zaroff laughs,
+  congratulates Rainsford, and retreats to dress his wound. Rainsford presses
+  deeper into the island as dusk falls, reaching the treacherous ground of Death
+  Swamp."
 beats:
-  - "The château gates clang shut behind Rainsford, and he is alone in the jungle with nothing but a hunting knife and a sack of food."
-  - "Zaroff has given him a three-hour head start."
-  - "Rainsford runs — not blindly, but with a hunter's calculation: doubling back, executing intricate loops to confuse his trail."
-  - "When night falls, he climbs a great tree with a thick trunk and spreading crown, settling into its crotch to rest."
-  - "Toward morning, he hears the careful approach of footsteps: Zaroff tracking with preternatural skill."
-  - "Zaroff stops beneath the tree, studies the ground, then looks up — inch by inch — but stops before reaching Rainsford's branch."
-  - "He smiles, blows a smoke ring, and walks away."
+  - The château gates clang shut behind Rainsford, and he is alone in the jungle
+    with nothing but a hunting knife and a sack of food.
+  - Zaroff has given him a three-hour head start.
+  - "Rainsford runs — not blindly, but with a hunter's calculation: doubling
+    back, executing intricate loops to confuse his trail."
+  - When night falls, he climbs a great tree with a thick trunk and spreading
+    crown, settling into its crotch to rest.
+  - "Toward morning, he hears the careful approach of footsteps: Zaroff tracking
+    with preternatural skill."
+  - Zaroff stops beneath the tree, studies the ground, then looks up — inch by
+    inch — but stops before reaching Rainsford's branch.
+  - He smiles, blows a smoke ring, and walks away.
   - "Rainsford realizes with horror: Zaroff is playing with him."
-  - "At dawn, Rainsford climbs down and forces himself to think."
-  - "He finds a huge dead tree leaning on a living one and constructs a Malay man-catcher — a trap that will drop the dead tree on anyone who trips its trigger."
-  - "He hides and waits."
-  - "Zaroff returns, tracking with bloodhound precision."
-  - "He steps on the trigger bough and senses danger at the last instant, leaping back — but the dead tree strikes him a glancing blow on the shoulder."
-  - "Zaroff laughs, congratulates Rainsford, and retreats to dress his wound."
-  - "Rainsford presses deeper into the island as dusk falls, reaching the treacherous ground of Death Swamp."
+  - At dawn, Rainsford climbs down and forces himself to think.
+  - He finds a huge dead tree leaning on a living one and constructs a Malay
+    man-catcher — a trap that will drop the dead tree on anyone who trips its
+    trigger.
+  - He hides and waits.
+  - Zaroff returns, tracking with bloodhound precision.
+  - He steps on the trigger bough and senses danger at the last instant, leaping
+    back — but the dead tree strikes him a glancing blow on the shoulder.
+  - Zaroff laughs, congratulates Rainsford, and retreats to dress his wound.
+  - Rainsford presses deeper into the island as dusk falls, reaching the
+    treacherous ground of Death Swamp.
 preconditions:
   - entity: rainsford
     attribute: location
     value: jungle
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: status
     value: alive
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: chose_hunt
     value: true
-    confidence: 1.0
-  - entity: zaroff_hunt_3day
-    attribute: active
-    value: true
-    confidence: 1.0
+    confidence: 1
   - entity: time
     attribute: value
     value: day_2_evening
-    confidence: 1.0
+    confidence: 1
 expectedPostconditions:
   - entity: rainsford
     attribute: location
     value: death_swamp
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: status
     value: alive
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: condition
     value: exhausted
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: knows_zaroff_tracking
     value: true
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: knows_zaroff_toying_with_him
     value: true
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: emotionalState
     value: terrified
-    confidence: 1.0
+    confidence: 1
   - entity: zaroff
     attribute: condition
     value: wounded_shoulder
-    confidence: 1.0
+    confidence: 1
   - entity: zaroff
     attribute: emotionalState
     value: amused
-    confidence: 1.0
+    confidence: 1
   - entity: jungle
     attribute: man_catcher_constructed
     value: true
-    confidence: 1.0
+    confidence: 1
 threadProgress:
   - thread: T1
-    advancement: "Rainsford survives the first night but realizes Zaroff is toying with him. He wounds Zaroff with the Malay man-catcher and reaches Death Swamp."
+    advancement: Rainsford survives the first night but realizes Zaroff is toying
+      with him. He wounds Zaroff with the Malay man-catcher and reaches Death
+      Swamp.
     progressAfter: 50
     progressTotal: 100
   - thread: T2
-    advancement: "Rainsford feels the 'full meaning of terror.' He is now the hunted, experiencing exactly the fear Whitney attributed to the jaguar."
+    advancement: Rainsford feels the 'full meaning of terror.' He is now the hunted,
+      experiencing exactly the fear Whitney attributed to the jaguar.
     progressAfter: 25
     progressTotal: 100
   - thread: T3
-    advancement: "Zaroff demonstrates his superiority — he tracks Rainsford through the night and finds him in the tree. He is wounded by the man-catcher but is amused; Rainsford is proving interesting."
+    advancement: Zaroff demonstrates his superiority — he tracks Rainsford through
+      the night and finds him in the tree. He is wounded by the man-catcher but
+      is amused; Rainsford is proving interesting.
     progressAfter: 60
     progressTotal: 100
 foreshadowing:
   - id: cat_and_mouse
-    hint: "Rainsford realizes Zaroff is the cat and he is the mouse. This foreshadows the final inversion where Rainsford becomes the predator in Zaroff's bedroom."
+    hint: Rainsford realizes Zaroff is the cat and he is the mouse. This foreshadows
+      the final inversion where Rainsford becomes the predator in Zaroff's
+      bedroom.
     targetRevealChapter: 5
     thread: T2
   - id: whole_pack_coming
-    hint: "As Rainsford reaches Death Swamp, he knows Zaroff will return with the whole pack. The hounds grow closer."
+    hint: As Rainsford reaches Death Swamp, he knows Zaroff will return with the
+      whole pack. The hounds grow closer.
     targetRevealChapter: 4
     thread: T1
 relationshipEffects: []
 ruleEffects:
-  - rule: zaroff_hunt_3day
-    effect: reinforce
-    evidence: "The hunt is underway. Rainsford uses the night to evade Zaroff, then wounds him with a trap."
-  - rule: no_other_weapon
-    effect: reinforce
-    evidence: "Rainsford uses only his hunting knife and natural materials to construct the Malay man-catcher."
+  - type: rule_transaction
+    ruleId: zaroff_hunt_3day
+    operation: enable
+    evidence: The hunt is underway. Rainsford uses the night to evade Zaroff, then
+      wounds him with a trap.
+    epochId: zaroff_hunt_3day:epoch-1
+    specificationId: zaroff_hunt_3day:specification-1
+  - type: rule_transaction
+    ruleId: no_other_weapon
+    operation: enable
+    evidence: Rainsford uses only his hunting knife and natural materials to
+      construct the Malay man-catcher.
+    epochId: no_other_weapon:epoch-1
+    specificationId: no_other_weapon:specification-1
 styleGuidance:
-  tone: "Tense cat-and-mouse sequence spanning a full day and night. The tree standoff should feel endless — Zaroff's deliberate retreat more terrifying than any attack. The man-catcher construction should feel methodical, desperate. Zaroff's laugh when wounded is the most chilling sound in the story. End with the ground turning soft beneath Rainsford's feet — he has entered Death Swamp."
+  tone: Tense cat-and-mouse sequence spanning a full day and night. The tree
+    standoff should feel endless — Zaroff's deliberate retreat more terrifying
+    than any attack. The man-catcher construction should feel methodical,
+    desperate. Zaroff's laugh when wounded is the most chilling sound in the
+    story. End with the ground turning soft beneath Rainsford's feet — he has
+    entered Death Swamp.

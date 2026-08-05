@@ -278,12 +278,20 @@ function buildRenderJobs(
     const pkg = new ContextCompiler().compile(event, beforeState, init.registry, {
       systemContext: sysCtx,
       narratorProfiles: init.data.narratorProfiles,
+      ruleDeclarations: init.data.ruleDeclarations,
+      threadDeclarations: init.data.worldInitialState.threads,
       discourseContext: discourseCtx,
       narrativeTechniques,
     });
 
     const worldStateHash = computeSha256Hex(canonicalJson(beforeState));
-    const knowledgeStateHash = computeSha256Hex(canonicalJson(beforeState.knowledge));
+    const knowledgeStateHash = computeSha256Hex(
+      canonicalJson({
+        ledger: beforeState.epistemicLedger,
+        propositions: beforeState.propositionCatalog,
+        commonGround: beforeState.commonGround,
+      }),
+    );
     const narratorProfileHash = computeSha256Hex(canonicalJson(init.data.narratorProfiles));
     const plannedDiscourseHash = discourseCtx
       ? computeSha256Hex(`${discourseCtx.ledgerHash}|${discourseCtx.assertionCatalogHash}`)

@@ -1,14 +1,44 @@
-id: david_murdstone
-type: abusive_stepfather
-participants:
-  - david_copperfield
-  - murdstone
-bidirectional: false
-initialState:
-  trust: -70
-  emotionalDistance: 95
-  intensity: 90
-  status: "persecutor_victim"
-  notes: "Mr Murdstone enters David's life as his mother Clara's suitor, a stern, handsome man with a 'firmness' that masks cruelty. David instinctively distrusts him from their first meeting, sensing something predatory in his manner toward Clara. After the marriage, Murdstone — aided by his equally cold sister, Miss Murdstone — systematically destroys the warm, affectionate home David knew. He imposes a rigid educational regimen, beats David for falling behind in his lessons, and when David bites him in self-defence, sends the boy away to Salem House. Murdstone's psychological abuse of Clara is more insidious: he 'trains' her into submission, breaking her spirit until she becomes a shadow of her former self. After Clara's death, Murdstone abandons David entirely, sending him to work at Murdstone and Grinby's warehouse in London — a child labourer in a rat-infested riverfront slum. David is rescued from this life only by running away to his aunt Betsey. The relationship is one of pure antagonism: Murdstone represents patriarchal cruelty, the abuse of adult authority over the powerless child, and the cold 'firmness' that Victorians called discipline but was in fact sadism."
-establishedEvent: E01
-breakingEvent: E05
+relationshipId: david_murdstone
+typeId: abusive_stepfather
+initialEpoch:
+  epochId: david_murdstone:epoch-1
+  lifecycle: active
+  memberships:
+    - membershipId: david_murdstone:member:1
+      entityId: david_copperfield
+      role: member
+    - membershipId: david_murdstone:member:2
+      entityId: murdstone
+      role: member
+  dimensions:
+    - dimensionId: trust
+      scope: global
+      value: -70
+    - dimensionId: emotionalDistance
+      scope: global
+      value: 95
+    - dimensionId: intensity
+      scope: global
+      value: 90
+    - dimensionId: status
+      scope: global
+      value: persecutor_victim
+    - dimensionId: notes
+      scope: global
+      value: "Mr Murdstone enters David's life as his mother Clara's suitor, a stern,
+        handsome man with a 'firmness' that masks cruelty. David instinctively
+        distrusts him from their first meeting, sensing something predatory in
+        his manner toward Clara. After the marriage, Murdstone — aided by his
+        equally cold sister, Miss Murdstone — systematically destroys the warm,
+        affectionate home David knew. He imposes a rigid educational regimen,
+        beats David for falling behind in his lessons, and when David bites him
+        in self-defence, sends the boy away to Salem House. Murdstone's
+        psychological abuse of Clara is more insidious: he 'trains' her into
+        submission, breaking her spirit until she becomes a shadow of her former
+        self. After Clara's death, Murdstone abandons David entirely, sending
+        him to work at Murdstone and Grinby's warehouse in London — a child
+        labourer in a rat-infested riverfront slum. David is rescued from this
+        life only by running away to his aunt Betsey. The relationship is one of
+        pure antagonism: Murdstone represents patriarchal cruelty, the abuse of
+        adult authority over the powerless child, and the cold 'firmness' that
+        Victorians called discipline but was in fact sadism."

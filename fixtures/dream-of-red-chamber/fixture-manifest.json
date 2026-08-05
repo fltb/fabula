@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "generator": "scripts/drc-fixture-manifest.mjs",
+  "fixture": "dream-of-red-chamber",
+  "chapters": [
+    {
+      "chapter": 1,
+      "eventCount": 9,
+      "events": [
+        "E01",
+        "E02",
+        "E03",
+        "E04",
+        "E05",
+        "E06",
+        "E07",
+        "E08",
+        "E09"
+      ]
+    },
+    {
+      "chapter": 2,
+      "eventCount": 9,
+      "events": [
+        "E10",
+        "E11",
+        "E12",
+        "E13",
+        "E14",
+        "E15",
+        "E16",
+        "E17",
+        "E18"
+      ]
+    },
+    {
+      "chapter": 3,
+      "eventCount": 9,
+      "events": [
+        "E19",
+        "E20",
+        "E21",
+        "E22",
+        "E23",
+        "E24",
+        "E25",
+        "E26",
+        "E27"
+      ]
+    },
+    {
+      "chapter": 4,
+      "eventCount": 9,
+      "events": [
+        "E28",
+        "E29",
+        "E30",
+        "E31",
+        "E32",
+        "E33",
+        "E34",
+        "E35",
+        "E36"
+      ]
+    }
+  ],
+  "eventCount": 36,
+  "definitions": {
+    "characters": 60,
+    "locations": 8,
+    "items": 1,
+    "factions": 0,
+    "relationships": 0,
+    "rules": 0,
+    "narrators": 1,
+    "assertions": 0
+  },
+  "initialState": {
+    "threads": 5,
+    "worldFacts": 6,
+    "timeAnchors": 8
+  },
+  "sourceSha256": "7c54660a27dfcba2d7612b169c1bd082d7bc201138823596719b4af879304b71",
+  "corpusSource": {
+    "sourceChapterCount": 80,
+    "acquisitionScript": "scripts/acquire-dream-of-red-chamber.mjs",
+    "manifest": "bench-data/corpus/dream-of-red-chamber/source-manifest.json"
+  }
+}

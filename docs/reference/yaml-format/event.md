@@ -203,9 +203,10 @@ expectedPostconditions:
 ### 叙事元数据字段
 
 - **`threadProgress`** — 追踪叙事线程进度的数组，每项包含 `{ thread, advancement, progressAfter, progressTotal }`。
+- **`knowledgeTransactions`** — canonical knowledge effects: `claim_write` updates an actor’s assessment of a declared proposition, `information_act` records proposition disclosure, and `common_ground` establishes a shared proposition. See [knowledge YAML contract](../yaml-contract/knowledge.md).
 - **`foreshadowing`** — 为埋设未来揭示内容而设的数组，每项包含 `{ id, hint, targetRevealChapter, thread? }`。
-- **`relationshipEffects`** — 关系演变的数组，每项包含 `{ participants: [EntityId, EntityId], effect, direction, newState? }`。
-- **`ruleEffects`** — 世界规则影响的数组，每项包含 `{ rule, effect: "reinforce" | "weaken" | "introduce_exception" | "nullify", evidence }`。
+- **`relationshipEffects`** — canonical relationship effects: either a `{ type: relationship_transaction, effectId, relationshipId, membershipAfter, ... }` transaction or an `{ type: identity_transition, oldEpochClosures, newTransactions, ... }` group. See [relationship YAML contract](../yaml-contract/relationship.md).
+- **`ruleEffects`** — canonical `{ type: rule_transaction, ruleId, operation, evidence, ... }` transactions. See [rule YAML contract](../yaml-contract/rule.md); the retired `{ rule, effect, evidence }` form is not accepted.
 - **`introduces`** — 独立于 `expectedPostconditions` 的 EventFile 字段：引入新实体的数组，每项包含 `{ type, id, initialState }`；`type` 仅限 `character`、`location`、`item`、`concept`（不包含 `faction` 与 `rule`）。规范内核 `loadCanonicalProject()`（`entity/project-runtime.ts`）的 `collectIntroductions()` 收集全部 introduces：同一实体只能由恰好一个事件引入（重复引入 → `ConfigError`）；若该实体已有定义文件且仍声明非空 `initialState`，同样报错（初始状态必须移到引入边界）。definition-less 的引入实体由内核按引入数据注册（kind/typeRef/`initialState`），并为每个引入合成 `system:introduction:<hostEvent>:<entityId>` transition——置于宿主事件之前并加入其 `causalPredecessors`，重放时激活实体（`lifecycle: active` + `initialState` 各键）。`compileProject()` 的投影只暴露分离的规范化数据与只读 `EntityLookup`，不暴露 registry；editorial `renderNovel()` 同样经 `executeEditorialRender()` → `loadCanonicalProject()` 走这套引入激活，而不是把该数组原样透传。
 - **`cast`** — 对象，包含 `onScreen: string[]`（物理上在场的角色）和 `affected: string[]`（受影响的幕后角色）。
 
@@ -296,7 +297,10 @@ foreshadowing:
     targetRevealChapter: 3
 
 ruleEffects:
-  - rule: widow_purity
-    effect: reinforce
+  - type: rule_transaction
+    ruleId: widow_purity
+    operation: enable
     evidence: "四婶冬至祭祀时的喝止——'你放着罢，祥林嫂！'"
+    epochId: widow_purity:epoch-1
+    specificationId: widow_purity:specification-1
 ```

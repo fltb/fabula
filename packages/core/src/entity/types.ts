@@ -17,38 +17,45 @@ import type {
   NarratorProfile,
   PlannedDiscourseLedger,
   ProjectConfig,
-  RelationshipDefinition,
-  RuleDefinition,
+  PropositionCatalog,
+  RelationshipDeclaration,
+  RelationshipTypeCatalog,
+  RuleDeclaration,
+  RuleTypeCatalog,
+  ThreadTypeCatalog,
   TimeAnchor,
   WorldInitialState,
 } from '../types/index.js';
+
 // ============================================================================
 // ProjectData — aggregate of all project file data
 // ============================================================================
 
+/**
+ * Canonical source data after one strict mapper pass.
+ *
+ * Catalog roots and relationship/rule declaration documents are required
+ * authoring inputs. No legacy relationship/rule shapes are represented here.
+ */
 export interface ProjectData {
-  config: ProjectConfig | null;
+  config: ProjectConfig;
   characters: CharacterDefinition[];
-  relationships: RelationshipDefinition[];
-  rules: RuleDefinition[];
   locations: LocationDefinition[];
   items: ItemDefinition[];
   factions: FactionDefinition[];
-  worldInitialState: WorldInitialState | null;
+  worldInitialState: WorldInitialState;
   chapters: Map<number, { metadata: ChapterMetadata | null; events: EventFile[] }>;
   timeAnchors: TimeAnchor[];
-  /** Narrator profiles from definitions/narrators/ (S6c), indexed by id. */
   narratorProfiles: Record<string, NarratorProfile>;
-  /** Mandatory runtime-compiled disclosure ledger from definitions/discourse-ledger.yaml. */
   discourseLedger: PlannedDiscourseLedger;
-  /** Narrator assertions from definitions/assertions/ (DISCOURSE-1), indexed by id. */
   narratorAssertions: Record<string, NarratorAssertion>;
-  /**
-   * Author-facing entity type catalog source from definitions/entity-types.yaml.
-   * Serialized source only — never a live Zod object. Compiled fresh per call
-   * via compileEntityTypeCatalog (internal entity module).
-   */
   entityTypeCatalogSource: EntityTypeCatalogSource;
+  threadTypeCatalog: ThreadTypeCatalog;
+  propositionCatalog: PropositionCatalog;
+  relationshipTypeCatalog: RelationshipTypeCatalog;
+  ruleTypeCatalog: RuleTypeCatalog;
+  relationshipDeclarations: RelationshipDeclaration[];
+  ruleDeclarations: RuleDeclaration[];
 }
 
 // ============================================================================

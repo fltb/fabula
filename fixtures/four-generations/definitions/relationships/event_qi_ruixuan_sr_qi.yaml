@@ -1,0 +1,13 @@
+relationshipId: event_qi_ruixuan_sr_qi
+typeId: event_relationship
+initialEpoch:
+  epochId: event_qi_ruixuan_sr_qi:epoch-1
+  lifecycle: active
+  memberships:
+    - membershipId: event_qi_ruixuan_sr_qi:member:1
+      entityId: sr_qi
+      role: member
+    - membershipId: event_qi_ruixuan_sr_qi:member:2
+      entityId: qi_ruixuan
+      role: member
+  dimensions: []

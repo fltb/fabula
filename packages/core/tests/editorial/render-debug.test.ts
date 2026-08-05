@@ -13,7 +13,12 @@ const source = (): ProjectSourceSnapshotV1 => {
     'nova.yaml':
       'project: release-assembly-debug\ntitle: Debug Test\nauthor: Tester\ndefaultModel: mock-pass2\n',
     'definitions/state_initial.yaml':
-      'info:\n  currentEra: modern\n  politicalSituation: stable\nthreads: []\nworldFacts: []\n',
+      'info:\n  currentEra: modern\n  politicalSituation: stable\nthreads: []\nworldFacts: []\nknowledge: { claims: [], commonGround: [] }\n',
+    'definitions/thread-types.yaml':
+      'types:\n  primary:\n    typeId: primary\n    description: Primary narrative thread type\n    allowedPhases: [opening, development, resolution]\n    lifecyclePolicy: { reopenPolicy: forbidden }\n    timeDomain: story\n    stableGoals: []\n    stableMilestones: []\n',
+    'definitions/propositions.yaml': 'version: 1\npropositions: {}\ndependencyGraph: {}\n',
+    'definitions/relationship-types.yaml': 'types: {}\n',
+    'definitions/rule-types.yaml': 'types: {}\n',
     'definitions/entity-types.yaml':
       'types:\n  character:\n    typeId: character\n    kind: character\n    attributes:\n      lifecycle:\n        attributeId: lifecycle\n        valueType: string\n        requiredAt: introduction\n        writePolicy: lifecycle_managed\n        allowedLifecycleStates: [active, inactive, retired]\n        unsetAllowed: false\n      traits:\n        attributeId: traits\n        valueType: string_list\n        requiredAt: never\n        writePolicy: immutable\n        unsetAllowed: true\n    lifecyclePolicy:\n      allowedTransitions: []\n    referenceCapabilities:\n      defaultEligibility: live\n    typedInvariants: []\n',
     'definitions/characters/alice.yaml':

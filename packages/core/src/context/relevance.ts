@@ -7,7 +7,7 @@ import type {
   EntityId,
   NarrativeEvent,
   RelevanceScore,
-  ThreadProgressEntry,
+  ThreadTransaction,
   WorldState,
 } from '../types/index.js';
 
@@ -82,7 +82,7 @@ export class RelevanceEngine {
   /** Entity shares active threads with the scene */
   private _threadAssociationScore(
     sceneThreads: Set<string>,
-    threadProgress: ThreadProgressEntry[],
+    threadProgress: ThreadTransaction[],
   ): number {
     // Entities that appear in thread progress entries get associated
     const entityThreads = threadProgress.filter((tp) => sceneThreads.has(tp.thread)).length;
@@ -120,15 +120,31 @@ export class RelevanceEngine {
     event: NarrativeEvent,
     state: WorldState,
   ): number {
-    const entityKnowledge = state.knowledge[entity.id];
-    if (!entityKnowledge) return 0;
+    const knownPropositions = new Set(
+      Object.values(state.epistemicLedger.claims)
+        .filter(
+          (claim) =>
+            claim.subject === entity.id &&
+            claim.assessment.type === 'settled' &&
+            claim.assessment.polarity === 'affirmative',
+        )
+        .map((claim) => claim.propositionId),
+    );
+    if (knownPropositions.size === 0) return 0;
 
-    // Check if entity knows facts relevant to scene preconditions
-    const relevantFacts = event.preconditions.map((p) => p.id);
-    const knownCount = relevantFacts.filter((f) => entityKnowledge.knownFacts.includes(f)).length;
-
-    if (relevantFacts.length === 0) return 0;
-    return knownCount / relevantFacts.length;
+    const relevantPropositions = Object.values(state.propositionCatalog.propositions)
+      .filter(
+        (proposition) =>
+          proposition.kind === 'grounded' &&
+          proposition.entityId === entity.id &&
+          event.preconditions.some((fact) => fact.attribute === proposition.attribute),
+      )
+      .map((proposition) => proposition.id);
+    if (relevantPropositions.length === 0) return 0;
+    return (
+      relevantPropositions.filter((propositionId) => knownPropositions.has(propositionId)).length /
+      relevantPropositions.length
+    );
   }
 
   /** Entity has a relationship with scene participants */

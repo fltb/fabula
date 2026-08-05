@@ -1,29 +1,29 @@
 event: E4
-title: "贺老六康复——不再回鲁镇"
+title: 贺老六康复——不再回鲁镇
 narrativeOrder: 5
 sceneType: flashback
 storyTime: spring_he_laoliu_recovery
 tense: past
 discourseMode: exposition
 arcPosition: rising
-emotionalValence: "relief_quiet_joy"
-conflictType: "person_vs_fate"
-resolutionType: "positive_resolution"
+emotionalValence: relief_quiet_joy
+conflictType: person_vs_fate
+resolutionType: positive_resolution
 pov:
   character: narrator
   type: first_person
-sceneBrief: "分支B：贺老六没有死。春天那场伤寒来得很凶，他躺在床上烧了七天七夜，祥林嫂日夜守在床边，用冷水给他擦身。村里人都说不行了——但第八天早上，他睁开了眼睛，要水喝。他活过来了。祥林嫂哭了一整夜——不是悲伤的哭，是那种从地狱门口捡回一条命的哭。阿毛还小，还坐在门槛上剥豆，还活着。春天过去了，夏天来了，贺老六慢慢恢复了力气，又能上山了。大伯本来以为贺老六不行了，已经盘算着来收房——但贺老六站了起来，大伯没来。祥林嫂对自己说：也许她的人生还有一点运气。她再也没有想过回鲁镇。"
+sceneBrief: 分支B：贺老六没有死。春天那场伤寒来得很凶，他躺在床上烧了七天七夜，祥林嫂日夜守在床边，用冷水给他擦身。村里人都说不行了——但第八天早上，他睁开了眼睛，要水喝。他活过来了。祥林嫂哭了一整夜——不是悲伤的哭，是那种从地狱门口捡回一条命的哭。阿毛还小，还坐在门槛上剥豆，还活着。春天过去了，夏天来了，贺老六慢慢恢复了力气，又能上山了。大伯本来以为贺老六不行了，已经盘算着来收房——但贺老六站了起来，大伯没来。祥林嫂对自己说：也许她的人生还有一点运气。她再也没有想过回鲁镇。
 beats:
-  - "分支B：贺老六没有死。"
-  - "春天那场伤寒来得很凶，他躺在床上烧了七天七夜，祥林嫂日夜守在床边，用冷水给他擦身。"
-  - "村里人都说不行了——但第八天早上，他睁开了眼睛，要水喝。"
-  - "他活过来了。"
-  - "祥林嫂哭了一整夜——不是悲伤的哭，是那种从地狱门口捡回一条命的哭。"
-  - "阿毛还小，还坐在门槛上剥豆，还活着。"
-  - "春天过去了，夏天来了，贺老六慢慢恢复了力气，又能上山了。"
-  - "大伯本来以为贺老六不行了，已经盘算着来收房——但贺老六站了起来，大伯没来。"
-  - "祥林嫂对自己说：也许她的人生还有一点运气。"
-  - "她再也没有想过回鲁镇。"
+  - 分支B：贺老六没有死。
+  - 春天那场伤寒来得很凶，他躺在床上烧了七天七夜，祥林嫂日夜守在床边，用冷水给他擦身。
+  - 村里人都说不行了——但第八天早上，他睁开了眼睛，要水喝。
+  - 他活过来了。
+  - 祥林嫂哭了一整夜——不是悲伤的哭，是那种从地狱门口捡回一条命的哭。
+  - 阿毛还小，还坐在门槛上剥豆，还活着。
+  - 春天过去了，夏天来了，贺老六慢慢恢复了力气，又能上山了。
+  - 大伯本来以为贺老六不行了，已经盘算着来收房——但贺老六站了起来，大伯没来。
+  - 祥林嫂对自己说：也许她的人生还有一点运气。
+  - 她再也没有想过回鲁镇。
 preconditions:
   - entity: xianglins_wife
     attribute: location
@@ -38,19 +38,19 @@ expectedPostconditions:
   - entity: xianglins_wife
     attribute: location
     value: he_family_hollow
-    confidence: 1.0
+    confidence: 1
   - entity: xianglins_wife
     attribute: marital_status
     value: remarried
-    confidence: 1.0
+    confidence: 1
   - entity: xianglins_wife
     attribute: has_ah_mao
     value: true
-    confidence: 1.0
+    confidence: 1
   - entity: he_laoliu
     attribute: status
     value: alive
-    confidence: 1.0
+    confidence: 1
   - entity: he_laoliu
     attribute: health
     value: recovered
@@ -58,47 +58,68 @@ expectedPostconditions:
   - entity: xianglins_wife
     attribute: emotionalState
     value: relieved_hopeful
-    confidence: 1.0
+    confidence: 1
   - entity: xianglins_wife
     attribute: social_status
-    narrativeHint: "分支B：她没有成为二次寡妇——这是她一生中第一次被命运放过。贺老六的康复是一个幸运的偶然，但这个偶然改变了一切：她不用回鲁镇，不用被四婶嫌弃，不用听到柳妈的地狱恐吓，不用捐门槛，不用在冬至祭祀时被喝止。她的好日子还在继续。"
-    confidence: 1.0
+    narrativeHint: 分支B：她没有成为二次寡妇——这是她一生中第一次被命运放过。贺老六的康复是一个幸运的偶然，但这个偶然改变了一切：她不用回鲁镇，不用被四婶嫌弃，不用听到柳妈的地狱恐吓，不用捐门槛，不用在冬至祭祀时被喝止。她的好日子还在继续。
+    confidence: 1
 threadProgress:
   - thread: T1
-    advancement: "分支B：祥林嫂生命中最大悲剧的避免——贺老六没有死。她不再被迫回到鲁镇，不再做二次寡妇，不再沦为乞丐。她第一次被命运眷顾。"
+    advancement: 分支B：祥林嫂生命中最大悲剧的避免——贺老六没有死。她不再被迫回到鲁镇，不再做二次寡妇，不再沦为乞丐。她第一次被命运眷顾。
     progressAfter: 60
     progressTotal: 100
   - thread: T2
-    advancement: "祥林嫂还不需要面对灵魂问题——她的身边还有活着的丈夫和孩子。柳妈的地狱恐吓不会发生，因为她不再是'再寡'的罪人。"
+    advancement: 祥林嫂还不需要面对灵魂问题——她的身边还有活着的丈夫和孩子。柳妈的地狱恐吓不会发生，因为她不再是'再寡'的罪人。
     progressAfter: 40
     progressTotal: 100
   - thread: T3
-    advancement: "鲁镇的看客们永远不会知道祥林嫂在贺家坳过上了怎样的日子——他们失去了一个嘲弄的对象，但这对祥林嫂来说是一种解放。"
+    advancement: 鲁镇的看客们永远不会知道祥林嫂在贺家坳过上了怎样的日子——他们失去了一个嘲弄的对象，但这对祥林嫂来说是一种解放。
     progressAfter: 35
     progressTotal: 100
 relationshipEffects:
-  - participants:
-      - he_laoliu
-      - xianglins_wife
-    effect: reinforce
-    direction: survival_strengthens_bond
-    newState:
-      type: survived_together
-      intensity: 95
-  - participants:
-      - fourth_aunt
-      - xianglins_wife
-    effect: dissolve
-    direction: xianglins_wife_never_returns
-    newState:
-      type: no_relationship
-      intensity: 0
+  - type: relationship_transaction
+    effectId: E4:relationship:1
+    relationshipId: he_laoliu_xianglins_wife
+    epochId: he_laoliu_xianglins_wife:epoch-1
+    membershipAfter:
+      - membershipId: he_laoliu_xianglins_wife:member:1
+        entityId: he_laoliu
+        role: member
+      - membershipId: he_laoliu_xianglins_wife:member:2
+        entityId: xianglins_wife
+        role: member
+    lifecycleAfter: active
+    dimensionSet:
+      - dimensionId: intensity
+        scope: global
+        value: 95
+    provenance: survival_strengthens_bond (survived_together)
+  - type: relationship_transaction
+    effectId: E4:relationship:2
+    relationshipId: event_fourth_aunt_xianglins_wife
+    epochId: event_fourth_aunt_xianglins_wife:epoch-1
+    membershipAfter:
+      - membershipId: event_fourth_aunt_xianglins_wife:member:1
+        entityId: fourth_aunt
+        role: member
+      - membershipId: event_fourth_aunt_xianglins_wife:member:2
+        entityId: xianglins_wife
+        role: member
+    lifecycleAfter: dissolved
+    dimensionSet:
+      - dimensionId: intensity
+        scope: global
+        value: 0
+    provenance: xianglins_wife_never_returns (no_relationship)
 ruleEffects:
-  - rule: patriarchal_clan_authority
-    effect: weaken
-    evidence: "大伯本来打算来收房——但贺老六活了下来，宗族的收房计划落空了。宗族权力在贺老六的存活面前暂时失效。"
+  - type: rule_transaction
+    ruleId: patriarchal_clan_authority
+    operation: suspend
+    evidence: 大伯本来打算来收房——但贺老六活了下来，宗族的收房计划落空了。宗族权力在贺老六的存活面前暂时失效。
+    epochId: patriarchal_clan_authority:epoch-1
+    specificationId: patriarchal_clan_authority:specification-1
 styleGuidance:
-  tone: "温暖但不煽情——是一种真实的、山野人家的质朴生存。贺老六的康复不是奇迹，是身体的胜利、是妻子的日夜照顾。"
-  scenePacing: "从伤寒的凶险（七天高烧、冷水中擦身）→第八天睁开眼的转折→祥林嫂的哭→春夏过渡→贺老六恢复力气→'她再也没有想过回鲁镇'的坚决收束。"
+  tone: 温暖但不煽情——是一种真实的、山野人家的质朴生存。贺老六的康复不是奇迹，是身体的胜利、是妻子的日夜照顾。
+  scenePacing: 从伤寒的凶险（七天高烧、冷水中擦身）→第八天睁开眼的转折→祥林嫂的哭→春夏过渡→贺老六恢复力气→'她再也没有想过回鲁镇'的坚决收束。
   characterVoice:
-    xianglins_wife: "她在贺老六昏迷时的独白或心理——'你不能死。你已经是我命里唯一的好东西了。'——这种朴素的情感具有与柳妈地狱恐吓完全相反的力量。"
+    xianglins_wife: 她在贺老六昏迷时的独白或心理——'你不能死。你已经是我命里唯一的好东西了。'——这种朴素的情感具有与柳妈地狱恐吓完全相反的力量。

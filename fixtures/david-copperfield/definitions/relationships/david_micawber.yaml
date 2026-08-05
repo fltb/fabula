@@ -1,14 +1,47 @@
-id: david_micawber
-type: friendship
-participants:
-  - david_copperfield
-  - micawber
-bidirectional: true
-initialState:
-  trust: 40
-  emotionalDistance: 30
-  intensity: 30
-  status: "fellow_lodgers"
-  notes: "David meets Mr Micawber when he lodges with the Micawber family in London during his miserable employment at Murdstone and Grinby's. Micawber is a garrulous, eternally optimistic, perpetually insolvent gentleman who is always 'waiting for something to turn up.' Despite his catastrophic financial management, Micawber treats David with warmth, dignity, and a kind of theatrical exuberance that cheers the boy's darkest days. David lends his small wages to the family, shares their meagre meals, and becomes emotionally entangled in their endless crises. When the Micawbers flee to Plymouth to evade their creditors, David is left alone — a loss that precipitates his desperate escape to Dover. Years later, their friendship resumes when Micawber, by a stroke of fate, becomes Uriah Heep's confidential clerk in Canterbury. It is Micawber who secretly collects the evidence of Heep's fraud, writes the magnificent letter of exposure, and — in the climactic confrontation — brings Heep to justice. Micawber's loyalty to David and his friends redeems his feckless past. He ultimately emigrates to Australia with his family, where he finally finds success as a magistrate. Their friendship is one of the novel's warmest, most human relationships: David never condescends to Micawber, and Micawber — despite his absurdity — never fails David when it truly matters."
-establishedEvent: E04
-breakingEvent: E19
+relationshipId: david_micawber
+typeId: friendship
+initialEpoch:
+  epochId: david_micawber:epoch-1
+  lifecycle: active
+  memberships:
+    - membershipId: david_micawber:member:1
+      entityId: david_copperfield
+      role: member
+    - membershipId: david_micawber:member:2
+      entityId: micawber
+      role: member
+  dimensions:
+    - dimensionId: trust
+      scope: global
+      value: 40
+    - dimensionId: emotionalDistance
+      scope: global
+      value: 30
+    - dimensionId: intensity
+      scope: global
+      value: 30
+    - dimensionId: status
+      scope: global
+      value: fellow_lodgers
+    - dimensionId: notes
+      scope: global
+      value: "David meets Mr Micawber when he lodges with the Micawber family in
+        London during his miserable employment at Murdstone and Grinby's.
+        Micawber is a garrulous, eternally optimistic, perpetually insolvent
+        gentleman who is always 'waiting for something to turn up.' Despite his
+        catastrophic financial management, Micawber treats David with warmth,
+        dignity, and a kind of theatrical exuberance that cheers the boy's
+        darkest days. David lends his small wages to the family, shares their
+        meagre meals, and becomes emotionally entangled in their endless crises.
+        When the Micawbers flee to Plymouth to evade their creditors, David is
+        left alone — a loss that precipitates his desperate escape to Dover.
+        Years later, their friendship resumes when Micawber, by a stroke of
+        fate, becomes Uriah Heep's confidential clerk in Canterbury. It is
+        Micawber who secretly collects the evidence of Heep's fraud, writes the
+        magnificent letter of exposure, and — in the climactic confrontation —
+        brings Heep to justice. Micawber's loyalty to David and his friends
+        redeems his feckless past. He ultimately emigrates to Australia with his
+        family, where he finally finds success as a magistrate. Their friendship
+        is one of the novel's warmest, most human relationships: David never
+        condescends to Micawber, and Micawber — despite his absurdity — never
+        fails David when it truly matters."

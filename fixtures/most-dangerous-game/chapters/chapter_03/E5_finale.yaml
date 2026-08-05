@@ -1,116 +1,165 @@
 event: E5
-title: "The Final Leap"
+title: The Final Leap
 narrativeOrder: 6
-sceneType: action
+sceneType: linear
 storyTime: day_3_night
 pov:
   character: rainsford
   type: third_person_limited
-sceneBrief: "The hounds resume the chase. Rainsford, unarmed and exhausted, bursts through the tree line to find himself on the sea cliffs — twenty feet below, the water churns against jagged rocks. Across the cove, the gloomy gray stone of Zaroff's château rises against the sky. The hounds are almost upon him. He leaps far out into the sea, cutting his cheek on a jagged rock. He surfaces, gasping, and swims. Zaroff arrives at the cliff edge, shrugs, sits down, takes a silver flask from his pocket, lights a perfumed cigarette, and hums an aria from Madama Butterfly. Rainsford swims around the island and infiltrates the château, hiding in the curtains of Zaroff's bedroom. Zaroff, having dined well, retires at ten o'clock. He locks the door, walks to the window to call to his hounds, and switches on the light. Rainsford steps from the curtains. Zaroff is shocked but recovers quickly, congratulating Rainsford on winning the game. Rainsford refuses the victory: 'I am still a beast at bay.' 'One of us is to furnish a repast for the hounds,' says Zaroff. 'The other will sleep in this very excellent bed. On guard, Rainsford.' They fight. Rainsford wins. The story ends as it began: 'He had never slept in a better bed.'"
+sceneBrief: "The hounds resume the chase. Rainsford, unarmed and exhausted,
+  bursts through the tree line to find himself on the sea cliffs — twenty feet
+  below, the water churns against jagged rocks. Across the cove, the gloomy gray
+  stone of Zaroff's château rises against the sky. The hounds are almost upon
+  him. He leaps far out into the sea, cutting his cheek on a jagged rock. He
+  surfaces, gasping, and swims. Zaroff arrives at the cliff edge, shrugs, sits
+  down, takes a silver flask from his pocket, lights a perfumed cigarette, and
+  hums an aria from Madama Butterfly. Rainsford swims around the island and
+  infiltrates the château, hiding in the curtains of Zaroff's bedroom. Zaroff,
+  having dined well, retires at ten o'clock. He locks the door, walks to the
+  window to call to his hounds, and switches on the light. Rainsford steps from
+  the curtains. Zaroff is shocked but recovers quickly, congratulating Rainsford
+  on winning the game. Rainsford refuses the victory: 'I am still a beast at
+  bay.' 'One of us is to furnish a repast for the hounds,' says Zaroff. 'The
+  other will sleep in this very excellent bed. On guard, Rainsford.' They fight.
+  Rainsford wins. The story ends as it began: 'He had never slept in a better
+  bed.'"
 beats:
-  - "The hounds resume the chase."
-  - "Rainsford, unarmed and exhausted, bursts through the tree line to find himself on the sea cliffs — twenty feet below, the water churns against jagged rocks."
-  - "Across the cove, the gloomy gray stone of Zaroff's château rises against the sky."
-  - "The hounds are almost upon him."
-  - "He leaps far out into the sea, cutting his cheek on a jagged rock."
-  - "He surfaces, gasping, and swims."
-  - "Zaroff arrives at the cliff edge, shrugs, sits down, takes a silver flask from his pocket, lights a perfumed cigarette, and hums an aria from Madama Butterfly."
-  - "Rainsford swims around the island and infiltrates the château, hiding in the curtains of Zaroff's bedroom."
-  - "Zaroff, having dined well, retires at ten o'clock."
-  - "He locks the door, walks to the window to call to his hounds, and switches on the light."
-  - "Rainsford steps from the curtains."
-  - "Zaroff is shocked but recovers quickly, congratulating Rainsford on winning the game."
+  - The hounds resume the chase.
+  - Rainsford, unarmed and exhausted, bursts through the tree line to find
+    himself on the sea cliffs — twenty feet below, the water churns against
+    jagged rocks.
+  - Across the cove, the gloomy gray stone of Zaroff's château rises against the
+    sky.
+  - The hounds are almost upon him.
+  - He leaps far out into the sea, cutting his cheek on a jagged rock.
+  - He surfaces, gasping, and swims.
+  - Zaroff arrives at the cliff edge, shrugs, sits down, takes a silver flask
+    from his pocket, lights a perfumed cigarette, and hums an aria from Madama
+    Butterfly.
+  - Rainsford swims around the island and infiltrates the château, hiding in the
+    curtains of Zaroff's bedroom.
+  - Zaroff, having dined well, retires at ten o'clock.
+  - He locks the door, walks to the window to call to his hounds, and switches
+    on the light.
+  - Rainsford steps from the curtains.
+  - Zaroff is shocked but recovers quickly, congratulating Rainsford on winning
+    the game.
   - "Rainsford refuses the victory: 'I am still a beast at bay.'"
   - "'One of us is to furnish a repast for the hounds,' says Zaroff."
   - "'The other will sleep in this very excellent bed."
-  - "On guard, Rainsford.'"
-  - "They fight."
-  - "Rainsford wins."
+  - On guard, Rainsford.'
+  - They fight.
+  - Rainsford wins.
   - "The story ends as it began: 'He had never slept in a better bed.'"
 preconditions:
   - entity: rainsford
     attribute: status
     value: alive
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: knife_lost_to_trap
     value: true
-    confidence: 1.0
-  - entity: zaroff_hunt_3day
-    attribute: active
-    value: true
-    confidence: 1.0
+    confidence: 1
   - entity: time
     attribute: value
     value: day_3_night
-    confidence: 1.0
+    confidence: 1
 expectedPostconditions:
   - entity: rainsford
     attribute: location
     value: chateau
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: status
     value: alive
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: won_fight
     value: true
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: emotionalState
     value: exhausted_victorious
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: condition
     value: injured_cheek
-    confidence: 1.0
+    confidence: 1
   - entity: zaroff
     attribute: status
     value: dead
-    confidence: 1.0
+    confidence: 1
   - entity: zaroff
     attribute: cause_of_death
     value: killed_by_rainsford
-    confidence: 1.0
-  - entity: zaroff_hunt_3day
-    attribute: active
-    value: false
-    confidence: 1.0
+    confidence: 1
 threadProgress:
   - thread: T1
-    advancement: "Rainsford kills Zaroff and survives. The game is won."
+    advancement: Rainsford kills Zaroff and survives. The game is won.
     progressAfter: 100
     progressTotal: 100
   - thread: T2
-    advancement: "Rainsford completes his transformation. He has killed a man in cold blood and will sleep in the dead man's bed. The hunter has become the huntee and the killer. Whitney's moral question has been answered in blood."
+    advancement: Rainsford completes his transformation. He has killed a man in cold
+      blood and will sleep in the dead man's bed. The hunter has become the
+      huntee and the killer. Whitney's moral question has been answered in
+      blood.
     progressAfter: 100
     progressTotal: 100
   - thread: T3
-    advancement: "Zaroff's need for a worthy opponent leads to his death. His curse — boredom — is ended permanently."
+    advancement: Zaroff's need for a worthy opponent leads to his death. His curse —
+      boredom — is ended permanently.
     progressAfter: 100
     progressTotal: 100
 foreshadowing:
   - id: hunters_huntees_final
-    hint: "Rainsford declared the world divided into hunters and huntees. In the end, he is both — hunter in the château, huntee in the jungle. The line has blurred to nothing."
+    hint: Rainsford declared the world divided into hunters and huntees. In the end,
+      he is both — hunter in the château, huntee in the jungle. The line has
+      blurred to nothing.
     targetRevealChapter: 5
     thread: T2
   - id: bed_frame
-    hint: "The story's opening described the château as having a 'good bed.' The closing line reveals Rainsford's final judgment: 'He had never slept in a better bed.' The frame is complete."
+    hint: "The story's opening described the château as having a 'good bed.' The
+      closing line reveals Rainsford's final judgment: 'He had never slept in a
+      better bed.' The frame is complete."
     targetRevealChapter: 5
     thread: T2
 relationshipEffects:
-  - participants:
-      - rainsford
-      - zaroff
-    effect: dissolve
-    direction: prey_kills_predator
-    newState:
-      type: final_victory
-      intensity: 1.0
+  - type: relationship_transaction
+    effectId: E5:relationship:1
+    relationshipId: rainsford_zaroff
+    epochId: rainsford_zaroff:epoch-1
+    membershipAfter:
+      - membershipId: rainsford_zaroff:member:1
+        entityId: rainsford
+        role: member
+      - membershipId: rainsford_zaroff:member:2
+        entityId: zaroff
+        role: member
+    lifecycleAfter: dissolved
+    dimensionSet:
+      - dimensionId: intensity
+        scope: global
+        value: 1
+    provenance: prey_kills_predator (final_victory)
 ruleEffects:
-  - rule: zaroff_hunt_3day
-    effect: nullify
-    evidence: "Rainsford survives and kills Zaroff. The game is over. Rainsford wins."
+  - type: rule_transaction
+    ruleId: zaroff_hunt_3day
+    operation: set_effectiveness
+    evidence: Rainsford survives and kills Zaroff. The game is over. Rainsford wins.
+    epochId: zaroff_hunt_3day:epoch-1
+    specificationId: zaroff_hunt_3day:specification-1
+    newEffectiveness: nullified
+  - type: rule_transaction
+    ruleId: zaroff_hunt_3day
+    operation: revoke
+    evidence: Zaroff's death ends the hunt and revokes its rule.
+    epochId: zaroff_hunt_3day:epoch-1
+    specificationId: zaroff_hunt_3day:specification-1
 styleGuidance:
-  tone: "Desperate climax followed by tense, intimate confrontation. The sea leap should feel like a final, irrational act of defiance — choosing the ocean over the hounds. Zaroff's casual response (brandy, cigarette, opera) should feel more chilling than any rage. The bedroom confrontation should feel like a trap that has snapped shut. Zaroff's politeness remains until the end. The fight itself can be brief; the meaning is in the dialogue and the closing line. End on the quiet, resonant final sentence."
+  tone: Desperate climax followed by tense, intimate confrontation. The sea leap
+    should feel like a final, irrational act of defiance — choosing the ocean
+    over the hounds. Zaroff's casual response (brandy, cigarette, opera) should
+    feel more chilling than any rage. The bedroom confrontation should feel like
+    a trap that has snapped shut. Zaroff's politeness remains until the end. The
+    fight itself can be brief; the meaning is in the dialogue and the closing
+    line. End on the quiet, resonant final sentence.

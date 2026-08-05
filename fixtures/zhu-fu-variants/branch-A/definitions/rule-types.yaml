@@ -1,0 +1,32 @@
+types:
+  constraint:
+    typeId: constraint
+    name: 寡妇不洁禁忌
+    category: ritual_taboo
+    ruleClass: social_norm
+    defaultConstraints:
+      - constraintId: widow_purity:constraint:1
+        kind: state_invariant
+        enforcement: hard
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.gender='女' AND entity.marital_status IN ('widow',
+            'remarried_widow') => entity.can_touch_ritual_items=false
+      - constraintId: widow_purity:constraint:2
+        kind: transition_constraint
+        enforcement: audit
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: event.season='new_year_eve' => widow_death.is_ritually_polluting=true

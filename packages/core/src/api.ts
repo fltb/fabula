@@ -243,8 +243,8 @@ export async function validateNovel(
     iss: calculateISS({
       entities: ir.registry,
       events,
-      threads: threads.map((thread) => ({ id: thread.id, name: thread.name })),
-      rules: ir.data.rules,
+      threads: threads.map((thread) => ({ id: thread.threadId, name: thread.name })),
+      rules: ir.data.ruleDeclarations,
     }),
   };
 }

@@ -278,23 +278,41 @@ export function compileStoryRuntimeGraph(input: {
       }
 
       // Relationship effects → relationship:<relationshipId>
-      // EntityMapper converts legacy RelationshipChange entries to
-      // RelationshipTransaction at load time, so relationshipId is always present.
+      // Canonical effects are a discriminated union: relationship transactions
+      // project their own relationshipId; identity transition closures and
+      // establishments project their relationshipIds with a stage suffix.
       for (let i = 0; i < event.relationshipEffects.length; i++) {
-        const entry = event.relationshipEffects[i];
-        effects.push({
-          effectId: `${event.id}:relationship:${i}`,
-          canonicalKey: `relationship:${entry.relationshipId}`,
-          value: entry,
-        });
+        const effect = event.relationshipEffects[i];
+        if (effect.type === 'identity_transition') {
+          for (const closure of effect.oldEpochClosures) {
+            effects.push({
+              effectId: `${event.id}:relationship:${i}:closure`,
+              canonicalKey: `relationship:${closure.relationshipId}`,
+              value: { type: 'identity_transition', closure: true, ...closure },
+            });
+          }
+          for (const transaction of effect.newTransactions) {
+            effects.push({
+              effectId: `${event.id}:relationship:${i}:new`,
+              canonicalKey: `relationship:${transaction.relationshipId}`,
+              value: transaction,
+            });
+          }
+        } else {
+          effects.push({
+            effectId: `${event.id}:relationship:${i}`,
+            canonicalKey: `relationship:${effect.relationshipId}`,
+            value: effect,
+          });
+        }
       }
 
-      // Rule effects → rule:<rule>
+      // Rule effects → rule:<ruleId>
       for (let i = 0; i < event.ruleEffects.length; i++) {
         const entry = event.ruleEffects[i];
         effects.push({
           effectId: `${event.id}:rule:${i}`,
-          canonicalKey: `rule:${entry.rule}`,
+          canonicalKey: `rule:${entry.ruleId}`,
           value: entry,
         });
       }

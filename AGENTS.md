@@ -28,12 +28,18 @@ Standard Host loader path contract:
 nova.yaml
 definitions/state_initial.yaml
 definitions/entity-types.yaml
-[optional] discourse-ledger.yaml
+definitions/thread-types.yaml
+definitions/propositions.yaml
+definitions/relationship-types.yaml
+definitions/rule-types.yaml
+definitions/relationships/*.yaml
+definitions/rules/*.yaml
+[optional] definitions/discourse-ledger.yaml
 chapters/chapter_NN/[optional] _chapter.yaml
 chapters/chapter_NN/E*.yaml
 ```
 
-`state_initial.yaml` and `entity-types.yaml` are required loader inputs; discourse ledger and chapter metadata are optional. Event files are strict `EventFile` (`beats` with at least one non-empty entry); wire `Fact` and runtime `Fact` are different representations normalized by the mapper.
+The seven root catalog/state documents are required loader inputs; relationship/rule declaration directories may be empty. Event files are strict `EventFile` (`beats` with at least one non-empty entry); wire `Fact` and runtime `Fact` are different representations normalized by the mapper.
 
 ## Validators and Pass 2
 
@@ -52,6 +58,7 @@ npm run typecheck:dead-code
 npm run bundle-check
 npm run lint             # biome check
 npm run bench            # @novalistically/bench
+npm run count:drc -- fixtures/dream-of-red-chamber --check
 ```
 
 For current test totals, lint diagnostics, and verified command results, read `docs/current-state.md`. Node is pinned `>=26.5.0 <27`; scripts run through `fnm`.

@@ -36,7 +36,7 @@ export interface FactionDefinition {
 
 // ——— Character-level Relationship Definition (file/YAML format) ———
 // Retained for YAML loading backward compatibility; the canonical
-// first-class RelationshipDefinition now lives in ./relationship.ts.
+// RelationshipDeclaration now lives in ./relationship.ts.
 
 export interface CharacterRelationshipDef {
   participants: [string, string];

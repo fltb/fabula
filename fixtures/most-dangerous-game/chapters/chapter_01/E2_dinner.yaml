@@ -1,118 +1,179 @@
 event: E2
-title: "The General's Dinner"
+title: The General's Dinner
 narrativeOrder: 3
-sceneType: dialogue
+sceneType: linear
 storyTime: day_1_evening
 pov:
   character: rainsford
   type: third_person_limited
-sceneBrief: "In the magnificent candlelit dining hall surrounded by mounted animal heads, General Zaroff hosts Rainsford for an exquisite dinner. Over borsch, filet mignon, champagne, and port, Zaroff reveals his life story: his Cossack youth, his military service, his worldwide hunting career. He confesses that hunting all animals had begun to bore him — and that he invented a new quarry: man. Rainsford is horrified, calling it murder. Zaroff calmly explains his philosophy — life is for the strong, and he only hunts the scum of the earth: sailors, tramps. Showing Rainsford the hounds through the window, he explains the three-day rules of his game. When Rainsford demands to leave in the morning, Zaroff forces the choice: hunt with him or be turned over to Ivan. Rainsford, seeing the giant's silent menace, chooses the hunt. He is given a three-hour head start with a hunting knife and released into the jungle at dusk."
+sceneBrief: "In the magnificent candlelit dining hall surrounded by mounted
+  animal heads, General Zaroff hosts Rainsford for an exquisite dinner. Over
+  borsch, filet mignon, champagne, and port, Zaroff reveals his life story: his
+  Cossack youth, his military service, his worldwide hunting career. He
+  confesses that hunting all animals had begun to bore him — and that he
+  invented a new quarry: man. Rainsford is horrified, calling it murder. Zaroff
+  calmly explains his philosophy — life is for the strong, and he only hunts the
+  scum of the earth: sailors, tramps. Showing Rainsford the hounds through the
+  window, he explains the three-day rules of his game. When Rainsford demands to
+  leave in the morning, Zaroff forces the choice: hunt with him or be turned
+  over to Ivan. Rainsford, seeing the giant's silent menace, chooses the hunt.
+  He is given a three-hour head start with a hunting knife and released into the
+  jungle at dusk."
 beats:
-  - "In the magnificent candlelit dining hall surrounded by mounted animal heads, General Zaroff hosts Rainsford for an exquisite dinner."
-  - "Over borsch, filet mignon, champagne, and port, Zaroff reveals his life story: his Cossack youth, his military service, his worldwide hunting career."
-  - "He confesses that hunting all animals had begun to bore him — and that he invented a new quarry: man."
-  - "Rainsford is horrified, calling it murder."
-  - "Zaroff calmly explains his philosophy — life is for the strong, and he only hunts the scum of the earth: sailors, tramps."
-  - "Showing Rainsford the hounds through the window, he explains the three-day rules of his game."
-  - "When Rainsford demands to leave in the morning, Zaroff forces the choice: hunt with him or be turned over to Ivan."
-  - "Rainsford, seeing the giant's silent menace, chooses the hunt."
-  - "He is given a three-hour head start with a hunting knife and released into the jungle at dusk."
+  - In the magnificent candlelit dining hall surrounded by mounted animal heads,
+    General Zaroff hosts Rainsford for an exquisite dinner.
+  - "Over borsch, filet mignon, champagne, and port, Zaroff reveals his life
+    story: his Cossack youth, his military service, his worldwide hunting
+    career."
+  - "He confesses that hunting all animals had begun to bore him — and that he
+    invented a new quarry: man."
+  - Rainsford is horrified, calling it murder.
+  - "Zaroff calmly explains his philosophy — life is for the strong, and he only
+    hunts the scum of the earth: sailors, tramps."
+  - Showing Rainsford the hounds through the window, he explains the three-day
+    rules of his game.
+  - "When Rainsford demands to leave in the morning, Zaroff forces the choice:
+    hunt with him or be turned over to Ivan."
+  - Rainsford, seeing the giant's silent menace, chooses the hunt.
+  - He is given a three-hour head start with a hunting knife and released into
+    the jungle at dusk.
 preconditions:
   - entity: rainsford
     attribute: location
     value: chateau
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: status
     value: alive
-    confidence: 1.0
+    confidence: 1
   - entity: time
     attribute: value
     value: day_1_evening
-    confidence: 1.0
+    confidence: 1
   - entity: zaroff
     attribute: knows_rainsford_identity
     value: true
-    confidence: 1.0
+    confidence: 1
 expectedPostconditions:
   - entity: rainsford
     attribute: knows_zaroff_hunts_men
     value: true
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: chose_hunt
     value: true
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: location
     value: jungle
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: inventory
     value:
       hunting_knife: carried
       food_pack: carried
-    confidence: 1.0
+    confidence: 1
   - entity: zaroff
     attribute: true_nature_revealed
     value: true
-    confidence: 1.0
+    confidence: 1
   - entity: zaroff
     attribute: hunt_commenced
     value: true
-    confidence: 1.0
-  - entity: zaroff_hunt_3day
-    attribute: active
-    value: true
-    confidence: 1.0
+    confidence: 1
 threadProgress:
   - thread: T1
-    advancement: "Rainsford learns the truth about Zaroff's game. He chooses the hunt and is released into the jungle. The survival challenge begins."
+    advancement: Rainsford learns the truth about Zaroff's game. He chooses the hunt
+      and is released into the jungle. The survival challenge begins.
     progressAfter: 35
     progressTotal: 100
   - thread: T2
-    advancement: "Rainsford calls it murder. His moral line is drawn. He is now forced to become the huntee — the very thing Whitney warned him about."
+    advancement: Rainsford calls it murder. His moral line is drawn. He is now
+      forced to become the huntee — the very thing Whitney warned him about.
     progressAfter: 15
     progressTotal: 100
   - thread: T3
-    advancement: "Zaroff reveals his philosophy and his ennui. Rainsford accepts the hunt, giving Zaroff the worthy opponent he craves."
+    advancement: Zaroff reveals his philosophy and his ennui. Rainsford accepts the
+      hunt, giving Zaroff the worthy opponent he craves.
     progressAfter: 40
     progressTotal: 100
 foreshadowing:
   - id: zaroff_boredom
-    hint: "Zaroff's ennui — he is bored with all animals. Only a worthy human opponent can excite him. This need will lead him to give Rainsford chances he should not."
+    hint: Zaroff's ennui — he is bored with all animals. Only a worthy human
+      opponent can excite him. This need will lead him to give Rainsford chances
+      he should not.
     targetRevealChapter: 5
     thread: T3
   - id: hounds_revealed_at_dinner
-    hint: "Zaroff shows Rainsford the hounds from the window — twelve enormous black shapes with glittering green eyes."
+    hint: Zaroff shows Rainsford the hounds from the window — twelve enormous black
+      shapes with glittering green eyes.
     targetRevealChapter: 4
     thread: T1
   - id: three_day_rule
-    hint: "Zaroff explains the three-day hunt rules. Rainsford does not yet know the full horror of what he has agreed to."
+    hint: Zaroff explains the three-day hunt rules. Rainsford does not yet know the
+      full horror of what he has agreed to.
     targetRevealChapter: 5
     thread: T1
   - id: death_swamp_warning
-    hint: "Zaroff warns Rainsford to avoid the big swamp in the southeast corner — Death Swamp. He mentions quicksand and his lost hound Lazarus."
+    hint: Zaroff warns Rainsford to avoid the big swamp in the southeast corner —
+      Death Swamp. He mentions quicksand and his lost hound Lazarus.
     targetRevealChapter: 3
     thread: T1
 relationshipEffects:
-  - participants:
-      - rainsford
-      - zaroff
-    effect: change
-    direction: hospitality_turns_to_threat
-    newState:
-      type: predator_recognizes_prey
-      intensity: 0.7
+  - type: relationship_transaction
+    effectId: E2:relationship:1
+    relationshipId: rainsford_zaroff
+    epochId: rainsford_zaroff:epoch-1
+    membershipAfter:
+      - membershipId: rainsford_zaroff:member:1
+        entityId: rainsford
+        role: member
+      - membershipId: rainsford_zaroff:member:2
+        entityId: zaroff
+        role: member
+    lifecycleAfter: active
+    dimensionSet:
+      - dimensionId: intensity
+        scope: global
+        value: 0.7
+    provenance: hospitality_turns_to_threat (predator_recognizes_prey)
 ruleEffects:
-  - rule: zaroff_hunt_3day
-    effect: introduce_exception
-    evidence: "Zaroff explains the three-day hunt rules to Rainsford over dinner. Rainsford accepts the hunt."
-  - rule: ivan_alternative
-    effect: reinforce
-    evidence: "Zaroff explains that if the quarry refuses, he is turned over to Ivan."
-  - rule: no_other_weapon
-    effect: reinforce
-    evidence: "Rainsford receives only a hunting knife — no firearm."
+  - type: rule_transaction
+    ruleId: zaroff_hunt_3day
+    operation: add_exception
+    evidence: Zaroff explains the three-day hunt rules to Rainsford over dinner.
+      Rainsford accepts the hunt.
+    epochId: zaroff_hunt_3day:epoch-1
+    specificationId: zaroff_hunt_3day:specification-1
+    exception:
+      exceptionId: zaroff_hunt_3day:exception:event-1
+      status: active
+      constraintIds: []
+      scopeBindings: {}
+      effect:
+        type: exempt
+  - type: rule_transaction
+    ruleId: ivan_alternative
+    operation: enable
+    evidence: Zaroff explains that if the quarry refuses, he is turned over to Ivan.
+    epochId: ivan_alternative:epoch-1
+    specificationId: ivan_alternative:specification-1
+  - type: rule_transaction
+    ruleId: no_other_weapon
+    operation: enable
+    evidence: Rainsford receives only a hunting knife — no firearm.
+    epochId: no_other_weapon:epoch-1
+    specificationId: no_other_weapon:specification-1
+  - type: rule_transaction
+    ruleId: zaroff_hunt_3day
+    operation: enable
+    evidence: Rainsford accepts the hunt, activating Zaroff's three-day rule.
+    epochId: zaroff_hunt_3day:epoch-1
+    specificationId: zaroff_hunt_3day:specification-1
 styleGuidance:
-  tone: "Drawing-room horror. The dinner must feel opulent and civilized — the finest linen, crystal, silver, china, perfectly cooked food — while Zaroff calmly describes mass murder. The mounted heads on the walls take on new meaning. The hounds through the window are a glimpse of hell. Zaroff's ultimatum is delivered with perfect politeness. End with the château gates clanging shut behind Rainsford."
+  tone: Drawing-room horror. The dinner must feel opulent and civilized — the
+    finest linen, crystal, silver, china, perfectly cooked food — while Zaroff
+    calmly describes mass murder. The mounted heads on the walls take on new
+    meaning. The hounds through the window are a glimpse of hell. Zaroff's
+    ultimatum is delivered with perfect politeness. End with the château gates
+    clanging shut behind Rainsford.

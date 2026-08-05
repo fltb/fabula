@@ -1,8 +1,7 @@
 // ============================================================================
 // Novalistically — Thread Transaction Replay
 // Applies ThreadTransaction to WorldState for STATE-5 thread narrative state.
-// Handles clock isolation (story vs discourse), backward compat conversion,
-// and branch merge.
+// Handles clock isolation (story vs discourse) and branch merge.
 // ============================================================================
 
 import type {
@@ -12,7 +11,6 @@ import type {
   ThreadLifecycle,
   ThreadMergeResult,
   ThreadMergeStrategy,
-  ThreadProgressEntry,
   ThreadRunId,
   ThreadRuntimeState,
   ThreadTransaction,
@@ -145,55 +143,7 @@ function validateThreadTransition(
 }
 
 // ============================================================================
-// 2. Backward-compat conversion: ThreadProgressEntry → ThreadTransaction
-// ============================================================================
-
-/**
- * convertLegacyThreadProgress — Converts a scalar-progress
- * ThreadProgressEntry (the old YAML format) into a structured
- * ThreadTransaction for the new system.
- */
-export function convertLegacyThreadProgress(
-  tp: ThreadProgressEntry,
-  eventId: string,
-): ThreadTransaction {
-  const runId = `legacy-${tp.thread}` as ThreadRunId;
-  const status: ThreadLifecycle = tp.progressAfter >= tp.progressTotal ? 'completed' : 'active';
-  const goalStatus: GoalLifecycle = tp.progressAfter >= tp.progressTotal ? 'achieved' : 'active';
-
-  return {
-    thread: tp.thread,
-    runId,
-    status,
-    provenance: eventId,
-    advancement: tp.advancement,
-    goalSet: [
-      {
-        goalId: 'progress',
-        status: goalStatus,
-      },
-    ],
-    milestoneSet: [],
-  };
-}
-
-/**
- * isLegacyThreadProgress — Duck-type check: returns true if the object
- * has the old scalar-progress shape (progressAfter/progressTotal).
- */
-export function isLegacyThreadProgress(entry: unknown): entry is ThreadProgressEntry {
-  if (typeof entry !== 'object' || entry === null) return false;
-  const e = entry as Record<string, unknown>;
-  return (
-    typeof e.thread === 'string' &&
-    typeof e.advancement === 'string' &&
-    typeof e.progressAfter === 'number' &&
-    typeof e.progressTotal === 'number'
-  );
-}
-
-// ============================================================================
-// 3. Clock isolation
+// 2. Clock isolation
 // ============================================================================
 
 /**
@@ -232,7 +182,7 @@ export function assertClockCompatibility(domain: TimeDomain, tx: ThreadTransacti
 }
 
 // ============================================================================
-// 4. Branch merge
+// 3. Branch merge
 // ============================================================================
 
 /**
@@ -323,7 +273,7 @@ export function mergeThreadStates(
 }
 
 // ============================================================================
-// 5. Helpers
+// 4. Helpers
 // ============================================================================
 
 /**

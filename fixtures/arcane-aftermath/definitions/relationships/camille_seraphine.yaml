@@ -1,13 +1,29 @@
-id: camille_seraphine
-participants:
-  - camille
-  - seraphine
-type: professional_mentor_asset
-bidirectional: false
-initialState:
-  trust: 45
-  emotionalDistance: 80
-  intensity: 60
-  status: active
-  notes: "Camille treats Seraphine as a strategically necessary but dangerous asset; Seraphine balances fear, compassion, and self-preservation."
-establishedEvent: arcane_s1_end
+relationshipId: camille_seraphine
+typeId: professional_mentor_asset
+initialEpoch:
+  epochId: camille_seraphine:epoch-1
+  lifecycle: active
+  memberships:
+    - membershipId: camille_seraphine:member:1
+      entityId: camille
+      role: member
+    - membershipId: camille_seraphine:member:2
+      entityId: seraphine
+      role: member
+  dimensions:
+    - dimensionId: trust
+      scope: global
+      value: 45
+    - dimensionId: emotionalDistance
+      scope: global
+      value: 80
+    - dimensionId: intensity
+      scope: global
+      value: 60
+    - dimensionId: status
+      scope: global
+      value: active
+    - dimensionId: notes
+      scope: global
+      value: Camille treats Seraphine as a strategically necessary but dangerous
+        asset; Seraphine balances fear, compassion, and self-preservation.

@@ -22,6 +22,7 @@ import { InMemoryEntityRegistry } from '../src/entity/registry.ts';
 import { compileDiscourseBoundaries } from '../src/state/discourse-context.ts';
 import { compilePlannedDiscourseLedger } from '../src/state/discourse-ledger.ts';
 import { areProjectionsIdentical } from '../src/state/discourse-replay.ts';
+import { emptyWorldState } from '../src/state/story-boundaries.ts';
 import type { BranchPath } from '../src/types/branch.ts';
 import type {
   DisclosureAction,
@@ -70,9 +71,12 @@ function makeEvent(overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
 
 function makeWorldState(): WorldState {
   return {
+    ...emptyWorldState(),
     entities: { 'test-char': { location: 'somewhere', status: 'alive' } },
     relationships: {},
-    knowledge: {},
+    epistemicLedger: { claims: {}, bySubject: {}, byProposition: {}, actLog: [] },
+    propositionCatalog: { version: 1, propositions: {}, dependencyGraph: {} },
+    commonGround: [],
     threads: {
       T1: {
         threadId: 'T1' as ThreadId,
@@ -707,7 +711,25 @@ const STATE_INITIAL_YAML = [
   '  politicalSituation: stable',
   'threads: []',
   'worldFacts: []',
+  'knowledge:',
+  '  claims: []',
+  '  commonGround: []',
 ].join('\n');
+const THREAD_TYPES_YAML = [
+  'types:',
+  '  primary:',
+  '    typeId: primary',
+  '    description: Primary narrative thread type',
+  '    allowedPhases: [opening, development, resolution]',
+  '    lifecyclePolicy:',
+  '      reopenPolicy: forbidden',
+  '    timeDomain: story',
+  '    stableGoals: []',
+  '    stableMilestones: []',
+].join('\n');
+const PROPOSITIONS_YAML = 'version: 1\npropositions: {}\ndependencyGraph: {}\n';
+const RELATIONSHIP_TYPES_YAML = 'types: {}\n';
+const RULE_TYPES_YAML = 'types: {}\n';
 const CHAPTER_YAML = [
   'chapter: 1',
   'title: "Chapter 1"',
@@ -860,6 +882,10 @@ function setupMinimalProject(discourseLedgerYaml: string): {
   fs.writeFileSync(path.join(defsDir, 'discourse-ledger.yaml'), discourseLedgerYaml);
   fs.writeFileSync(path.join(defsDir, 'state_initial.yaml'), STATE_INITIAL_YAML);
   fs.writeFileSync(path.join(defsDir, 'entity-types.yaml'), ENTITY_TYPES_YAML);
+  fs.writeFileSync(path.join(defsDir, 'thread-types.yaml'), THREAD_TYPES_YAML);
+  fs.writeFileSync(path.join(defsDir, 'propositions.yaml'), PROPOSITIONS_YAML);
+  fs.writeFileSync(path.join(defsDir, 'relationship-types.yaml'), RELATIONSHIP_TYPES_YAML);
+  fs.writeFileSync(path.join(defsDir, 'rule-types.yaml'), RULE_TYPES_YAML);
   fs.writeFileSync(path.join(chaptersDir, '_chapter.yaml'), CHAPTER_YAML);
   fs.writeFileSync(path.join(chaptersDir, 'E1.yaml'), EVENT_YAML);
   fs.writeFileSync(
@@ -965,6 +991,10 @@ describe('renderNovel discourse-branch validation', () => {
     fs.writeFileSync(path.join(projectDir, 'nova.yaml'), PROJECT_YAML);
     fs.writeFileSync(path.join(defsDir, 'state_initial.yaml'), STATE_INITIAL_YAML);
     fs.writeFileSync(path.join(defsDir, 'entity-types.yaml'), ENTITY_TYPES_YAML);
+    fs.writeFileSync(path.join(defsDir, 'thread-types.yaml'), THREAD_TYPES_YAML);
+    fs.writeFileSync(path.join(defsDir, 'propositions.yaml'), PROPOSITIONS_YAML);
+    fs.writeFileSync(path.join(defsDir, 'relationship-types.yaml'), RELATIONSHIP_TYPES_YAML);
+    fs.writeFileSync(path.join(defsDir, 'rule-types.yaml'), RULE_TYPES_YAML);
     fs.writeFileSync(path.join(chaptersDir, '_chapter.yaml'), CHAPTER_YAML);
     fs.writeFileSync(path.join(chaptersDir, 'E1.yaml'), EVENT_YAML);
     const source = materializeFixtureSnapshot(projectDir);

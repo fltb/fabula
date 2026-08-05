@@ -1,21 +1,33 @@
-participants:
-  - zaroff
-  - ivan
-type: master_to_servant
-description: "Zaroff and Ivan share a relationship of absolute feudal loyalty. Ivan, a deaf-mute Cossack giant who served as knouter to the Tsar, is utterly devoted to Zaroff. He functions as butler, bodyguard, enforcer, and keeper of the hounds. Zaroff communicates with Ivan through silent lip movements and gestures. Despite Ivan's fearsome appearance and brutal role, Zaroff speaks of him with a kind of casual ownership — 'a simple fellow, but, I'm afraid, like all his race, a bit of a savage.' When Ivan dies in the course of the hunt, Zaroff's main concern is that it will be 'difficult to replace' him."
-initialState:
-  zaroffToIvan:
-    trust: 0.95
-    attitude: proprietary
-    emotionalDistance: 0.6
-    respect: 0.5
-    notes: "Zaroff trusts Ivan completely but sees him as a tool rather than a person. He values Ivan's strength and loyalty but regards him as racially inferior."
-  ivanToZaroff:
-    trust: 1.0
-    attitude: utterly_devoted
-    emotionalDistance: 0.2
-    respect: 1.0
-    notes: "Ivan's devotion to Zaroff is absolute. He obeys without hesitation, anticipates Zaroff's needs, and would die for him — which he eventually does, killed by Rainsford's knife trap."
-establishedEvent:
-  day: -3650
-  summary: "Ivan served Zaroff since before the Russian Revolution; their relationship spans decades of shared service in the Tsar's regime and exile."
+relationshipId: zaroff_ivan
+typeId: master_to_servant
+initialEpoch:
+  epochId: zaroff_ivan:epoch-1
+  lifecycle: active
+  memberships:
+    - membershipId: zaroff_ivan:member:1
+      entityId: zaroff
+      role: member
+    - membershipId: zaroff_ivan:member:2
+      entityId: ivan
+      role: member
+  dimensions:
+    - dimensionId: zaroffToIvan
+      scope: global
+      value:
+        trust: 0.95
+        attitude: proprietary
+        emotionalDistance: 0.6
+        respect: 0.5
+        notes: Zaroff trusts Ivan completely but sees him as a tool rather than a
+          person. He values Ivan's strength and loyalty but regards him as
+          racially inferior.
+    - dimensionId: ivanToZaroff
+      scope: global
+      value:
+        trust: 1
+        attitude: utterly_devoted
+        emotionalDistance: 0.2
+        respect: 1
+        notes: Ivan's devotion to Zaroff is absolute. He obeys without hesitation,
+          anticipates Zaroff's needs, and would die for him — which he
+          eventually does, killed by Rainsford's knife trap.

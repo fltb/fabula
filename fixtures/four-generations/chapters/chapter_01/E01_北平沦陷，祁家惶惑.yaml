@@ -14,118 +14,127 @@ pov:
   type: omniscient
 sceneBrief: 一九三七年七七事变后，北平城在七月二十九日沦陷。小羊圈胡同里，祁老人还惦记着三个月准保平安的老话和八十大寿；瑞宣听到炮声心中惶惑；瑞全热血沸腾想要出走；韵梅依旧操持家务。胡同里的人们第一次感觉到亡国的滋味——不知日本人来了会怎样，是福是祸。
 beats:
-  - "一九三七年七七事变后，北平城在七月二十九日沦陷。"
-  - "小羊圈胡同里，祁老人还惦记着三个月准保平安的老话和八十大寿；瑞宣听到炮声心中惶惑；瑞全热血沸腾想要出走；韵梅依旧操持家务。"
-  - "胡同里的人们第一次感觉到亡国的滋味——不知日本人来了会怎样，是福是祸。"
+  - 一九三七年七七事变后，北平城在七月二十九日沦陷。
+  - 小羊圈胡同里，祁老人还惦记着三个月准保平安的老话和八十大寿；瑞宣听到炮声心中惶惑；瑞全热血沸腾想要出走；韵梅依旧操持家务。
+  - 胡同里的人们第一次感觉到亡国的滋味——不知日本人来了会怎样，是福是祸。
 preconditions:
-- entity: sr_qi
-  attribute: location
-  value: loc_qijia
-- entity: qi_ruixuan
-  attribute: location
-  value: loc_qijia
-- entity: qi_ruiquan
-  attribute: location
-  value: loc_qijia
+  - entity: sr_qi
+    attribute: location
+    value: loc_qijia
+  - entity: qi_ruixuan
+    attribute: location
+    value: loc_qijia
+  - entity: qi_ruiquan
+    attribute: location
+    value: loc_qijia
 expectedPostconditions:
-- entity: sr_qi
-  attribute: emotionalState
-  value: anxious_but_hopeful
-  confidence: 1.0
-- entity: qi_ruixuan
-  attribute: emotionalState
-  narrativeHint: 瑞宣听到炮声后陷入亡国的惶惑与苦闷。他是祁家最清醒的人，也是最痛苦的人——既想抵抗又放不下家庭。
-  confidence: 1.0
-- entity: qi_ruiquan
-  attribute: emotionalState
-  narrativeHint: 瑞全热血沸腾，决心出走。他不想做亡国奴，年轻人的血性使他无法安心待在家里。
-  confidence: 1.0
-- entity: qi_ruixuan
-  attribute: knowledge
-  value: beiping_has_fallen
-  confidence: 1.0
+  - entity: sr_qi
+    attribute: emotionalState
+    value: anxious_but_hopeful
+    confidence: 1
+  - entity: qi_ruixuan
+    attribute: emotionalState
+    narrativeHint: 瑞宣听到炮声后陷入亡国的惶惑与苦闷。他是祁家最清醒的人，也是最痛苦的人——既想抵抗又放不下家庭。
+    confidence: 1
+  - entity: qi_ruiquan
+    attribute: emotionalState
+    narrativeHint: 瑞全热血沸腾，决心出走。他不想做亡国奴，年轻人的血性使他无法安心待在家里。
+    confidence: 1
+  - entity: qi_ruixuan
+    attribute: knowledge
+    value: beiping_has_fallen
+    confidence: 1
 threadProgress:
-- thread: T1
-  advancement: 北平沦陷，抗日救国的前提已经确立。瑞全的出走欲望是这条线索的开端。
-  progressAfter: 5
-  progressTotal: 100
-- thread: T2
-  advancement: 瑞宣的苦闷从第一天就开始了——他既为国家担忧，又放不下四世同堂的家庭。
-  progressAfter: 5
-  progressTotal: 100
-- thread: T5
-  advancement: 小羊圈胡同的各色人等第一次感受到亡国的威胁，惶惑不安弥漫在每个人心头。
-  progressAfter: 5
-  progressTotal: 100
+  - thread: T1
+    advancement: 北平沦陷，抗日救国的前提已经确立。瑞全的出走欲望是这条线索的开端。
+    progressAfter: 5
+    progressTotal: 100
+  - thread: T2
+    advancement: 瑞宣的苦闷从第一天就开始了——他既为国家担忧，又放不下四世同堂的家庭。
+    progressAfter: 5
+    progressTotal: 100
+  - thread: T5
+    advancement: 小羊圈胡同的各色人等第一次感受到亡国的威胁，惶惑不安弥漫在每个人心头。
+    progressAfter: 5
+    progressTotal: 100
 foreshadowing:
-- id: ruiquan_departure
-  hint: 瑞全的热血与躁动预示着他即将离家出走，奔赴国难。
-  targetRevealChapter: 1
-  thread: T1
+  - id: ruiquan_departure
+    hint: 瑞全的热血与躁动预示着他即将离家出走，奔赴国难。
+    targetRevealChapter: 1
+    thread: T1
 relationshipEffects:
-- participants:
-  - sr_qi
-  - qi_ruixuan
-  effect: reinforce
-  direction: grandfather_grandson_bond
-  newState:
-    type: mutual_dependence
-    intensity: 70
+  - type: relationship_transaction
+    effectId: E01:relationship:1
+    relationshipId: event_qi_ruixuan_sr_qi
+    epochId: event_qi_ruixuan_sr_qi:epoch-1
+    membershipAfter:
+      - membershipId: event_qi_ruixuan_sr_qi:member:1
+        entityId: sr_qi
+        role: member
+      - membershipId: event_qi_ruixuan_sr_qi:member:2
+        entityId: qi_ruixuan
+        role: member
+    lifecycleAfter: active
+    dimensionSet:
+      - dimensionId: intensity
+        scope: global
+        value: 70
+    provenance: grandfather_grandson_bond (mutual_dependence)
 ruleEffects: []
 introduces:
-- type: character
-  id: sr_qi
-  initialState:
-    location: loc_qijia
-    status: alive
-    condition: healthy_for_his_age
-    emotionalState: anxious_but_hopeful
-    health: fair
-    worldview: peace_and_harmony
-    confidence_in_victory: three_months
-- type: character
-  id: qi_ruixuan
-  initialState:
-    location: loc_qijia
-    status: alive
-    condition: teaching
-    emotionalState: anxious_and_conflicted
-    political_stance: patriotic_but_passive
-- type: character
-  id: qi_ruiquan
-  initialState:
-    location: loc_qijia
-    status: alive
-    condition: student
-    emotionalState: determined_to_fight
-    political_stance: resistance
-- type: character
-  id: yunmei
-  initialState:
-    location: loc_qijia
-    status: alive
-    condition: healthy
-    emotionalState: worried_but_steadfast
-- type: character
-  id: qi_tianyou
-  initialState:
-    location: loc_beiping
-    status: alive
-    condition: working
-    emotionalState: anxious_about_business
-    financial: declining
-- type: location
-  id: loc_xiaoyangquan
-  initialState:
-    status: active
-- type: location
-  id: loc_qijia
-  initialState:
-    status: active
-- type: location
-  id: loc_beiping
-  initialState:
-    status: occupied
+  - type: character
+    id: sr_qi
+    initialState:
+      location: loc_qijia
+      status: alive
+      condition: healthy_for_his_age
+      emotionalState: anxious_but_hopeful
+      health: fair
+      worldview: peace_and_harmony
+      confidence_in_victory: three_months
+  - type: character
+    id: qi_ruixuan
+    initialState:
+      location: loc_qijia
+      status: alive
+      condition: teaching
+      emotionalState: anxious_and_conflicted
+      political_stance: patriotic_but_passive
+  - type: character
+    id: qi_ruiquan
+    initialState:
+      location: loc_qijia
+      status: alive
+      condition: student
+      emotionalState: determined_to_fight
+      political_stance: resistance
+  - type: character
+    id: yunmei
+    initialState:
+      location: loc_qijia
+      status: alive
+      condition: healthy
+      emotionalState: worried_but_steadfast
+  - type: character
+    id: qi_tianyou
+    initialState:
+      location: loc_beiping
+      status: alive
+      condition: working
+      emotionalState: anxious_about_business
+      financial: declining
+  - type: location
+    id: loc_xiaoyangquan
+    initialState:
+      status: active
+  - type: location
+    id: loc_qijia
+    initialState:
+      status: active
+  - type: location
+    id: loc_beiping
+    initialState:
+      status: occupied
 styleGuidance:
   tone: 压抑、惶惑、暗流涌动
   targetWordCount: 1200

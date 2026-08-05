@@ -25,6 +25,29 @@ export interface RuleTypeDefinition {
   ruleClass?: RuleClass;
   defaultConstraints: RuleConstraint[];
 }
+export interface RuleTypeCatalog {
+  types: Record<string, RuleTypeDefinition>;
+}
+
+// ——— RuleDeclaration — project-level rule declaration ———
+
+export interface RuleSpecificationDeclaration {
+  statement: string;
+  constraints: RuleConstraint[];
+}
+
+export interface RuleDeclaration {
+  ruleId: RuleId;
+  name: string;
+  typeId: string;
+  initialEpochId: RuleEpochId;
+  initialSpecificationId: RuleSpecificationId;
+  initialActivation: RuleActivation;
+  initialEffectiveness: RuleEffectiveness;
+  scopeBindings: Record<string, unknown>;
+  exceptions: RuleException[];
+  specifications: Record<RuleSpecificationId, RuleSpecificationDeclaration>;
+}
 
 // ——— RuleSpecification — immutable enacted formal semantics ———
 
@@ -118,7 +141,7 @@ export interface RuleException {
   effect: RuleExceptionEffect;
 }
 
-// ——— RuleTransaction — replaces RuleEffectEntry ———
+// ——— RuleTransaction — canonical rule event transaction ———
 
 export type RuleTransactionOperation =
   | 'enable'
@@ -140,39 +163,4 @@ export interface RuleTransaction {
   newEffectiveness?: RuleEffectiveness;
   exception?: RuleException;
   constraintEvaluation?: RuleConstraint[];
-}
-
-// ——— RuleEffectEntry — backward-compat type (kept for YAML loading) ———
-
-export interface RuleEffectEntry {
-  rule: string;
-  effect: 'reinforce' | 'weaken' | 'introduce_exception' | 'nullify';
-  evidence: string;
-}
-
-// ——— RuleDefinition (YAML) — kept for backward compat ———
-
-export interface RuleDefinition {
-  ruleId: string;
-  name: string;
-  category: string;
-  type: string;
-  statement: string;
-  ruleClass?: 'natural_law' | 'social_norm' | 'moral_principle' | 'game_rule' | 'legal_code';
-  logicalConsequences: LogicalConsequence[];
-  exceptions?: Array<{ condition: string; note: string }>;
-  evidenceChain: RuleEffectEntry[];
-}
-
-export interface LogicalConsequence {
-  description: string;
-  check: {
-    type: 'state_invariant' | 'transition_constraint' | 'progression';
-    filter: string;
-    assert: string;
-    unlessEvent?: string;
-    direction?: string;
-    tolerance?: number;
-    severity: 'error' | 'warning';
-  };
 }

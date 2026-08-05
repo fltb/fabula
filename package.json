@@ -15,6 +15,7 @@
     "build:types": "fnm exec --using=26.5.0 -- npm run typecheck:core && npm run typecheck:node-host && npm run typecheck:bench && npm run typecheck:workbench-protocol && npm run typecheck:cli && npm run typecheck:workbench-host && npm run typecheck:workbench-client",
     "build:js": "node packages/core/build.mjs && node packages/node-host/build.mjs && node packages/bench/build.mjs && node packages/workbench-protocol/build.mjs && node packages/cli/build.mjs && npm run -w @novalistically/workbench build",
     "smoke:stage1:live": "node packages/bench/scripts/generate-reference.mjs",
+    "count:drc": "node scripts/drc-fixture-manifest.mjs",
     "test": "fnm exec --using=26.5.0 -- vitest run && npm run test:workbench",
     "test:core": "fnm exec --using=26.5.0 -- vitest run packages/core",
     "test:node-host": "fnm exec --using=26.5.0 -- npm run -w @novalistically/node-host test",

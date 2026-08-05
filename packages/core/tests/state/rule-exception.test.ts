@@ -160,7 +160,19 @@ describe('RuleException — constraint exemption', () => {
 
 describe('RuleException — epoch isolation', () => {
   it('should not carry exceptions across epochs automatically', () => {
-    const rules: Record<string, RuleRuntimeState> = {};
+    // Canonical materialized baseline: the declared rule is seeded as dormant
+    // before any transaction is applied.
+    const rules: Record<string, RuleRuntimeState> = {
+      test_rule: {
+        ruleId: 'test_rule',
+        currentEpoch: 'epoch-0',
+        specificationId: 'spec-v0',
+        activation: 'dormant',
+        effectiveness: 'full',
+        scopeBindings: {},
+        exceptions: [],
+      },
+    };
     // Enable rule with an exception
     applyRuleTransaction(rules, {
       type: 'rule_transaction',
@@ -184,7 +196,8 @@ describe('RuleException — epoch isolation', () => {
     });
     expect(rules.test_rule.exceptions).toHaveLength(1);
 
-    // Replace (new epoch) — exceptions are cleared
+    // Replace (new epoch) — exceptions are cleared. The replace transaction
+    // also carries the declaration identity explicitly (no implicit creation).
     applyRuleTransaction(rules, {
       type: 'rule_transaction',
       ruleId: 'test_rule',

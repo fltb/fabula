@@ -1,105 +1,215 @@
 info:
-  currentEra: "1820s-1840s, Victorian England"
-  politicalSituation: "England under King George IV and later William IV, in the early Victorian period before the great reforms of the 1830s-40s. The legal system (Doctors' Commons) is antiquated and corrupt. Class distinctions are rigid but the rising middle class is gaining influence through commerce and the professions. Debtors' prisons like the Marshalsea still operate. Social mobility is limited but possible through education, talent, and fortunate connections."
-
+  currentEra: 1820s-1840s, Victorian England
+  politicalSituation: England under King George IV and later William IV, in the
+    early Victorian period before the great reforms of the 1830s-40s. The legal
+    system (Doctors' Commons) is antiquated and corrupt. Class distinctions are
+    rigid but the rising middle class is gaining influence through commerce and
+    the professions. Debtors' prisons like the Marshalsea still operate. Social
+    mobility is limited but possible through education, talent, and fortunate
+    connections.
 timeAnchors:
   - id: davids_birth
     at: day_0
-    description: "David Copperfield is born at Blunderstone Rookery in Suffolk on a Friday at midnight. His father died six months before."
+    description: David Copperfield is born at Blunderstone Rookery in Suffolk on a
+      Friday at midnight. His father died six months before.
   - id: murdstone_marriage
     at: day_700
-    description: "Mr Murdstone marries David's mother Clara. David's idyllic early life ends. Miss Murdstone arrives to manage the household."
+    description: Mr Murdstone marries David's mother Clara. David's idyllic early
+      life ends. Miss Murdstone arrives to manage the household.
   - id: yarmouth_visit
     at: day_730
-    description: "David visits Yarmouth with Peggotty, staying with Mr Peggotty's boathouse family — Ham, Little Emily, and Mrs Gummidge."
+    description: David visits Yarmouth with Peggotty, staying with Mr Peggotty's
+      boathouse family — Ham, Little Emily, and Mrs Gummidge.
   - id: mothers_death
     at: day_1100
-    description: "Clara Copperfield dies. David is recalled from Salem House for the funeral. The baby brother also dies."
+    description: Clara Copperfield dies. David is recalled from Salem House for the
+      funeral. The baby brother also dies.
   - id: london_work
     at: day_1200
-    description: "David is sent to London to work at Murdstone and Grinby's wine warehouse, lodging with the Micawber family."
+    description: David is sent to London to work at Murdstone and Grinby's wine
+      warehouse, lodging with the Micawber family.
   - id: flight_to_dover
     at: day_1350
-    description: "David runs away from London to Dover to seek his Aunt Betsey Trotwood. His half-guinea and box are stolen on the way."
+    description: David runs away from London to Dover to seek his Aunt Betsey
+      Trotwood. His half-guinea and box are stolen on the way.
   - id: canterbury_school
     at: day_1500
-    description: "Aunt Betsey sends David to Doctor Strong's school in Canterbury. He lodges with Mr Wickfield and meets Agnes Wickfield and Uriah Heep."
+    description: Aunt Betsey sends David to Doctor Strong's school in Canterbury. He
+      lodges with Mr Wickfield and meets Agnes Wickfield and Uriah Heep.
   - id: london_career
     at: day_2700
-    description: "David graduates school, chooses the profession of proctor in Doctors' Commons, and moves to London. He reconnects with Steerforth."
+    description: David graduates school, chooses the profession of proctor in
+      Doctors' Commons, and moves to London. He reconnects with Steerforth.
   - id: dora_meeting
     at: day_2850
-    description: "David meets and falls in love with Dora Spenlow at Mr Spenlow's house. He begins his obsessive courtship."
+    description: David meets and falls in love with Dora Spenlow at Mr Spenlow's
+      house. He begins his obsessive courtship.
   - id: heep_exposure
     at: day_3300
-    description: "Mr Micawber exposes Uriah Heep's frauds against Mr Wickfield. Heep is defeated and imprisoned."
+    description: Mr Micawber exposes Uriah Heep's frauds against Mr Wickfield. Heep
+      is defeated and imprisoned.
   - id: dora_death
     at: day_3400
-    description: "Dora dies after a long illness. David is devastated and goes abroad for three years."
+    description: Dora dies after a long illness. David is devastated and goes abroad
+      for three years.
   - id: return_to_england
     at: day_4500
-    description: "David returns to England, realizes his love for Agnes, and they marry. The final retrospect shows their happy life together."
-
+    description: David returns to England, realizes his love for Agnes, and they
+      marry. The final retrospect shows their happy life together.
 threads:
-  - id: T1
-    name: "David's Growth and Maturity"
-    type: primary
-    description: "David Copperfield's journey from orphaned boy to successful author and fulfilled man. Each phase — Blunderstone childhood, Salem House, London warehouse, flight to Dover, Canterbury schooling, London career, marriage, loss, and mature love — marks a step in his moral and emotional education. His 'undisciplined heart' must learn to distinguish between infatuation and true love, between appearances and reality."
+  - threadId: T1
+    name: David's Growth and Maturity
+    description: David Copperfield's journey from orphaned boy to successful author
+      and fulfilled man. Each phase — Blunderstone childhood, Salem House,
+      London warehouse, flight to Dover, Canterbury schooling, London career,
+      marriage, loss, and mature love — marks a step in his moral and emotional
+      education. His 'undisciplined heart' must learn to distinguish between
+      infatuation and true love, between appearances and reality.
+    typeId: primary
+    initialPhase: opening
     targetRevealChapter: 1
     initialProgress: "0.00"
-  - id: T2
-    name: "Dora vs Agnes Romance"
-    type: main
-    description: "David's romantic life is a choice between Dora Spenlow — his 'child-wife,' beautiful but impractical — and Agnes Wickfield — the steady, wise 'sister' who is his true complement. David's infatuation with Dora represents the heart's undisciplined desires, while his eventual recognition of Agnes represents mature love. The thread traces David's first meeting with Dora, his obsessive courtship, their marriage and its difficulties, Dora's illness and death, David's blindness to Agnes's love, and finally his awakening and their union."
+  - threadId: T2
+    name: Dora vs Agnes Romance
+    description: David's romantic life is a choice between Dora Spenlow — his
+      'child-wife,' beautiful but impractical — and Agnes Wickfield — the
+      steady, wise 'sister' who is his true complement. David's infatuation with
+      Dora represents the heart's undisciplined desires, while his eventual
+      recognition of Agnes represents mature love. The thread traces David's
+      first meeting with Dora, his obsessive courtship, their marriage and its
+      difficulties, Dora's illness and death, David's blindness to Agnes's love,
+      and finally his awakening and their union.
+    typeId: main
+    initialPhase: opening
     targetRevealChapter: 1
     initialProgress: "0.00"
-  - id: T3
-    name: "Uriah Heep's Schemes"
-    type: sub
-    description: "Uriah Heep, the 'umble clerk, insinuates himself into Mr Wickfield's business and home, gaining power through fraud and manipulation. He works to destroy Wickfield, marry Agnes, and take over the firm. He is opposed by David, Traddles, Aunt Betsey, and ultimately Mr Micawber, whose secret investigation leads to Heep's exposure. The thread illustrates the corrosive power of hypocrisy and the danger of false humility."
+  - threadId: T3
+    name: Uriah Heep's Schemes
+    description: Uriah Heep, the 'umble clerk, insinuates himself into Mr
+      Wickfield's business and home, gaining power through fraud and
+      manipulation. He works to destroy Wickfield, marry Agnes, and take over
+      the firm. He is opposed by David, Traddles, Aunt Betsey, and ultimately Mr
+      Micawber, whose secret investigation leads to Heep's exposure. The thread
+      illustrates the corrosive power of hypocrisy and the danger of false
+      humility.
+    typeId: sub
+    initialPhase: opening
     targetRevealChapter: 1
     initialProgress: "0.00"
-  - id: T4
-    name: "Emily and Steerforth Tragedy"
-    type: sub
-    description: "Little Emily, the fisherman's niece engaged to Ham Peggotty, is seduced and abandoned by James Steerforth, David's charismatic but corrupt schoolfellow. Her ruin shatters the Peggotty family and sends Mr Peggotty on a long search across Europe. Steerforth's reckless act is paid for when he drowns in the great Yarmouth storm, and Ham dies trying to save him. Emily eventually emigrates to Australia with Mr Peggotty to start a new life."
+  - threadId: T4
+    name: Emily and Steerforth Tragedy
+    description: Little Emily, the fisherman's niece engaged to Ham Peggotty, is
+      seduced and abandoned by James Steerforth, David's charismatic but corrupt
+      schoolfellow. Her ruin shatters the Peggotty family and sends Mr Peggotty
+      on a long search across Europe. Steerforth's reckless act is paid for when
+      he drowns in the great Yarmouth storm, and Ham dies trying to save him.
+      Emily eventually emigrates to Australia with Mr Peggotty to start a new
+      life.
+    typeId: sub
+    initialPhase: opening
     targetRevealChapter: 1
     initialProgress: "0.00"
-  - id: T5
-    name: "Micawber's Fortunes"
-    type: sub
-    description: "Wilkins Micawber, the eternally optimistic and perpetually debt-ridden gentleman, moves through the story in a series of financial crises — imprisonment in the Marshalsea, escape to Plymouth, migration to Canterbury, employment with Uriah Heep, and finally his triumphant exposure of Heep's fraud. His philosophy that 'something will turn up' is rewarded when he emigrates to Australia and becomes a successful magistrate. His loyal wife Emma and ever-growing family accompany him through every reversal."
+  - threadId: T5
+    name: Micawber's Fortunes
+    description: Wilkins Micawber, the eternally optimistic and perpetually
+      debt-ridden gentleman, moves through the story in a series of financial
+      crises — imprisonment in the Marshalsea, escape to Plymouth, migration to
+      Canterbury, employment with Uriah Heep, and finally his triumphant
+      exposure of Heep's fraud. His philosophy that 'something will turn up' is
+      rewarded when he emigrates to Australia and becomes a successful
+      magistrate. His loyal wife Emma and ever-growing family accompany him
+      through every reversal.
+    typeId: sub
+    initialPhase: opening
     targetRevealChapter: 1
     initialProgress: "0.00"
-
 worldFacts:
   - id: blunderstone_childhood
-    value: "Blunderstone Rookery in Suffolk is David's birthplace. The house has a large garden with elm trees and old rooks' nests — though the rooks themselves have long deserted them. David's earliest memories are of the churchyard where his father's grave lies, of Peggotty's rough forefinger and her sea-scented clothing, and of his beautiful young mother Clara with her luxuriant hair and youthful manner."
-    description: "David's childhood home in Suffolk — the setting of his earliest years."
+    value: Blunderstone Rookery in Suffolk is David's birthplace. The house has a
+      large garden with elm trees and old rooks' nests — though the rooks
+      themselves have long deserted them. David's earliest memories are of the
+      churchyard where his father's grave lies, of Peggotty's rough forefinger
+      and her sea-scented clothing, and of his beautiful young mother Clara with
+      her luxuriant hair and youthful manner.
+    description: David's childhood home in Suffolk — the setting of his earliest years.
   - id: yarmouth_boathouse
-    value: "Mr Peggotty's home is not a house but a beached boat — a real black barge converted into a dwelling, with a door cut in the side, windows, a tiny garden, and a wonderful chimney. Inside it is cozy and shipshape, with a bed built into the wall, a Dutch clock, and a table where the family gathers. It houses Mr Peggotty, Ham, Little Emily, Mrs Gummidge, and any visitor who needs shelter. It represents warmth, loyalty, and unconditional love."
-    description: "The Peggotty family home — a converted boat on Yarmouth beach."
+    value: Mr Peggotty's home is not a house but a beached boat — a real black barge
+      converted into a dwelling, with a door cut in the side, windows, a tiny
+      garden, and a wonderful chimney. Inside it is cozy and shipshape, with a
+      bed built into the wall, a Dutch clock, and a table where the family
+      gathers. It houses Mr Peggotty, Ham, Little Emily, Mrs Gummidge, and any
+      visitor who needs shelter. It represents warmth, loyalty, and
+      unconditional love.
+    description: The Peggotty family home — a converted boat on Yarmouth beach.
   - id: salem_house_school
-    value: "Salem House is Mr Creakle's school, presided over by the fierce, half-deaf Creakle and his assistant Tungay. The building is grim with a high brick wall topped with broken bottles. The boys subsist on poor food and harsh discipline. The school's saving graces are the friendships David forms — Steerforth, his protector and idol, and Traddles, the hapless but good-hearted boy who draws skeletons everywhere."
-    description: "David's first school, a brutal establishment run by Mr Creakle."
+    value: Salem House is Mr Creakle's school, presided over by the fierce,
+      half-deaf Creakle and his assistant Tungay. The building is grim with a
+      high brick wall topped with broken bottles. The boys subsist on poor food
+      and harsh discipline. The school's saving graces are the friendships David
+      forms — Steerforth, his protector and idol, and Traddles, the hapless but
+      good-hearted boy who draws skeletons everywhere.
+    description: David's first school, a brutal establishment run by Mr Creakle.
   - id: murdstone_and_grinby
-    value: "Murdstone and Grinby's wine warehouse is a dark, rotting, rat-infested establishment on the river Thames, near Blackfriars. David is set to work washing, labeling, and corking bottles alongside rough boys like Mick Walker and Mealy Potatoes. The work is monotonous, the pay is six shillings a week plus a daily bread-and-pudding allowance, and the degradation of his position among genteel companions breaks David's spirit."
-    description: "The London wine warehouse where David was sent to work as a child."
+    value: Murdstone and Grinby's wine warehouse is a dark, rotting, rat-infested
+      establishment on the river Thames, near Blackfriars. David is set to work
+      washing, labeling, and corking bottles alongside rough boys like Mick
+      Walker and Mealy Potatoes. The work is monotonous, the pay is six
+      shillings a week plus a daily bread-and-pudding allowance, and the
+      degradation of his position among genteel companions breaks David's
+      spirit.
+    description: The London wine warehouse where David was sent to work as a child.
   - id: aunt_betseys_dover
-    value: "Miss Betsey Trotwood's cottage in Dover is a neat, compact residence on the cliffs overlooking the sea. It has a small garden, a parlour with a fireplace where Betsey sits frowning at the fire, and an upstairs window where David watches the moon on the water. Her household consists of herself, the harmless eccentric Mr Dick (who flies kites with his Memorial), and the servant Janet. Betsey's fierce exterior conceals a deeply generous heart."
-    description: "Aunt Betsey Trotwood's home in Dover, David's refuge."
+    value: Miss Betsey Trotwood's cottage in Dover is a neat, compact residence on
+      the cliffs overlooking the sea. It has a small garden, a parlour with a
+      fireplace where Betsey sits frowning at the fire, and an upstairs window
+      where David watches the moon on the water. Her household consists of
+      herself, the harmless eccentric Mr Dick (who flies kites with his
+      Memorial), and the servant Janet. Betsey's fierce exterior conceals a
+      deeply generous heart.
+    description: Aunt Betsey Trotwood's home in Dover, David's refuge.
   - id: canterbury_wickfield_house
-    value: "Mr Wickfield's house in Canterbury is an ancient, dignified building near the Cathedral. It has a dark wainscoted hall, a staircase with landings, and a drawing-room that opens onto a garden of scented old trees. Here David meets Agnes Wickfield, his 'good angel,' who keeps house for her father and bears the weight of his drinking and financial troubles. Uriah Heep lurks in the office below, his 'umble fingers writing endlessly."
-    description: "The Wickfield home in Canterbury where David lodges during school."
+    value: Mr Wickfield's house in Canterbury is an ancient, dignified building near
+      the Cathedral. It has a dark wainscoted hall, a staircase with landings,
+      and a drawing-room that opens onto a garden of scented old trees. Here
+      David meets Agnes Wickfield, his 'good angel,' who keeps house for her
+      father and bears the weight of his drinking and financial troubles. Uriah
+      Heep lurks in the office below, his 'umble fingers writing endlessly.
+    description: The Wickfield home in Canterbury where David lodges during school.
   - id: doctors_commons
-    value: "Doctors' Commons is a society of proctors practising civil law, located near St Paul's Cathedral in London. The courts deal with testamentary, matrimonial, and admiralty cases in an archaic and costly manner. David is articled as a proctor with Spenlow and Jorkins, spending his days among ecclesiastical lawyers, shuffling papers, and attending the Prerogative Office. It represents the old, sleepy, genteel profession that David eventually abandons for literature."
-    description: "The archaic civil law society where David is apprenticed."
+    value: Doctors' Commons is a society of proctors practising civil law, located
+      near St Paul's Cathedral in London. The courts deal with testamentary,
+      matrimonial, and admiralty cases in an archaic and costly manner. David is
+      articled as a proctor with Spenlow and Jorkins, spending his days among
+      ecclesiastical lawyers, shuffling papers, and attending the Prerogative
+      Office. It represents the old, sleepy, genteel profession that David
+      eventually abandons for literature.
+    description: The archaic civil law society where David is apprenticed.
   - id: victorian_marriage_law
-    value: "Under English common law, marriage vested the wife's property in her husband. A woman had no separate legal existence from her husband (coverture). Divorce was virtually impossible except by Act of Parliament. Dora's entire fortune reverts to Mr Spenlow's control, and upon his death becomes subject to Chancery. The Spenlow sisters' authority over Dora reflects the legal reality that unmarried women were under the guardianship of male relatives."
-    description: "The legal context of marriage and property in Victorian England."
+    value: Under English common law, marriage vested the wife's property in her
+      husband. A woman had no separate legal existence from her husband
+      (coverture). Divorce was virtually impossible except by Act of Parliament.
+      Dora's entire fortune reverts to Mr Spenlow's control, and upon his death
+      becomes subject to Chancery. The Spenlow sisters' authority over Dora
+      reflects the legal reality that unmarried women were under the
+      guardianship of male relatives.
+    description: The legal context of marriage and property in Victorian England.
   - id: debtors_prison
-    value: "The Marshalsea Prison in London is where debtors were imprisoned until their debts were paid. Mr Micawber is confined there for several months. The prison has a common room, a yard, and a chapel; prisoners can receive visitors and even conduct business from within. Micawber's imprisonment is a financial and social catastrophe from which he always recovers through his irrepressible optimism and the generosity of friends."
-    description: "The Marshalsea debtors' prison where Mr Micawber is incarcerated."
+    value: The Marshalsea Prison in London is where debtors were imprisoned until
+      their debts were paid. Mr Micawber is confined there for several months.
+      The prison has a common room, a yard, and a chapel; prisoners can receive
+      visitors and even conduct business from within. Micawber's imprisonment is
+      a financial and social catastrophe from which he always recovers through
+      his irrepressible optimism and the generosity of friends.
+    description: The Marshalsea debtors' prison where Mr Micawber is incarcerated.
   - id: the_heep_fraud
-    value: "Uriah Heep systematically defrauds Mr Wickfield by exploiting his drinking and his grief for his wife. He gets Wickfield to sign documents that make him a partner and give him control over the firm. He also attempts to force Agnes into marriage. His schemes are exposed by Mr Micawber, who has been secretly gathering evidence while working as Heep's clerk. The exposure takes place at a dramatic confrontation in Wickfield's office, witnessed by David, Aunt Betsey, Traddles, and Mr Wickfield."
-    description: "The nature of Uriah Heep's fraud against the Wickfield firm."
+    value: Uriah Heep systematically defrauds Mr Wickfield by exploiting his
+      drinking and his grief for his wife. He gets Wickfield to sign documents
+      that make him a partner and give him control over the firm. He also
+      attempts to force Agnes into marriage. His schemes are exposed by Mr
+      Micawber, who has been secretly gathering evidence while working as Heep's
+      clerk. The exposure takes place at a dramatic confrontation in Wickfield's
+      office, witnessed by David, Aunt Betsey, Traddles, and Mr Wickfield.
+    description: The nature of Uriah Heep's fraud against the Wickfield firm.
+knowledge:
+  claims: []
+  commonGround: []

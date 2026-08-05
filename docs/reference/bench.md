@@ -79,6 +79,10 @@
 
 预生成的散文与分析存放于 `fixtures/zhu-fu/reference/`：`data/`（恰好 E0–E6 七个 `<eventId>.json`，含 `{ prose, analysis, metadata }`）、`expected-outcomes.json`、`provenance.json`、`generation-record.json`、`review.json`。L2 阶段通过 `loadApprovedReferences()` 闭集加载这些文件——校验数据集合恰好为 E0–E6、responsesSha256、provenance/expected-outcomes/generation-record 哈希与 review 审批状态——并对其运行渲染后验证器（`aggregator.validatePost()`）。
 
+### Reference evidence boundary
+
+`reference/data` is a deterministic mock/generated regression input, not a human annotation set or live-provider claim. `npm run smoke:stage1:live` is credential-gated, cold-copies the fixture, and writes only a timestamped `.nova/smoke-candidates/` candidate. It never overwrites approved reference data. A candidate becomes live evidence only after the record/provenance gates pass and a human records approval; absent such a record, benchmark results must be described as mock-reference regression evidence.
+
 ## 输出与报告
 
 基准测试结果以 JSON 和 Markdown 两种格式写入工作区根目录 `output/bench/`。`packages/bench/src/reporters.ts` 中的 `writeResults(results: BenchResults): string` 不接受 storage 参数，`RESULTS_DIR` 硬编码为工作区根目录下的 `output/bench/`；文件名由 `results.timestamp` 规范化而来（`2026-07-31_12-34-56` 形式），返回 `{ts}` 基础路径；`toJson()` / `toMarkdown()` 分别生成 JSON 与 Markdown。Markdown 报告包括：回归阶段表格（`## Regression Benchmarks (祝福)`）、L2 验证摘要（`### L2 Post-Render Validation`）、变体基准测试（`### Branch Variants`、`### Error Injection Validation`、`### Extreme Damage Validation`、`### Pipeline F1 Score`——每个文件的匹配/未匹配情况与精确率/召回率/F1/匹配/遗漏/误报计数）、问题表格（仅非空时输出：`### L1 Issues (Pre-Render Validation) — N issues` 与 `### L2 Issues (Post-Render Validation with Pass 2) — N issues`，列为 `# | Validator | Severity | Event | Entity | Attribute | Message`）、两个独立的按验证器 N-CED 小节（`### Per-Validator Error Density (L1)` 与 `### Per-Validator Error Density (L2)`）、严重性级别 CED（`### Severity-Level CED`）、性能基准测试（`## Performance Benchmarks`）与规模扩展摘要（`### Scaling Summary`，N=10/100/1000 平均耗时并排）。

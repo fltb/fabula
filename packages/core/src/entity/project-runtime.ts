@@ -21,9 +21,12 @@ import { branchPathsEqual, createEmptyBranchPath } from '../branch/index.js';
 import type { ProjectSourceSnapshotV1 } from '../contracts/source.js';
 import { ConfigError } from '../errors.ts';
 import { parseIntroductionTransition } from '../state/event-application.ts';
+import { materializeNarrativeBaseline } from '../state/narrative-baseline.ts';
 import type { CompiledNarrativeRuntime } from '../state/narrative-runtime.ts';
 import { compileNarrativeRuntime } from '../state/narrative-runtime.ts';
-import type { RuntimeEntityTypeCatalog } from '../types/entity-catalog.js';
+import type { RelationshipReplayContext } from '../state/relationship-replay.ts';
+import type { NarrativeStateBaseline } from '../state/story-boundaries.ts';
+import type { NarrativeCatalogContext, RuntimeEntityTypeCatalog } from '../types/entity-catalog.js';
 import type {
   BranchPath,
   EntityCatalogContext,
@@ -91,6 +94,10 @@ export interface CanonicalProjectIR {
   readonly authoredEvents: readonly NarrativeEvent[];
   /** Authored + system:introduction:* + system:branch-choice:* transitions. */
   readonly runtimeEvents: readonly NarrativeEvent[];
+  /** Complete project-owned catalogs used to materialize every state domain. */
+  readonly narrativeCatalogContext: NarrativeCatalogContext;
+  /** Full non-entity baseline cloned for each replay/boundary reconstruction. */
+  readonly baseline: NarrativeStateBaseline;
   readonly initialFacts: readonly Fact[];
   readonly initialThreads: readonly { id: string }[];
   readonly registry: InMemoryEntityRegistry;
@@ -98,6 +105,8 @@ export interface CanonicalProjectIR {
   readonly entityTypes: RuntimeEntityTypeCatalog;
   /** The one shared catalog pair threaded to StateManager and compileNarrativeRuntime. */
   readonly catalogContext: EntityCatalogContext;
+  /** Canonical relationship declarations and types for fail-closed replay. */
+  readonly relationshipReplayContext: RelationshipReplayContext;
   readonly gameDialogueTree: CompiledGameDialogueTree | null;
   readonly chapterByEventId: Readonly<Record<string, number>>;
 }
@@ -208,14 +217,7 @@ function buildDeclarationCatalog(
     add(item.id, 'item', item.name, `definitions/items/${item.id}.yaml`);
   for (const fac of data.factions)
     add(fac.id, 'faction', fac.name, `definitions/factions/${fac.id}.yaml`);
-  for (const rule of data.rules)
-    add(
-      rule.ruleId,
-      'rule',
-      rule.name,
-      `definitions/rules/${rule.ruleId.split('.').pop() ?? rule.ruleId}.yaml`,
-    );
-  for (const wf of data.worldInitialState?.worldFacts ?? [])
+  for (const wf of data.worldInitialState.worldFacts ?? [])
     add(wf.id, 'concept', wf.id, 'definitions/state_initial.yaml');
   for (const intro of introductions.values())
     if (declarations[intro.entityId] === undefined)
@@ -397,6 +399,28 @@ export function loadCanonicalProject(snapshot: ProjectSourceSnapshotV1): Canonic
     entityDeclarationCatalog: entityDeclarations,
     entityTypeCatalog: entityTypes,
   };
+  const narrativeCatalogContext: NarrativeCatalogContext = {
+    ...catalogContext,
+    threadTypeCatalog: data.threadTypeCatalog,
+    threadDeclarations: data.worldInitialState.threads,
+    propositionCatalog: data.propositionCatalog,
+    relationshipTypeCatalog: data.relationshipTypeCatalog,
+    relationshipDeclarations: data.relationshipDeclarations,
+    ruleTypeCatalog: data.ruleTypeCatalog,
+    ruleDeclarations: data.ruleDeclarations,
+  };
+  const materializedBaseline = materializeNarrativeBaseline(
+    narrativeCatalogContext,
+    data.worldInitialState,
+  );
+  const baseline: NarrativeStateBaseline = {
+    epistemicLedger: materializedBaseline.epistemicLedger,
+    propositionCatalog: materializedBaseline.propositionCatalog,
+    commonGround: materializedBaseline.commonGround,
+    threads: materializedBaseline.threads,
+    relationships: materializedBaseline.relationships,
+    rules: materializedBaseline.rules,
+  };
   const gameDialogueTree = compileGameDialogueTree(
     authoredEvents,
     resolveTemporalContext(authoredEvents, data.timeAnchors),
@@ -436,13 +460,19 @@ export function loadCanonicalProject(snapshot: ProjectSourceSnapshotV1): Canonic
     sourceHash: hash,
     data,
     authoredEvents,
+    narrativeCatalogContext,
+    baseline,
     runtimeEvents,
     initialFacts: buildInitialFacts(entityDeclarations, registry),
-    initialThreads: (data.worldInitialState?.threads ?? []).map((thread) => ({ id: thread.id })),
+    initialThreads: data.worldInitialState.threads.map((thread) => ({ id: thread.threadId })),
     registry,
     entityDeclarations,
     entityTypes,
     catalogContext,
+    relationshipReplayContext: {
+      relationshipDeclarations: data.relationshipDeclarations,
+      relationshipTypeCatalog: data.relationshipTypeCatalog,
+    },
     gameDialogueTree,
     chapterByEventId: buildChapterIndex(data),
   };
@@ -479,5 +509,7 @@ export function compileCanonicalRuntime(
     narratorProfiles: ir.data.narratorProfiles,
     initialThreads: ir.initialThreads,
     catalogs: ir.catalogContext,
+    relationshipReplayContext: ir.relationshipReplayContext,
+    baseline: ir.baseline,
   });
 }

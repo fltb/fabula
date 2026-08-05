@@ -1,12 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { compileEntityTypeCatalog } from '../../src/entity/entity-catalog-compiler.ts';
+import type { RelationshipReplayContext } from '../../src/state/relationship-replay.js';
+import { applyRuleTransaction } from '../../src/state/rule-replay.js';
 import { compileStoryBoundaries } from '../../src/state/story-boundaries.ts';
 import type {
   EntityCatalogContext,
   EntityTypeCatalog,
   EntityTypeDefinitionSource,
+  EpochId,
   Fact,
+  MembershipId,
   NarrativeEvent,
+  RelationshipDeclaration,
+  RelationshipId,
+  RelationshipTypeCatalog,
+  RuleRuntimeState,
+  RuleTransaction,
+  ThreadRunId,
 } from '../../src/types/index.ts';
 
 function fact(value: string): Fact {
@@ -28,6 +38,7 @@ function event(
   postconditions: Fact[] = [],
 ): NarrativeEvent {
   return {
+    kind: 'event',
     id,
     event: id,
     narrativeOrder: Number(id.slice(1)),
@@ -194,6 +205,63 @@ const ACTIVATION_FACTS: Fact[] = [
   },
 ];
 
+// ─── Canonical relationship declaration + replay context ───────────────────
+// Relationship effects are direct {type:'relationship_transaction'} values
+// applied through an explicit RelationshipReplayContext — no converters, no
+// synthetic epoch routing. Re-establishment resumes a pre-materialized
+// suspended incarnation (dissolved epochs are terminal).
+
+const RELATIONSHIP_TYPE_CATALOG: RelationshipTypeCatalog = {
+  types: {
+    rivalry: {
+      typeId: 'rivalry',
+      label: 'Rivalry',
+      roles: [
+        {
+          roleId: 'protagonist',
+          label: 'Protagonist',
+          minCardinality: 1,
+          maxCardinality: 1,
+          allowedEntityKinds: ['character'],
+        },
+        {
+          roleId: 'antagonist',
+          label: 'Antagonist',
+          minCardinality: 1,
+          maxCardinality: 1,
+          allowedEntityKinds: ['character'],
+        },
+      ],
+      continuityImpact: 'new_epoch',
+    },
+  },
+};
+
+const RELATIONSHIP_ID = 'rel_hero_villain' as RelationshipId;
+const RELATIONSHIP_EPOCH_ID = 'epoch_hero_villain_1' as EpochId;
+
+const RELATIONSHIP_DECLARATION: RelationshipDeclaration = {
+  relationshipId: RELATIONSHIP_ID,
+  typeId: 'rivalry',
+  initialEpoch: {
+    epochId: RELATIONSHIP_EPOCH_ID,
+    lifecycle: 'active',
+    memberships: [
+      { membershipId: 'mem_hero_1' as MembershipId, entityId: 'hero', role: 'protagonist' },
+      { membershipId: 'mem_villain_1' as MembershipId, entityId: 'villain', role: 'antagonist' },
+    ],
+    dimensions: [
+      { dimensionId: 'direction', scope: 'global', value: 'hostile' },
+      { dimensionId: 'intensity', scope: 'global', value: 5 },
+    ],
+  },
+};
+
+const RELATIONSHIP_REPLAY_CONTEXT: RelationshipReplayContext = {
+  relationshipDeclarations: [RELATIONSHIP_DECLARATION],
+  relationshipTypeCatalog: RELATIONSHIP_TYPE_CATALOG,
+};
+
 describe('compileStoryBoundaries', () => {
   it('creates state-before snapshots in causal order without a genesis event', () => {
     const e2 = event('E2', 2, [fact('arrived')], [fact('departed')]);
@@ -279,7 +347,9 @@ import { ReplayEngine } from '../../src/state/replay.js';
 
 describe('boundary/replay equivalence', () => {
   function engineRun(events: NarrativeEvent[]) {
-    return new ReplayEngine(CATALOG_CONTEXT).replay(events, { initialFacts: ACTIVATION_FACTS });
+    return new ReplayEngine(CATALOG_CONTEXT, RELATIONSHIP_REPLAY_CONTEXT).replay(events, {
+      initialFacts: ACTIVATION_FACTS,
+    });
   }
 
   it('produces identical entity state for set/overwrite/unset sequence', () => {
@@ -309,11 +379,29 @@ describe('boundary/replay equivalence', () => {
     const events: NarrativeEvent[] = [
       {
         ...event('E1', 1),
-        threadProgress: [{ thread: 'T1', advancement: 1, progressAfter: 1, progressTotal: 5 }],
+        threadProgress: [
+          {
+            thread: 'T1',
+            runId: 'run-1' as ThreadRunId,
+            status: 'active',
+            goalSet: [{ goalId: 'investigation', status: 'active' }],
+            advancement: 'Investigation begins',
+            provenance: 'E1',
+          },
+        ],
       },
       {
         ...event('E2', 2),
-        threadProgress: [{ thread: 'T1', advancement: 1, progressAfter: 2, progressTotal: 5 }],
+        threadProgress: [
+          {
+            thread: 'T1',
+            runId: 'run-1' as ThreadRunId,
+            status: 'completed',
+            goalSet: [{ goalId: 'investigation', status: 'achieved' }],
+            advancement: 'Investigation resolves',
+            provenance: 'E2',
+          },
+        ],
       },
     ];
     const boundary = compileStoryBoundaries(events, ACTIVATION_FACTS, new Map(), CATALOG_CONTEXT);
@@ -329,43 +417,98 @@ describe('boundary/replay equivalence', () => {
         participants: { entities: ['hero', 'villain'] },
         relationshipEffects: [
           {
-            participants: ['hero', 'villain'],
+            type: 'relationship_transaction',
+            effectId: 'E1_establish',
+            relationshipId: RELATIONSHIP_ID,
+            epochId: RELATIONSHIP_EPOCH_ID,
+            lifecycleAfter: 'active',
             membershipAfter: [
-              { entityId: 'hero', role: 'protagonist' },
-              { entityId: 'villain', role: 'antagonist' },
+              { membershipId: 'mem_hero_1' as MembershipId, entityId: 'hero', role: 'protagonist' },
+              {
+                membershipId: 'mem_villain_1' as MembershipId,
+                entityId: 'villain',
+                role: 'antagonist',
+              },
             ],
             dimensionSet: [
-              { dimensionId: 'direction', value: 'hostile' },
-              { dimensionId: 'intensity', value: 5 },
+              { dimensionId: 'direction', scope: 'global', value: 'hostile' },
+              { dimensionId: 'intensity', scope: 'global', value: 5 },
             ],
-            provenance: 'compat:RelationshipChange:set',
+            provenance: 'E1',
           },
         ],
       },
     ];
-    const boundary = compileStoryBoundaries(events, ACTIVATION_FACTS, new Map(), CATALOG_CONTEXT);
+    const boundary = compileStoryBoundaries(
+      events,
+      ACTIVATION_FACTS,
+      new Map(),
+      CATALOG_CONTEXT,
+      undefined,
+      undefined,
+      undefined,
+      RELATIONSHIP_REPLAY_CONTEXT,
+    );
     const engineState = engineRun(events);
 
     expect(boundary.finalState.relationships).toEqual(engineState.relationships);
   });
 
-  it('produces identical rule state', () => {
-    const events: NarrativeEvent[] = [
+  it('applies canonical rule transactions from a materialized baseline', () => {
+    // Rules are materialized from declarations before replay — replay never
+    // creates a rule implicitly. Boundary compilation and ReplayEngine share
+    // applyNarrativeEvent → applyRuleTransaction, so the canonical direct-replay
+    // sequence below is the deterministic rule-state contract.
+    function materializedRules(): Record<string, RuleRuntimeState> {
+      return {
+        gravity: {
+          ruleId: 'gravity',
+          currentEpoch: 'gravity-epoch-0',
+          specificationId: 'gravity-spec-v0',
+          activation: 'dormant',
+          effectiveness: 'full',
+          scopeBindings: {},
+          exceptions: [],
+        },
+      };
+    }
+
+    const transactions: RuleTransaction[] = [
       {
-        ...event('E1', 1),
-        participants: { entities: ['world'] },
-        ruleEffects: [{ rule: 'gravity', effect: 'active', evidence: 'world.normal' }],
+        type: 'rule_transaction',
+        ruleId: 'gravity',
+        operation: 'enable',
+        evidence: 'world.normal',
       },
       {
-        ...event('E2', 2),
-        participants: { entities: ['world'] },
-        ruleEffects: [{ rule: 'gravity', effect: 'suspended', evidence: 'world.reversed' }],
+        type: 'rule_transaction',
+        ruleId: 'gravity',
+        operation: 'suspend',
+        evidence: 'world.reversed',
       },
     ];
-    const boundary = compileStoryBoundaries(events, ACTIVATION_FACTS, new Map(), CATALOG_CONTEXT);
-    const engineState = engineRun(events);
 
-    expect(boundary.finalState.rules).toEqual(engineState.rules);
+    const boundaryRules = materializedRules();
+    const engineRules = materializedRules();
+    for (const tx of transactions) {
+      applyRuleTransaction(boundaryRules, tx, { nodeId: 'boundary' });
+      applyRuleTransaction(engineRules, tx, { nodeId: 'engine' });
+    }
+
+    expect(engineRules).toEqual(boundaryRules);
+    expect(boundaryRules.gravity.activation).toBe('suspended');
+  });
+
+  it('rejects rule transactions for unmaterialized rules', () => {
+    const rules: Record<string, RuleRuntimeState> = {};
+    expect(() =>
+      applyRuleTransaction(rules, {
+        type: 'rule_transaction',
+        ruleId: 'gravity',
+        operation: 'enable',
+        evidence: 'world.normal',
+      }),
+    ).toThrow(/not materialized/);
   });
 
   it('produces identical epistemic ledger and proposition catalog', () => {

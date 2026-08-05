@@ -8,20 +8,22 @@
 
 ## 事件溯源模型
 
-Novalistically 使用纯事件溯源架构：每个状态变更都被记录为一个 `NarrativeEvent`。世界状态从不就地修改——它始终通过**从初始状态重放事件来推导**。位于 `packages/core/src/state/replay.ts` 的 `ReplayEngine` 类是此系统的核心。
+Novalistically derives state by replaying authored `NarrativeEvent`s on a declaration-owned baseline. The baseline is materialized before the first event; neither baseline materialization nor initial entity facts create a synthetic genesis narrative event. `ReplayEngine` in `packages/core/src/state/replay.ts` applies the selected event order.
 
 `WorldState` 接口（`types/world.ts`）捕获叙事状态的核心维度：
 
 ```
-entities       Record<EntityId, Record<string, unknown>>
-relationships  Record<RelationshipId, RelationshipRuntimeState>
-knowledge      Record<EntityId, { knownFacts: FactId[] }>
-threads        Record<string, ThreadRuntimeState>
-rules          Record<string, RuleRuntimeState>
-facts          Fact[]
+entities         Record<EntityId, Record<string, unknown>>
+relationships    Record<RelationshipId, RelationshipRuntimeState>
+epistemicLedger  EpistemicLedger
+propositionCatalog PropositionCatalog
+commonGround     CommonGroundRecord[]
+threads          Record<string, ThreadRuntimeState>
+rules            Record<string, RuleRuntimeState>
+facts            Fact[]
 ```
 
-另有 STATE-4 可选扩展：`epistemicLedger?`（角色对命题的态度账本）与 `propositionCatalog?`（不可变命题目录）。每个属性都在重放处理事件时增量构建。实体状态存储为平面键值记录；关系状态追踪定向维度和感知（`RelationshipRuntimeState`，见 `types/relationship.ts`）；线程状态是 `ThreadRuntimeState`（`types/thread.ts`：`threadId`、`status`、`currentRunId`、`phase`、`bindings`、`goalStates`、`milestoneStates`、`semanticStateHash`）。
+`materializeNarrativeBaseline()` constructs the required epistemic ledger, proposition catalog, common ground, threads, relationships, and rules from canonical source declarations before replay. Entity state remains a flat key/value record; relationship state uses epochs, memberships, and scoped dimensions; thread state is `ThreadRuntimeState` (`threadId`、`status`、`currentRunId`、`phase`、`bindings`、`goalStates`、`milestoneStates`、`semanticStateHash`).
 
 ## 图编译与状态边界（GRAPH-1）
 
@@ -84,13 +86,8 @@ function compareFact(fact: Fact, stateValue: unknown): CompareOutcome
 
 返回 `'match'`（值等于状态）、`'mismatch'`（值不同）或 `'deferred'`（仅 narrativeHint）。它的实际角色是**严格相等比较器**：调用方限于 causality / branch-merge 验证器（`compareFact` 比较 precondition 与 queryState）与 deferred resolver（确认 hint 被分类为 `deferred`）。重放前置条件校验**不走它**——`validatePreconditions()` 通过私有 `preconditionMatches()` 按全部 10 个 operator 分派（`eq`/`neq`/`gt`/…/`exists`/`not_exists`），失败抛 `PreconditionMismatchError`；同一事实的 operator 语义由 `preconditionMatches()` / `applyNarrativeEvent()` 定义。
 
-## 规则效果
+## Rule transactions
 
-`state/rule-replay.ts` 的 `applyRuleTransaction()` 处理 `RuleTransaction` 操作：`enable` / `suspend` / `revoke` / `amend` / `replace` / `set_effectiveness` / `add_exception` / `remove_exception`，更新 `RuleRuntimeState`（`activation`、`effectiveness`、`exceptions[]`、`scopeBindings`）。YAML 层的 legacy `RuleEffectEntry` 在应用时由 `convertLegacyRuleEffect()` 映射：
+`state/narrative-baseline.ts` materializes every declared `RuleRuntimeState` before replay. `state/rule-replay.ts` applies canonical `RuleTransaction` operations — `enable`, `suspend`, `revoke`, `amend`, `replace`, `set_effectiveness`, `add_exception`, and `remove_exception` — to that declared state. An event cannot create an undeclared rule: replay raises `RuleConstraintViolationError`.
 
-| legacy 效果 | 映射操作 |
-|---|---|
-| `reinforce` | `enable`（+ audit） |
-| `weaken` | `suspend` |
-| `introduce_exception` | `add_exception` |
-| `nullify` | `set_effectiveness: nullified` |
+Rule constraints produce structured `RuleEvaluationRecord`s. Hard violations fail the transaction; audit and semantic results remain records for the caller. There is no legacy `RuleEffectEntry` conversion path.

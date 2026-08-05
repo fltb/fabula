@@ -1,50 +1,79 @@
 ruleId: hanjian_social_pressure
-name: "汉奸告密与白色恐怖"
-category: social_control
-type: state_invariant
-statement: "日伪统治下，汉奸成为日本人控制北平的重要工具。冠晓荷告密导致钱默吟被捕；蓝东阳、瑞丰在教育局内争权夺利互相倾轧；大赤包通过妓女检查所敛财。汉奸之间既相互勾结又相互倾轧，形成了笼罩北平的告密网络。任何一个市民都可能因为邻居的一句谗言而被送入宪兵队。这种白色恐怖比刺刀更可怕——它撕裂了邻里之间的信任，让每个人都互相提防。"
-ruleClass: social_norm
-logicalConsequences:
-  - description: "汉奸告密直接导致抗日者和无辜市民被捕"
-    check:
-      type: transition_constraint
-      filter: "event.cause='informing'"
-      assert: "entity.status='arrested' OR entity.status='taken_away'"
-      severity: error
-  - description: "汉奸之间相互倾轧，内讧不断"
-    check:
-      type: state_invariant
-      filter: "entity.tags CONTAINS 'hanjian'"
-      assert: "entity.allies.size<=1 AND entity.enemies.size>=2"
-      severity: warning
-  - description: "良善市民因恐惧不敢与可疑邻居交往"
-    check:
-      type: state_invariant
-      filter: "entity.tags CONTAINS 'law_abiding_citizen' AND entity.neighbor.is_suspicious=true"
-      assert: "entity.distance_from_suspicious_person>=50"
-      severity: warning
-  - description: "地下抗日者必须以隐蔽身份活动"
-    check:
-      type: state_invariant
-      filter: "entity.political_stance='resistance'"
-      assert: "entity.is_public_about_resistance=false"
-      severity: error
+name: 汉奸告密与白色恐怖
+typeId: state_invariant
+initialEpochId: hanjian_social_pressure:epoch-1
+initialSpecificationId: hanjian_social_pressure:specification-1
+initialActivation: enabled
+initialEffectiveness: full
+scopeBindings: {}
 exceptions:
-  - condition: "抗日志士在极少数可靠同志中可以暴露身份"
-    note: "地下的信任圈子——一旦错信，代价是生命"
-evidenceChain:
-  - rule: hanjian_social_pressure
-    effect: reinforce
-    evidence: "冠晓荷向日本人告密，导致钱默吟被逮捕毒刑，钱家遭受灭门之灾"
-  - rule: hanjian_social_pressure
-    effect: reinforce
-    evidence: "大赤包通过妓女检查所疯狂敛财，与蓝东阳等汉奸争权夺利"
-  - rule: hanjian_social_pressure
-    effect: reinforce
-    evidence: "瑞丰在教育局当了庶务科科长后立刻抖起来，与蓝东阳明争暗斗"
-  - rule: hanjian_social_pressure
-    effect: reinforce
-    evidence: "祁瑞宣不敢公开自己的抗日活动，只能暗中帮助钱默吟散布传单"
-  - rule: hanjian_social_pressure
-    effect: reinforce
-    evidence: "小羊圈胡同的居民逐渐互相猜疑——没有人知道谁是下一个告密者"
+  - exceptionId: hanjian_social_pressure:exception:1
+    status: active
+    constraintIds:
+      - hanjian_social_pressure:constraint:1
+      - hanjian_social_pressure:constraint:2
+      - hanjian_social_pressure:constraint:3
+      - hanjian_social_pressure:constraint:4
+    scopeBindings: {}
+    condition:
+      type: expression
+      expression: 抗日志士在极少数可靠同志中可以暴露身份
+    effect:
+      type: exempt
+specifications:
+  hanjian_social_pressure:specification-1:
+    statement: 日伪统治下，汉奸成为日本人控制北平的重要工具。冠晓荷告密导致钱默吟被捕；蓝东阳、瑞丰在教育局内争权夺利互相倾轧；大赤包通过妓女检查所敛财。汉奸之间既相互勾结又相互倾轧，形成了笼罩北平的告密网络。任何一个市民都可能因为邻居的一句谗言而被送入宪兵队。这种白色恐怖比刺刀更可怕——它撕裂了邻里之间的信任，让每个人都互相提防。
+    constraints:
+      - constraintId: hanjian_social_pressure:constraint:1
+        kind: transition_constraint
+        enforcement: hard
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: event.cause='informing' => entity.status='arrested' OR
+            entity.status='taken_away'
+      - constraintId: hanjian_social_pressure:constraint:2
+        kind: state_invariant
+        enforcement: audit
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.tags CONTAINS 'hanjian' => entity.allies.size<=1 AND
+            entity.enemies.size>=2
+      - constraintId: hanjian_social_pressure:constraint:3
+        kind: state_invariant
+        enforcement: audit
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.tags CONTAINS 'law_abiding_citizen' AND
+            entity.neighbor.is_suspicious=true =>
+            entity.distance_from_suspicious_person>=50
+      - constraintId: hanjian_social_pressure:constraint:4
+        kind: state_invariant
+        enforcement: hard
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.political_stance='resistance' =>
+            entity.is_public_about_resistance=false

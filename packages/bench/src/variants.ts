@@ -12,6 +12,7 @@ import {
   type EntityLookup,
   type EntityTypeCatalog,
   type NarrativeEvent,
+  type ThreadRunId,
   type ValidationIssue,
   type WorldState,
 } from '@novalistically/core';
@@ -423,8 +424,10 @@ function applyInjections(events: NarrativeEvent[], injections: InjectedEntry[]):
       case 'world_rule_compliance': {
         if (!event.ruleEffects) event.ruleEffects = [];
         event.ruleEffects.push({
-          rule: 'patriarchal_clan_authority',
-          effect: 'nullify',
+          type: 'rule_transaction',
+          ruleId: 'patriarchal_clan_authority',
+          operation: 'set_effectiveness',
+          newEffectiveness: 'nullified',
           evidence: 'Injected error: woman leads public ritual',
         });
         applied.push('Added rule-violating rule effect');
@@ -546,9 +549,9 @@ function applyInjections(events: NarrativeEvent[], injections: InjectedEntry[]):
       case 'thread_progress_invalid': {
         event.threadProgress.push({
           thread: 'T99',
+          runId: 'T99:run_1' as ThreadRunId,
           advancement: 'nonexistent_thread_reference',
-          progressAfter: 100,
-          progressTotal: 100,
+          provenance: 'bench:variant',
         });
         applied.push('Added threadProgress for T99');
         break;

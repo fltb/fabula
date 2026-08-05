@@ -27,7 +27,7 @@ function document(logicalPath: string, content: string): SourceDocumentV1 {
     logicalPath,
     content,
     contentHash: computeSourceDocumentHash(content),
-    parseResult: { status: 'parsed', value: {} },
+    parseResult: { status: 'parsed', value: null },
     diagnostics: [],
   };
 }
@@ -50,9 +50,18 @@ function change(logicalPath: string, afterContent: string | null): SourceChangeV
 }
 
 const CURRENT = snapshot({
-  'nova.yaml': 'name: test\n',
-  'chapters/chapter_01/E001.yaml': 'event: E001\n',
-  'definitions/characters/hero.yaml': 'name: Hero\n',
+  'nova.yaml': 'project: test\ntitle: Test\nauthor: Tester\n',
+  'definitions/state_initial.yaml':
+    'info:\n  currentEra: now\n  politicalSituation: calm\nthreads: []\nknowledge:\n  claims: []\n  commonGround: []\nworldFacts: []\n',
+  'definitions/entity-types.yaml': 'types: {}\n',
+  'definitions/thread-types.yaml': 'types: {}\n',
+  'definitions/propositions.yaml': 'version: 1\npropositions: {}\ndependencyGraph: {}\n',
+  'definitions/relationship-types.yaml': 'types: {}\n',
+  'definitions/rule-types.yaml': 'types: {}\n',
+  'chapters/chapter_01/E001.yaml':
+    'event: E001\nnarrativeOrder: 1\ntitle: Event\nstoryTime: day_1\npov:\n  character: hero\n  type: third_person_limited\nsceneBrief: Test event\nbeats: [beat]\npreconditions: []\nexpectedPostconditions: []\n',
+  'definitions/characters/hero.yaml':
+    'id: hero\nname: Hero\ntype: protagonist\ndescription: Test hero\ntraits: []\n',
 });
 
 describe('SourceWorkspace — pure source snapshot facade', () => {
@@ -61,9 +70,15 @@ describe('SourceWorkspace — pure source snapshot facade', () => {
     expect(ws.list().map((d) => d.logicalPath)).toEqual([
       'chapters/chapter_01/E001.yaml',
       'definitions/characters/hero.yaml',
+      'definitions/entity-types.yaml',
+      'definitions/propositions.yaml',
+      'definitions/relationship-types.yaml',
+      'definitions/rule-types.yaml',
+      'definitions/state_initial.yaml',
+      'definitions/thread-types.yaml',
       'nova.yaml',
     ]);
-    expect(ws.get('nova.yaml')?.content).toBe('name: test\n');
+    expect(ws.get('nova.yaml')?.content).toBe('project: test\ntitle: Test\nauthor: Tester\n');
     expect(ws.get('missing.yaml')).toBeNull();
   });
 
@@ -77,6 +92,12 @@ describe('SourceWorkspace — pure source snapshot facade', () => {
     expect(result.candidate.documents.map((d) => d.logicalPath)).toEqual([
       'chapters/chapter_01/E001.yaml',
       'chapters/chapter_01/E002.yaml',
+      'definitions/entity-types.yaml',
+      'definitions/propositions.yaml',
+      'definitions/relationship-types.yaml',
+      'definitions/rule-types.yaml',
+      'definitions/state_initial.yaml',
+      'definitions/thread-types.yaml',
       'nova.yaml',
     ]);
     expect(result.candidate.sourceHash).not.toBe(CURRENT.sourceHash);
@@ -84,6 +105,12 @@ describe('SourceWorkspace — pure source snapshot facade', () => {
     expect(CURRENT.documents.map((d) => d.logicalPath)).toEqual([
       'chapters/chapter_01/E001.yaml',
       'definitions/characters/hero.yaml',
+      'definitions/entity-types.yaml',
+      'definitions/propositions.yaml',
+      'definitions/relationship-types.yaml',
+      'definitions/rule-types.yaml',
+      'definitions/state_initial.yaml',
+      'definitions/thread-types.yaml',
       'nova.yaml',
     ]);
   });

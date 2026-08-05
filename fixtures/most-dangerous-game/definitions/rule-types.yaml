@@ -1,0 +1,86 @@
+types:
+  consequence_rule:
+    typeId: consequence_rule
+    name: Ivan's Alternative
+    category: game_rule
+    ruleClass: game_rule
+    defaultConstraints:
+      - constraintId: ivan_alternative:constraint:1
+        kind: transition_constraint
+        enforcement: hard
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: quarry_refuses_hunt == true => quarry_status == 'dead' AND
+            cause_of_death == 'ivan_execution'
+  equipment_rule:
+    typeId: equipment_rule
+    name: Quarry Weapon Restriction
+    category: game_rule
+    ruleClass: game_rule
+    defaultConstraints:
+      - constraintId: no_other_weapon:constraint:1
+        kind: state_invariant
+        enforcement: hard
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: rainsford_in_hunt == true => rainsford_inventory does not contain
+            'gun' AND rainsford_inventory does not contain 'rifle' AND
+            rainsford_inventory does not contain 'pistol'
+  conflict_rule:
+    typeId: conflict_rule
+    name: Zaroff's Three-Day Hunt
+    category: game_rule
+    ruleClass: game_rule
+    defaultConstraints:
+      - constraintId: zaroff_hunt_3day:constraint:1
+        kind: state_invariant
+        enforcement: hard
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: zaroff_hunt_active == true => (rainsford_location != 'chateau' AND
+            rainsford_status == 'alive') OR (rainsford_status == 'dead' AND
+            hunt_over == true)
+      - constraintId: zaroff_hunt_3day:constraint:2
+        kind: postcondition_requirement
+        enforcement: hard
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: zaroff_hunt_active == true => if time > day_4_midnight AND
+            rainsford_status == 'alive' then rainsford_wins == true
+      - constraintId: zaroff_hunt_3day:constraint:3
+        kind: transition_constraint
+        enforcement: audit
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: zaroff_in_hunt == true => (zaroff_inventory does not contain
+            'hunting_rifle') OR (zaroff_using_rifle_during_hunt == false)

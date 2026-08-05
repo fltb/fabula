@@ -1,0 +1,32 @@
+types:
+  rule:
+    typeId: rule
+    name: Hextech Crystal Scarcity
+    category: state_invariant
+    ruleClass: social_norm
+    defaultConstraints:
+      - constraintId: hextech_crystal_scarcity:constraint:1
+        kind: state_invariant
+        enforcement: hard
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: character.traits includes hextech_augmented => maintenance overdue
+            implies degradation status
+      - constraintId: hextech_crystal_scarcity:constraint:2
+        kind: state_invariant
+        enforcement: audit
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: faction.hextech_crystal_count > 10 => threat level is elevated

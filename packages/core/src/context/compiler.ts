@@ -9,7 +9,9 @@ import type {
   NarrativeEvent,
   NarratorProfile,
   ResolvedNarrativeTechniqueContract,
+  RuleDeclaration,
   SystemContext,
+  ThreadDeclaration,
   WorldState,
 } from '../types/index.js';
 
@@ -34,6 +36,10 @@ export class ContextCompiler {
       systemContext?: SystemContext;
       activeThreadIds?: string[];
       narratorProfiles?: Record<string, NarratorProfile>;
+      /** Canonical rule declarations for active-rule projections. */
+      ruleDeclarations?: RuleDeclaration[];
+      /** Canonical thread declarations for runtime status projections. */
+      threadDeclarations?: readonly ThreadDeclaration[];
       /** Precompiled strict discourse context for this event. */
       discourseContext?: CompiledDiscourseRenderContext;
       /** Emotional beat to annotate the compiled scene spec */
@@ -49,6 +55,8 @@ export class ContextCompiler {
       options?.volumeSummary ?? '',
       options?.systemContext,
       options?.activeThreadIds,
+      options?.ruleDeclarations,
+      options?.threadDeclarations,
     );
     // Apply emotional beat from compile options
     if (options?.emotionalBeat) {

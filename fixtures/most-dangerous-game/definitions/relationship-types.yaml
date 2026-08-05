@@ -1,0 +1,41 @@
+types:
+  host_to_prey:
+    typeId: host_to_prey
+    label: host to prey
+    description: Narrative relationship type host_to_prey.
+    roles:
+      - roleId: member
+        label: Member
+        minCardinality: 2
+        maxCardinality: 2
+        allowedEntityKinds: &a1
+          - character
+          - location
+          - item
+          - faction
+          - narrator
+          - assertion
+          - concept
+    continuityImpact: preserve
+  master_to_servant:
+    typeId: master_to_servant
+    label: master to servant
+    description: Narrative relationship type master_to_servant.
+    roles:
+      - roleId: member
+        label: Member
+        minCardinality: 2
+        maxCardinality: 2
+        allowedEntityKinds: *a1
+    continuityImpact: preserve
+  friends_on_yacht:
+    typeId: friends_on_yacht
+    label: friends on yacht
+    description: Narrative relationship type friends_on_yacht.
+    roles:
+      - roleId: member
+        label: Member
+        minCardinality: 2
+        maxCardinality: 2
+        allowedEntityKinds: *a1
+    continuityImpact: preserve

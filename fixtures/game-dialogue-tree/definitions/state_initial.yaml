@@ -4,9 +4,12 @@ info:
 timeAnchors:
   - id: the_offer
     at: day_0
-    description: "Day 0"
+    description: Day 0
   - id: the_hunt
     at: day_1
-    description: "Day 1"
+    description: Day 1
 threads: []
 worldFacts: []
+knowledge:
+  claims: []
+  commonGround: []

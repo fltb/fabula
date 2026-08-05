@@ -7,6 +7,7 @@ import { ContextAssembler } from '../src/context/assembler.js';
 import { ContextCompiler } from '../src/context/compiler.js';
 import { RelevanceEngine } from '../src/context/relevance.js';
 import { InMemoryEntityRegistry } from '../src/entity/registry.js';
+import { emptyWorldState } from '../src/state/story-boundaries.js';
 import type {
   Entity,
   EntityKind,
@@ -82,6 +83,7 @@ function makeEvent(overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
 
 function makeState(overrides: Partial<WorldState> = {}): WorldState {
   return {
+    ...emptyWorldState(),
     entities: {
       alice: { location: 'entrance', status: 'alive' },
       bob: { location: 'room', status: 'alive' },
@@ -108,9 +110,14 @@ function makeState(overrides: Partial<WorldState> = {}): WorldState {
         activeEpochId: 'epoch_1',
       },
     },
-    knowledge: {
-      alice: { knownFacts: ['alice.location', 'bob.location'] },
+    epistemicLedger: {
+      claims: {},
+      bySubject: {},
+      byProposition: {},
+      actLog: [],
     },
+    propositionCatalog: { version: 1, propositions: {}, dependencyGraph: {} },
+    commonGround: [],
     threads: {
       T1: {
         threadId: 'T1' as ThreadId,
@@ -358,6 +365,8 @@ describe('ContextAssembler', () => {
     expect(pkg.markdown).toContain('Scene Specification');
     expect(pkg.markdown).toContain('Characters');
     expect(pkg.markdown).toContain('Relationships');
+    expect(pkg.markdown).toContain('lifecycle: active');
+    expect(pkg.markdown).toContain('global::intensity: 0.5');
     expect(pkg.markdown).toContain('POV Knowledge Boundary');
   });
 });

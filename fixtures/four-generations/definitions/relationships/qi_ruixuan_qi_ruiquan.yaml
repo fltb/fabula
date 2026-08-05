@@ -1,14 +1,28 @@
-id: qi_ruixuan_qi_ruiquan
-type: brotherhood_ideal_vs_reality
-participants:
-  - qi_ruixuan
-  - qi_ruiquan
-bidirectional: true
-initialState:
-  trust: 90
-  emotionalDistance: 15
-  intensity: 85
-  status: "兄弟——理想与现实的镜像"
-  notes: "瑞宣和瑞全是祁家的长孙与三孙，也是全书最重要的对比：一个出走了，一个留下了。瑞全是祁家第一个毅然出走奔赴国难的人——他悄悄离开北平，加入了抗日队伍。瑞宣深深羡慕弟弟的自由与勇气，却只能困在四世同堂的牢笼里教书养家。他不阻拦瑞全出走，甚至还暗中支持——但看着弟弟远去的背影，他的心像被刺了一刀。瑞宣的痛苦在于：他什么都明白——明白应该去抗日、应该舍小家顾大家——但他做不到。瑞全不痛苦，因为他做得到。两年后瑞全秘密潜回北平执行任务，与大哥重逢。他看出瑞宣的苦闷与变化，鼓励大哥参加地下抗日工作。瑞宣在弟弟面前又骄傲又惭愧——骄傲的是弟弟已经成了真正的战士，惭愧的是自己什么都不是。最终瑞宣在瑞全的启发下找到了隐蔽抗日的工作。兄弟俩一个在家、一个在外，在不同的战场上为同一个目标战斗。"
-establishedEvent: fall_of_beiping
-breakingEvent: end_of_novel
+relationshipId: qi_ruixuan_qi_ruiquan
+typeId: brotherhood_ideal_vs_reality
+initialEpoch:
+  epochId: qi_ruixuan_qi_ruiquan:epoch-1
+  lifecycle: active
+  memberships:
+    - membershipId: qi_ruixuan_qi_ruiquan:member:1
+      entityId: qi_ruixuan
+      role: member
+    - membershipId: qi_ruixuan_qi_ruiquan:member:2
+      entityId: qi_ruiquan
+      role: member
+  dimensions:
+    - dimensionId: trust
+      scope: global
+      value: 90
+    - dimensionId: emotionalDistance
+      scope: global
+      value: 15
+    - dimensionId: intensity
+      scope: global
+      value: 85
+    - dimensionId: status
+      scope: global
+      value: 兄弟——理想与现实的镜像
+    - dimensionId: notes
+      scope: global
+      value: 瑞宣和瑞全是祁家的长孙与三孙，也是全书最重要的对比：一个出走了，一个留下了。瑞全是祁家第一个毅然出走奔赴国难的人——他悄悄离开北平，加入了抗日队伍。瑞宣深深羡慕弟弟的自由与勇气，却只能困在四世同堂的牢笼里教书养家。他不阻拦瑞全出走，甚至还暗中支持——但看着弟弟远去的背影，他的心像被刺了一刀。瑞宣的痛苦在于：他什么都明白——明白应该去抗日、应该舍小家顾大家——但他做不到。瑞全不痛苦，因为他做得到。两年后瑞全秘密潜回北平执行任务，与大哥重逢。他看出瑞宣的苦闷与变化，鼓励大哥参加地下抗日工作。瑞宣在弟弟面前又骄傲又惭愧——骄傲的是弟弟已经成了真正的战士，惭愧的是自己什么都不是。最终瑞宣在瑞全的启发下找到了隐蔽抗日的工作。兄弟俩一个在家、一个在外，在不同的战场上为同一个目标战斗。

@@ -35,14 +35,14 @@ export const milestoneLifecycleSchema = z.enum([
 
 export const goalStateSchema = z
   .object({
-    goalId: z.string(),
+    goalId: z.string().min(1),
     status: goalLifecycleSchema,
   })
   .strict();
 
 export const milestoneStateSchema = z
   .object({
-    milestoneId: z.string(),
+    milestoneId: z.string().min(1),
     status: milestoneLifecycleSchema,
   })
   .strict();
@@ -55,9 +55,9 @@ export const timeDomainSchema = z.enum(['story', 'discourse']);
 
 export const threadTypeDefinitionSchema = z
   .object({
-    typeId: z.string(),
-    description: z.string(),
-    allowedPhases: z.array(z.string()),
+    typeId: z.string().min(1),
+    description: z.string().min(1),
+    allowedPhases: z.array(z.string().min(1)).min(1),
     lifecyclePolicy: z
       .object({
         reopenPolicy: z.enum(['forbidden', 'allowed', 'requiresExplicitReason']),
@@ -67,7 +67,7 @@ export const threadTypeDefinitionSchema = z
     stableGoals: z.array(goalStateSchema),
     stableMilestones: z.array(milestoneStateSchema),
     narrativeHints: z.array(z.string()).optional(),
-    provenance: z.string().optional(),
+    provenance: z.string().min(1).optional(),
     structuralFunction: structuralFunctionSchema.optional(),
     actantModel: actantModelSchema.optional(),
   })
@@ -75,7 +75,7 @@ export const threadTypeDefinitionSchema = z
 
 export const threadTypeCatalogSchema = z
   .object({
-    types: z.record(z.string(), threadTypeDefinitionSchema),
+    types: z.record(z.string().min(1), threadTypeDefinitionSchema),
   })
   .strict();
 
@@ -83,23 +83,23 @@ export const threadTypeCatalogSchema = z
 
 export const threadDeclarationSchema = z
   .object({
-    threadId: z.string(),
-    name: z.string(),
-    description: z.string(),
-    typeId: z.string(),
-    initialPhase: z.string().optional(),
-    initialBindings: z.record(z.string(), z.string()).optional(),
+    threadId: z.string().min(1),
+    name: z.string().min(1),
+    description: z.string().min(1),
+    typeId: z.string().min(1),
+    initialPhase: z.string().min(1).optional(),
+    initialBindings: z.record(z.string().min(1), z.string().min(1)).optional(),
     initialGoalStates: z.array(goalStateSchema).optional(),
     initialMilestoneStates: z.array(milestoneStateSchema).optional(),
-    provenance: z.string().optional(),
+    provenance: z.string().min(1).optional(),
+    targetRevealChapter: z.number().int().nonnegative().optional(),
+    initialProgress: z.string().min(1).optional(),
+    structuralFunction: structuralFunctionSchema.optional(),
   })
   .strict();
 
-export const threadDeclarationCatalogSchema = z
-  .object({
-    declarations: z.record(z.string(), threadDeclarationSchema),
-  })
-  .strict();
+/** Canonical state_initial.threads list; declarations are not keyed in YAML. */
+export const threadDeclarationCatalogSchema = z.array(threadDeclarationSchema);
 
 // ─── ThreadRuntimeState ──────────────────────────────────────────────────────
 

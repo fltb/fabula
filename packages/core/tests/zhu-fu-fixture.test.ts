@@ -42,23 +42,45 @@ describe('zhu-fu fixture — loadProject', () => {
     expect(data.locations).toHaveLength(4);
   });
 
-  it('loads 4 rules with ruleClass', () => {
+  it('loads 4 canonical rule declarations with catalog types', () => {
     const data = mapper.loadProject();
-    expect(data.rules).toHaveLength(4);
-    for (const rule of data.rules) {
-      expect(rule.ruleClass).toBeTruthy();
+    expect(data.ruleDeclarations).toHaveLength(4);
+    const ruleIds = data.ruleDeclarations.map((rule) => rule.ruleId).sort();
+    expect(ruleIds).toEqual([
+      'husbands_authority',
+      'patriarchal_clan_authority',
+      'religious_authority',
+      'widow_purity',
+    ]);
+    for (const rule of data.ruleDeclarations) {
+      expect(data.ruleTypeCatalog.types[rule.typeId]).toBeDefined();
+      expect(rule.specifications[rule.initialSpecificationId]).toBeDefined();
     }
   });
 
-  it('loads 5 relationships', () => {
+  it('loads 6 canonical relationship declarations', () => {
     const data = mapper.loadProject();
-    expect(data.relationships).toHaveLength(5);
+    expect(data.relationshipDeclarations).toHaveLength(6);
+    expect(
+      data.relationshipDeclarations.map((declaration) => declaration.relationshipId).sort(),
+    ).toEqual([
+      'event_fourth_aunt_xianglins_wife',
+      'fourth_master_lu_xianglins_wife',
+      'he_laoliu_xianglins_wife',
+      'liu_ma_xianglins_wife',
+      'mother_in_law_xianglins_wife',
+      'narrator_xianglins_wife',
+    ]);
   });
 
-  it('loads world initial state with threads and timeAnchors', () => {
+  it('loads world initial state with canonical thread declarations and timeAnchors', () => {
     const data = mapper.loadProject();
     expect(data.worldInitialState).toBeTruthy();
     expect(data.worldInitialState?.threads.length).toBeGreaterThanOrEqual(3);
+    const threadIds = data.worldInitialState?.threads.map((thread) => thread.threadId);
+    expect(threadIds).toContain('T1');
+    expect(threadIds).toContain('T2');
+    expect(threadIds).toContain('T3');
     expect(data.timeAnchors.length).toBeGreaterThanOrEqual(5);
   });
 });

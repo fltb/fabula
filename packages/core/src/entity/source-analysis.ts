@@ -11,6 +11,7 @@ import type {
 import {
   chapterMetadataSchema,
   characterDefinitionSchema,
+  entityTypeCatalogSourceSchema,
   eventFileSchema,
   factionDefinitionSchema,
   itemDefinitionSchema,
@@ -19,8 +20,12 @@ import {
   narratorProfileSchema,
   plannedDiscourseLedgerSourceSchema,
   projectConfigSchema,
-  relationshipDefinitionSchema,
-  ruleDefinitionSchema,
+  propositionCatalogSchema,
+  relationshipDeclarationSchema,
+  relationshipTypeCatalogSchema,
+  ruleDeclarationSchema,
+  ruleTypeCatalogSchema,
+  threadTypeCatalogSchema,
   worldInitialStateSchema,
 } from '../schemas/index.js';
 import {
@@ -37,7 +42,11 @@ interface Rule {
 const rules: readonly Rule[] = [
   { re: /^nova\.yaml$/, schema: projectConfigSchema },
   { re: /^definitions\/state_initial\.yaml$/, schema: worldInitialStateSchema },
-  { re: /^definitions\/entity-types\.yaml$/, schema: null },
+  { re: /^definitions\/entity-types\.yaml$/, schema: entityTypeCatalogSourceSchema },
+  { re: /^definitions\/thread-types\.yaml$/, schema: threadTypeCatalogSchema },
+  { re: /^definitions\/propositions\.yaml$/, schema: propositionCatalogSchema },
+  { re: /^definitions\/relationship-types\.yaml$/, schema: relationshipTypeCatalogSchema },
+  { re: /^definitions\/rule-types\.yaml$/, schema: ruleTypeCatalogSchema },
   {
     re: /^definitions\/(characters|locations|items|factions|relationships|rules|narrators|assertions)\/[^/]+\.(yaml|yml)$/,
     schema: null,
@@ -52,8 +61,8 @@ const schemaByDirectory: Record<string, ZodType<unknown>> = {
   locations: locationDefinitionSchema,
   items: itemDefinitionSchema,
   factions: factionDefinitionSchema,
-  relationships: relationshipDefinitionSchema,
-  rules: ruleDefinitionSchema,
+  relationships: relationshipDeclarationSchema,
+  rules: ruleDeclarationSchema,
   narrators: narratorProfileSchema,
   assertions: narratorAssertionSchema,
 };
@@ -74,6 +83,111 @@ function validPath(path: string): boolean {
     parts.every((part) => part.length > 0 && part !== '.' && part !== '..') &&
     path === parts.join('/')
   );
+}
+const REQUIRED_ROOTS = [
+  'nova.yaml',
+  'definitions/state_initial.yaml',
+  'definitions/entity-types.yaml',
+  'definitions/thread-types.yaml',
+  'definitions/propositions.yaml',
+  'definitions/relationship-types.yaml',
+  'definitions/rule-types.yaml',
+] as const;
+
+function canonicalIdentityDiagnostic(path: string, value: unknown): SourceDiagnosticV1 | null {
+  const parts = path.split('/');
+  const file = parts.at(-1)?.replace(/\.ya?ml$/i, '');
+  if (!file || typeof value !== 'object' || value === null) return null;
+  const record = value as Record<string, unknown>;
+  const directory = parts[1];
+  const idField =
+    directory === 'relationships'
+      ? 'relationshipId'
+      : directory === 'rules'
+        ? 'ruleId'
+        : ['characters', 'locations', 'items', 'factions', 'narrators', 'assertions'].includes(
+              directory ?? '',
+            )
+          ? 'id'
+          : null;
+  if (idField && typeof record[idField] === 'string' && record[idField] !== file) {
+    return {
+      code: 'SOURCE_FILE_ID_MISMATCH',
+      severity: 'error',
+      message: `File name "${file}" does not match ${idField} "${record[idField]}"`,
+      logicalPath: path,
+    };
+  }
+  const catalogField =
+    path === 'definitions/thread-types.yaml' ||
+    path === 'definitions/relationship-types.yaml' ||
+    path === 'definitions/rule-types.yaml'
+      ? 'types'
+      : path === 'definitions/propositions.yaml'
+        ? 'propositions'
+        : null;
+  if (catalogField && typeof record[catalogField] === 'object' && record[catalogField] !== null) {
+    for (const [key, entry] of Object.entries(record[catalogField] as Record<string, unknown>)) {
+      if (typeof entry !== 'object' || entry === null) continue;
+      const entryRecord = entry as Record<string, unknown>;
+      const idFieldForCatalog = catalogField === 'propositions' ? 'id' : 'typeId';
+      if (entryRecord[idFieldForCatalog] !== key) {
+        return {
+          code: 'SOURCE_CATALOG_KEY_MISMATCH',
+          severity: 'error',
+          message: `${catalogField}.${key} must contain ${idFieldForCatalog} "${key}"`,
+          logicalPath: path,
+        };
+      }
+    }
+  }
+  return null;
+}
+
+function topologyDiagnostics(documents: readonly SourceDocumentV1[]): SourceDiagnosticV1[] {
+  const diagnostics: SourceDiagnosticV1[] = [];
+  const byPath = new Map(documents.map((document) => [document.logicalPath, document]));
+  for (const root of REQUIRED_ROOTS) {
+    if (!byPath.has(root)) {
+      diagnostics.push({
+        code: 'SOURCE_REQUIRED_FILE_MISSING',
+        severity: 'error',
+        message: 'Required canonical source file is missing',
+        logicalPath: root,
+      });
+    }
+  }
+  for (const document of documents) {
+    const rule = ruleFor(document.logicalPath);
+    if (!rule) continue;
+    try {
+      const parsed = document.parseResult.value ?? YAML.parse(document.content);
+      // Current snapshots may come from Host loaders that parse YAML but do not
+      // validate Core schemas; validate unchanged documents without duplicating
+      // diagnostics already produced for an overlay change.
+      if (
+        rule.schema &&
+        !document.diagnostics.some((diagnostic) => diagnostic.code === 'SOURCE_SCHEMA_INVALID')
+      ) {
+        const checked = rule.schema.safeParse(parsed);
+        if (!checked.success) {
+          diagnostics.push({
+            code: 'SOURCE_SCHEMA_INVALID',
+            severity: 'error',
+            message: checked.error.issues
+              .map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
+              .join('; '),
+            logicalPath: document.logicalPath,
+          });
+        }
+      }
+      const identity = canonicalIdentityDiagnostic(document.logicalPath, parsed);
+      if (identity) diagnostics.push(identity);
+    } catch {
+      // parseDocument emits the authoritative YAML diagnostic.
+    }
+  }
+  return diagnostics;
 }
 
 function jsonValue(value: unknown): JsonValue | null {
@@ -219,6 +333,7 @@ export function analyzeSource(
     documents: candidateDocuments,
     sourceHash: computeSourceHash(candidateDocuments),
   };
+  diagnostics.push(...topologyDiagnostics(candidateDocuments));
   diagnostics.push(...(options.validateOntology?.(candidateDocuments) ?? []));
 
   const affectedEventIds = [

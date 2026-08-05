@@ -66,12 +66,12 @@ export function validateStrict(context: StrictValidationContext): ValidationIssu
     }
   }
 
-  // ═══ 3. Each rule must have ≥ 1 executable check ═══
+  // ═══ 3. Each rule must have ≥ 1 executable constraint ═══
   for (const rule of rules) {
-    const hasCheck = rule.logicalConsequences.some(
-      (lc) => lc.check !== null && lc.check !== undefined,
+    const hasConstraint = Object.values(rule.specifications).some(
+      (specification) => specification.constraints.length > 0,
     );
-    if (!hasCheck) {
+    if (!hasConstraint) {
       issues.push({
         validator: 'iss-strict',
         severity: 'error',
@@ -79,12 +79,12 @@ export function validateStrict(context: StrictValidationContext): ValidationIssu
         event: '',
         entity: rule.ruleId,
         message:
-          `Rule "${rule.name}" (${rule.ruleId}) has no executable check. ` +
-          `Strict mode requires at least 1 logicalConsequences.check entry.`,
+          `Rule "${rule.name}" (${rule.ruleId}) has no executable constraint. ` +
+          `Strict mode requires at least 1 specification with a constraints entry.`,
         fixSuggestion:
-          'Add a logicalConsequences entry with a valid check (state_invariant, transition_constraint, or progression).',
+          'Add a specification with a constraints entry (state_invariant, transition_constraint, precondition_requirement, or postcondition_requirement).',
         fixAction: 'manual',
-        fixTarget: { file: `rules/${rule.ruleId}.yaml`, field: 'logicalConsequences' },
+        fixTarget: { file: `definitions/rules/${rule.ruleId}.yaml`, field: 'specifications' },
       });
     }
   }

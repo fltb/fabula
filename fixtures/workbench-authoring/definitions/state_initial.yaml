@@ -4,15 +4,19 @@ info:
 timeAnchors:
   - id: day_1
     at: day_1
-    description: "The single authored story-time anchor for the fixture project."
+    description: The single authored story-time anchor for the fixture project.
 threads:
-  - id: T1
-    name: "The journey"
-    description: "Tracks the protagonist as she travels through the small town."
-    type: primary
+  - threadId: T1
+    name: The journey
+    description: Tracks the protagonist as she travels through the small town.
+    typeId: primary
+    initialPhase: opening
     targetRevealChapter: 1
     initialProgress: "0.00"
 worldFacts:
   - id: small_town_ritual
-    value: "The town holds an annual winter ritual at the end of the year."
-    description: "A shared world fact that anchors the fixture setting."
+    value: The town holds an annual winter ritual at the end of the year.
+    description: A shared world fact that anchors the fixture setting.
+knowledge:
+  claims: []
+  commonGround: []

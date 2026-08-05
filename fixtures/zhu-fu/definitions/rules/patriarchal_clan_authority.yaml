@@ -1,40 +1,76 @@
 ruleId: patriarchal_clan_authority
-name: "族权 — 宗族父权统治"
-category: social_structure
-type: constraint
-statement: "在封建宗族制度下，女性是家族的财产而非独立个体。婆婆有权处置儿媳的去留甚至买卖，大伯有权收回亡弟的房屋并驱逐弟媳。女性的命运由宗族年长男性或婆婆决定，没有自主权。"
-ruleClass: social_norm
-logicalConsequences:
-  - description: "婆婆有权处置儿媳"
-    check:
-      type: state_invariant
-      filter: "entity.marital_status='widow_of_son' AND entity.gender='女'"
-      assert: "entity.subordinate_to='mother_in_law'"
-      severity: error
-  - description: "宗族年长男性有权收屋驱人"
-    check:
-      type: transition_constraint
-      filter: "husband_dead=true AND has_male_child=false"
-      assert: "eldest_brother_of_husband.can_claim_house=true"
-      severity: error
-  - description: "女性不能拒绝宗族安排的婚姻"
-    check:
-      type: state_invariant
-      filter: "entity.gender='女' AND entity.marital_status='widow'"
-      assert: "entity.can_refuse_remarriage=false"
-      severity: error
+name: 族权 — 宗族父权统治
+typeId: constraint
+initialEpochId: patriarchal_clan_authority:epoch-1
+initialSpecificationId: patriarchal_clan_authority:specification-1
+initialActivation: enabled
+initialEffectiveness: full
+scopeBindings: {}
 exceptions:
-  - condition: "如果寡妇有成年儿子，则儿子的权利优先于大伯"
-    note: "阿毛如果活着并成年，贺老六的房子归他，大伯无权收走"
-  - condition: "如果娘家有势力，可以保护出嫁女儿不被婆家随意处置"
-    note: "祥林嫂娘家贫穷，无力保护她"
-evidenceChain:
-  - rule: patriarchal_clan_authority
-    effect: reinforce
-    evidence: "婆婆以八十千卖掉祥林嫂，拿部分钱给小儿子娶媳妇——宗族制度赋予她这项权利"
-  - rule: patriarchal_clan_authority
-    effect: reinforce
-    evidence: "贺老六死后，大伯来收房、赶走祥林嫂——宗族制度赋予他这项权利"
-  - rule: patriarchal_clan_authority
-    effect: reinforce
-    evidence: "鲁四老爷说'既是她的婆婆要她回去，那有什么话可说的呢？'——乡绅也认可宗族制度"
+  - exceptionId: patriarchal_clan_authority:exception:1
+    status: active
+    constraintIds:
+      - patriarchal_clan_authority:constraint:1
+      - patriarchal_clan_authority:constraint:2
+      - patriarchal_clan_authority:constraint:3
+    scopeBindings: {}
+    condition:
+      type: expression
+      expression: 如果寡妇有成年儿子，则儿子的权利优先于大伯
+    effect:
+      type: exempt
+  - exceptionId: patriarchal_clan_authority:exception:2
+    status: active
+    constraintIds:
+      - patriarchal_clan_authority:constraint:1
+      - patriarchal_clan_authority:constraint:2
+      - patriarchal_clan_authority:constraint:3
+    scopeBindings: {}
+    condition:
+      type: expression
+      expression: 如果娘家有势力，可以保护出嫁女儿不被婆家随意处置
+    effect:
+      type: exempt
+specifications:
+  patriarchal_clan_authority:specification-1:
+    statement: 在封建宗族制度下，女性是家族的财产而非独立个体。婆婆有权处置儿媳的去留甚至买卖，大伯有权收回亡弟的房屋并驱逐弟媳。女性的命运由宗族年长男性或婆婆决定，没有自主权。
+    constraints:
+      - constraintId: patriarchal_clan_authority:constraint:1
+        kind: state_invariant
+        enforcement: hard
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.marital_status='widow_of_son' AND entity.gender='女' =>
+            entity.subordinate_to='mother_in_law'
+      - constraintId: patriarchal_clan_authority:constraint:2
+        kind: transition_constraint
+        enforcement: hard
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: husband_dead=true AND has_male_child=false =>
+            eldest_brother_of_husband.can_claim_house=true
+      - constraintId: patriarchal_clan_authority:constraint:3
+        kind: state_invariant
+        enforcement: hard
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.gender='女' AND entity.marital_status='widow' =>
+            entity.can_refuse_remarriage=false

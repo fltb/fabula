@@ -61,13 +61,13 @@ describe('Story-domain thread behavior', () => {
       thread: 'T_story',
       runId: 'run-1' as ThreadRunId,
       status: 'active',
-      goalSet: [{ goalId: 'progress', status: 'active' }],
+      goalSet: [{ goalId: 'story_arc', status: 'active' }],
       provenance: 'E0',
     });
 
     expect(threads.T_story).toBeDefined();
     expect(threads.T_story?.status).toBe('active');
-    expect(threads.T_story?.goalStates.progress).toBe('active');
+    expect(threads.T_story?.goalStates.story_arc).toBe('active');
   });
 
   it('multiple story transactions accumulate state', () => {
@@ -150,78 +150,48 @@ describe('Discourse-domain thread behavior', () => {
   });
 });
 
-describe('Backward compatibility — ThreadProgressEntry', () => {
-  it('legacy scalar progress threads work through replay', () => {
+describe('Canonical transaction behavior across clocks', () => {
+  it('keeps explicit run IDs and provenance for story and discourse transactions', () => {
     const threads: Record<string, ThreadRuntimeState> = {};
+    const transactions = [
+      {
+        thread: 'T_story',
+        runId: 'story-run-1' as ThreadRunId,
+        status: 'active' as const,
+        phase: 'setup',
+        goalSet: [{ goalId: 'setup', status: 'active' as const }],
+        provenance: 'E1',
+      },
+      {
+        thread: 'T_mystery',
+        runId: 'discourse-run-1' as ThreadRunId,
+        status: 'active' as const,
+        phase: 'reveal',
+        goalSet: [{ goalId: 'reveal', status: 'active' as const }],
+        provenance: 'E5',
+      },
+    ];
 
-    // Simulate what convertLegacyThreadProgress produces
-    applyThreadTransaction(threads, {
-      thread: 'T_legacy',
-      runId: 'legacy-T_legacy' as ThreadRunId,
-      status: 'active',
-      goalSet: [{ goalId: 'progress', status: 'active' }],
-      provenance: 'E0',
-      advancement: 'Started the journey',
-    });
+    for (const tx of transactions) {
+      applyThreadTransaction(threads, tx);
+    }
 
-    expect(threads.T_legacy?.status).toBe('active');
-    expect(threads.T_legacy?.goalStates.progress).toBe('active');
-    expect(threads.T_legacy?.currentRunId).toBe('legacy-T_legacy');
-  });
-
-  it('multiple legacy entries on the same thread accumulate', () => {
-    const threads: Record<string, ThreadRuntimeState> = {};
-
-    // First legacy entry
-    applyThreadTransaction(threads, {
-      thread: 'T_legacy',
-      runId: 'legacy-T_legacy' as ThreadRunId,
-      status: 'active',
-      goalSet: [{ goalId: 'progress', status: 'active' }],
-      provenance: 'E1',
-      advancement: 'First step',
-    });
-
-    // Second legacy entry (same thread, same status, same goal)
-    applyThreadTransaction(threads, {
-      thread: 'T_legacy',
-      runId: 'legacy-T_legacy' as ThreadRunId,
-      status: 'active',
-      goalSet: [{ goalId: 'progress', status: 'active' }],
-      provenance: 'E2',
-      advancement: 'Second step',
-    });
-
-    expect(threads.T_legacy?.status).toBe('active');
-    expect(threads.T_legacy?.goalStates.progress).toBe('active');
-  });
-
-  it('legacy entry with complete progress creates completed state', () => {
-    const threads: Record<string, ThreadRuntimeState> = {};
-
-    applyThreadTransaction(threads, {
-      thread: 'T_done',
-      runId: 'legacy-T_done' as ThreadRunId,
-      status: 'completed',
-      goalSet: [{ goalId: 'progress', status: 'achieved' }],
-      provenance: 'E_final',
-      advancement: 'Thread complete',
-    });
-
-    expect(threads.T_done?.status).toBe('completed');
-    expect(threads.T_done?.goalStates.progress).toBe('achieved');
+    expect(threads.T_story?.currentRunId).toBe('story-run-1');
+    expect(threads.T_story?.goalStates.setup).toBe('active');
+    expect(threads.T_mystery?.currentRunId).toBe('discourse-run-1');
+    expect(threads.T_mystery?.goalStates.reveal).toBe('active');
   });
 });
 
-describe('No scalar progress storage', () => {
-  it('ThreadRuntimeState uses absolute goal/milestone states, not progress numbers', () => {
+describe('Absolute thread state storage', () => {
+  it('uses goal and milestone states rather than numeric counters', () => {
     const threads: Record<string, ThreadRuntimeState> = {};
 
     applyThreadTransaction(threads, {
       thread: 'T_check',
       runId: 'run-1' as ThreadRunId,
       status: 'active',
-      goalSet: [{ goalId: 'progress', status: 'active' }],
+      goalSet: [{ goalId: 'investigation', status: 'active' }],
       provenance: 'E0',
     });
 
@@ -231,13 +201,10 @@ describe('No scalar progress storage', () => {
       throw new Error('Expected T_check thread state');
     }
 
-    // There should be NO 'progress' or 'total' numeric fields on the state
     expect(state).not.toHaveProperty('progress');
     expect(state).not.toHaveProperty('total');
-
-    // Instead, state has absolute goal/milestone states
     expect(state).toHaveProperty('goalStates');
     expect(state).toHaveProperty('milestoneStates');
-    expect(state.goalStates.progress).toBe('active');
+    expect(state.goalStates.investigation).toBe('active');
   });
 });

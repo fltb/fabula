@@ -4,28 +4,6 @@
 
 import { z } from 'zod';
 
-// ——— RelationshipDefinition (first-class entity, original schema) ———
-
-export const relationshipDefinitionSchema = z
-  .object({
-    id: z.string(),
-    type: z.string(),
-    participants: z.tuple([z.string(), z.string()]),
-    bidirectional: z.boolean(),
-    initialState: z
-      .object({
-        trust: z.number().min(-100).max(100),
-        emotionalDistance: z.number().min(0).max(100),
-        intensity: z.number().min(0).max(100),
-        status: z.string(),
-        notes: z.string().optional(),
-      })
-      .strict(),
-    establishedEvent: z.string().optional(),
-    breakingEvent: z.string().optional(),
-  })
-  .strict();
-
 // ——— RelationshipRoleDefinition ———
 
 export const relationshipRoleDefinitionSchema = z
@@ -50,6 +28,25 @@ export const relationshipTypeDefinitionSchema = z
     continuityImpact: z.enum(['preserve', 'new_epoch', 'new_relationship']),
   })
   .strict();
+
+// ——— RelationshipTypeCatalog (versionless authoring root) ———
+
+export const relationshipTypeCatalogSchema = z
+  .object({
+    types: z.record(z.string(), relationshipTypeDefinitionSchema),
+  })
+  .strict()
+  .superRefine((catalog, ctx) => {
+    for (const [typeId, definition] of Object.entries(catalog.types)) {
+      if (typeId !== definition.typeId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['types', typeId, 'typeId'],
+          message: `Catalog key ${typeId} must match typeId ${definition.typeId}`,
+        });
+      }
+    }
+  });
 
 // ——— Membership ———
 
@@ -90,6 +87,7 @@ export const dimensionUnsetSchema = z
 
 export const relationshipTransactionSchema = z
   .object({
+    type: z.literal('relationship_transaction'),
     effectId: z.string(),
     relationshipId: z.string(),
     epochId: z.string().optional(),
@@ -116,6 +114,7 @@ export const identityTransitionCarryEntrySchema = z
 
 export const relationshipIdentityTransitionGroupSchema = z
   .object({
+    type: z.literal('identity_transition'),
     oldEpochClosures: z.array(
       z
         .object({
@@ -129,3 +128,28 @@ export const relationshipIdentityTransitionGroupSchema = z
     provenance: z.string().optional(),
   })
   .strict();
+
+// ——— RelationshipDeclaration (versionless authoring source) ———
+
+export const relationshipDeclarationSchema = z
+  .object({
+    relationshipId: z.string(),
+    typeId: z.string(),
+    initialEpoch: z
+      .object({
+        epochId: z.string(),
+        lifecycle: z.enum(['active', 'suspended', 'dissolved']),
+        memberships: z.array(membershipSchema),
+        dimensions: z.array(dimensionWriteSchema),
+      })
+      .strict(),
+    provenance: z.string().optional(),
+  })
+  .strict();
+
+// ——— Canonical event relationship effect ———
+
+export const relationshipEffectSchema = z.discriminatedUnion('type', [
+  relationshipTransactionSchema,
+  relationshipIdentityTransitionGroupSchema,
+]);

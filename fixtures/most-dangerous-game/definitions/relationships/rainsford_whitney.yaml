@@ -1,22 +1,33 @@
-id: rainsford_whitney
-participants:
-  - rainsford
-  - whitney
-type: friends_on_yacht
-description: "Rainsford and Whitney are fellow big-game hunters traveling together on a yacht bound for Rio de Janeiro and a jaguar-hunting expedition up the Amazon. They share a profession and a love of hunting, but differ fundamentally in their philosophical outlook. Whitney reproaches Rainsford's dismissive attitude toward animal suffering, introducing the moral tension that will later be tested when Rainsford himself becomes the hunted. Their dynamic is collegial but pointed — Whitney's gentle moralizing sets up the story's central thematic question."
-initialState:
-  rainsfordToWhitney:
-    trust: 0.8
-    attitude: collegial
-    emotionalDistance: 0.3
-    respect: 0.7
-    notes: "Rainsford enjoys Whitney's company but dismisses his philosophical concerns as softness. He does not take Whitney's warnings about Ship-Trap Island seriously."
-  whitneyToRainsford:
-    trust: 0.8
-    attitude: concerned
-    emotionalDistance: 0.3
-    respect: 0.8
-    notes: "Whitney admires Rainsford's skill but worries about his moral blindness. His reproach — 'For the hunter, not the jaguar' — foreshadows Rainsford's later awakening."
-establishedEvent:
-  day: -7
-  summary: "Rainsford and Whitney have traveled together before; their friendship is built on shared hunts and long voyages."
+relationshipId: rainsford_whitney
+typeId: friends_on_yacht
+initialEpoch:
+  epochId: rainsford_whitney:epoch-1
+  lifecycle: active
+  memberships:
+    - membershipId: rainsford_whitney:member:1
+      entityId: rainsford
+      role: member
+    - membershipId: rainsford_whitney:member:2
+      entityId: whitney
+      role: member
+  dimensions:
+    - dimensionId: rainsfordToWhitney
+      scope: global
+      value:
+        trust: 0.8
+        attitude: collegial
+        emotionalDistance: 0.3
+        respect: 0.7
+        notes: Rainsford enjoys Whitney's company but dismisses his philosophical
+          concerns as softness. He does not take Whitney's warnings about
+          Ship-Trap Island seriously.
+    - dimensionId: whitneyToRainsford
+      scope: global
+      value:
+        trust: 0.8
+        attitude: concerned
+        emotionalDistance: 0.3
+        respect: 0.8
+        notes: Whitney admires Rainsford's skill but worries about his moral blindness.
+          His reproach — 'For the hunter, not the jaguar' — foreshadows
+          Rainsford's later awakening.

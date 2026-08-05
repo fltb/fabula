@@ -2,7 +2,12 @@
 // ISS — Anti-pattern Detection
 // ============================================================================
 
-import type { EntityLookup, NarrativeEvent, ValidationIssue } from '../types/index.js';
+import type {
+  EntityLookup,
+  NarrativeEvent,
+  ThreadTransaction,
+  ValidationIssue,
+} from '../types/index.js';
 
 /**
  * detectAntiPatterns — Scans the input data for known structural anti-patterns
@@ -92,21 +97,24 @@ export function detectAntiPatterns(options: {
   const sortedEvents = [...events].sort((a, b) => a.narrativeOrder - b.narrativeOrder);
   const eventsPast5 = sortedEvents.filter((e) => e.narrativeOrder > 5);
 
-  // Track the latest progress per thread among events past chapter 5
-  const threadProgressPast5 = new Map<string, { progress: number; total: number }>();
+  // Track the latest transaction per thread among events past chapter 5.
+  // Canonical transactions carry absolute goal/milestone status writes; a
+  // thread is dead when its latest transaction neither completes the thread
+  // nor achieves any goal.
+  const threadTxPast5 = new Map<string, ThreadTransaction>();
   for (const event of eventsPast5) {
-    for (const tp of event.threadProgress) {
+    for (const tx of event.threadProgress) {
       // Keep the last-seen (highest narrativeOrder) value
-      threadProgressPast5.set(tp.thread, {
-        progress: tp.progressAfter,
-        total: tp.progressTotal,
-      });
+      threadTxPast5.set(tx.thread, tx);
     }
   }
 
   for (const thread of threads) {
-    const prog = threadProgressPast5.get(thread.id);
-    if (prog !== undefined && prog.progress === 0 && prog.total === 0) {
+    const tx = threadTxPast5.get(thread.id);
+    if (tx === undefined) continue;
+    const achieved = (tx.goalSet ?? []).some((goal) => goal.status === 'achieved');
+    const completed = tx.status === 'completed';
+    if (!achieved && !completed) {
       issues.push({
         validator: 'iss-anti-pattern',
         severity: 'warning',
@@ -114,10 +122,10 @@ export function detectAntiPatterns(options: {
         event: '',
         entity: '',
         message:
-          `Thread "${thread.name}" (${thread.id}) is defined but its progress is still 0/0 ` +
-          `after 5 chapters. No events are advancing this thread — it will never resolve.`,
+          `Thread "${thread.name}" (${thread.id}) is referenced past chapter 5 but its latest ` +
+          `transaction achieves no goal and never completes the thread. No events are advancing it — it will never resolve.`,
         fixSuggestion:
-          'Add threadProgress entries referencing this thread in events, or remove it if unused.',
+          'Add threadProgress transactions with goalSet achievements referencing this thread in events, or remove it if unused.',
         fixAction: 'manual',
         fixTarget: { file: 'world.yaml', field: `threads.${thread.id}.progress` },
       });

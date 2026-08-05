@@ -196,29 +196,6 @@ export const foreshadowEntrySchema = z
   })
   .strict();
 
-export const relationshipChangeSchema = z
-  .object({
-    participants: z.tuple([z.string(), z.string()]),
-    effect: z.enum(['establish', 'change', 'dissolve', 'reinforce', 'complicate']),
-    direction: z.string(),
-    newState: z
-      .object({
-        type: z.string(),
-        intensity: z.number(),
-      })
-      .strict()
-      .optional(),
-  })
-  .strict();
-
-export const ruleEffectSchema = z
-  .object({
-    rule: z.string(),
-    effect: z.enum(['reinforce', 'weaken', 'introduce_exception', 'nullify']),
-    evidence: z.string(),
-  })
-  .strict();
-
 export const introduceEntrySchema = z
   .object({
     type: z.enum(['character', 'location', 'item', 'concept']),

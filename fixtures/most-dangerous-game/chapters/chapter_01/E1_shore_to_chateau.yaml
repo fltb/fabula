@@ -1,102 +1,139 @@
 event: E1
-title: "The Shore to the Château"
+title: The Shore to the Château
 narrativeOrder: 2
 sceneType: linear
 storyTime: day_1_afternoon
 pov:
   character: rainsford
   type: third_person_limited
-sceneBrief: "Rainsford wakes late in the afternoon, hungry but alive. Following the shore, he finds evidence of a violent chase: crushed underbrush, bloodstained weeds, an empty .22 cartridge, and a sailor's body torn by hounds. He follows the peculiar tree-skeleton warning deeper into the island. As darkness falls, he sights the lights of an enormous château on a high bluff. Approaching the spiked iron gate, he lifts a heavy gargoyle knocker. The door swings open to reveal a giant black-bearded man holding a revolver aimed at Rainsford's heart — Ivan, who is deaf and mute. Then General Zaroff appears, an erect, slender man in evening clothes, and welcomes Rainsford by name, having recognized him from his book on hunting snow leopards in Tibet. Ivan is dismissed with a silent gesture, and Rainsford is drawn into the warmth and light."
+sceneBrief: "Rainsford wakes late in the afternoon, hungry but alive. Following
+  the shore, he finds evidence of a violent chase: crushed underbrush,
+  bloodstained weeds, an empty .22 cartridge, and a sailor's body torn by
+  hounds. He follows the peculiar tree-skeleton warning deeper into the island.
+  As darkness falls, he sights the lights of an enormous château on a high
+  bluff. Approaching the spiked iron gate, he lifts a heavy gargoyle knocker.
+  The door swings open to reveal a giant black-bearded man holding a revolver
+  aimed at Rainsford's heart — Ivan, who is deaf and mute. Then General Zaroff
+  appears, an erect, slender man in evening clothes, and welcomes Rainsford by
+  name, having recognized him from his book on hunting snow leopards in Tibet.
+  Ivan is dismissed with a silent gesture, and Rainsford is drawn into the
+  warmth and light."
 beats:
-  - "Rainsford wakes late in the afternoon, hungry but alive."
-  - "Following the shore, he finds evidence of a violent chase: crushed underbrush, bloodstained weeds, an empty .22 cartridge, and a sailor's body torn by hounds."
-  - "He follows the peculiar tree-skeleton warning deeper into the island."
-  - "As darkness falls, he sights the lights of an enormous château on a high bluff."
-  - "Approaching the spiked iron gate, he lifts a heavy gargoyle knocker."
-  - "The door swings open to reveal a giant black-bearded man holding a revolver aimed at Rainsford's heart — Ivan, who is deaf and mute."
-  - "Then General Zaroff appears, an erect, slender man in evening clothes, and welcomes Rainsford by name, having recognized him from his book on hunting snow leopards in Tibet."
-  - "Ivan is dismissed with a silent gesture, and Rainsford is drawn into the warmth and light."
+  - Rainsford wakes late in the afternoon, hungry but alive.
+  - "Following the shore, he finds evidence of a violent chase: crushed
+    underbrush, bloodstained weeds, an empty .22 cartridge, and a sailor's body
+    torn by hounds."
+  - He follows the peculiar tree-skeleton warning deeper into the island.
+  - As darkness falls, he sights the lights of an enormous château on a high
+    bluff.
+  - Approaching the spiked iron gate, he lifts a heavy gargoyle knocker.
+  - The door swings open to reveal a giant black-bearded man holding a revolver
+    aimed at Rainsford's heart — Ivan, who is deaf and mute.
+  - Then General Zaroff appears, an erect, slender man in evening clothes, and
+    welcomes Rainsford by name, having recognized him from his book on hunting
+    snow leopards in Tibet.
+  - Ivan is dismissed with a silent gesture, and Rainsford is drawn into the
+    warmth and light.
 preconditions:
   - entity: rainsford
     attribute: location
     value: ship_trap_shore
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: status
     value: alive
-    confidence: 1.0
+    confidence: 1
   - entity: time
     attribute: value
     value: day_1_afternoon
-    confidence: 1.0
+    confidence: 1
 expectedPostconditions:
   - entity: rainsford
     attribute: location
     value: chateau
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: found_hunting_trail
     value: true
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: knows_island_inhabited
     value: true
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: met_zaroff
     value: true
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: met_ivan
     value: true
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: knows_ivan_deaf_mute
     value: true
-    confidence: 1.0
+    confidence: 1
   - entity: zaroff
     attribute: knows_rainsford_identity
     value: true
-    confidence: 1.0
+    confidence: 1
   - entity: ship_trap_shore
     attribute: cartridge_found
     value: true
-    confidence: 1.0
+    confidence: 1
   - entity: ship_trap_shore
     attribute: bloodstains_identified
     value: true
-    confidence: 1.0
+    confidence: 1
 threadProgress:
   - thread: T1
-    advancement: "Rainsford discovers the island's deadly secret — someone has been hunted here before. He then meets Zaroff and Ivan and enters the château."
+    advancement: Rainsford discovers the island's deadly secret — someone has been
+      hunted here before. He then meets Zaroff and Ivan and enters the château.
     progressAfter: 25
     progressTotal: 100
 foreshadowing:
   - id: tree_skeleton_warning
-    hint: "The tree stripped of bark and showing white wood beneath — a warning sign left in the jungle. Rainsford does not yet understand its meaning, but it foreshadows the dead tree he will use as a man-catcher."
+    hint: The tree stripped of bark and showing white wood beneath — a warning sign
+      left in the jungle. Rainsford does not yet understand its meaning, but it
+      foreshadows the dead tree he will use as a man-catcher.
     targetRevealChapter: 3
     thread: T1
   - id: hounds_in_jungle
-    hint: "The .22 cartridge and the body torn by hounds foreshadow Rainsford's own fate if caught."
+    hint: The .22 cartridge and the body torn by hounds foreshadow Rainsford's own
+      fate if caught.
     targetRevealChapter: 4
     thread: T1
   - id: ivan_revolver
-    hint: "Ivan's revolver trained on Rainsford's heart. The deaf-mute giant is a gatekeeper of death."
+    hint: Ivan's revolver trained on Rainsford's heart. The deaf-mute giant is a
+      gatekeeper of death.
     targetRevealChapter: 4
     thread: T1
   - id: zaroff_recognition
-    hint: "Zaroff recognizes Rainsford from his book. This is not coincidence — Zaroff knows exactly who has arrived on his island."
+    hint: Zaroff recognizes Rainsford from his book. This is not coincidence —
+      Zaroff knows exactly who has arrived on his island.
     targetRevealChapter: 5
     thread: T3
 relationshipEffects:
-  - participants:
-      - rainsford
-      - zaroff
-    effect: establish
-    direction: host_guest
-    newState:
-      type: formal_hospitality
-      intensity: 0.5
+  - type: relationship_transaction
+    effectId: E1:relationship:1
+    relationshipId: rainsford_zaroff
+    epochId: rainsford_zaroff:epoch-1
+    membershipAfter:
+      - membershipId: rainsford_zaroff:member:1
+        entityId: rainsford
+        role: member
+      - membershipId: rainsford_zaroff:member:2
+        entityId: zaroff
+        role: member
+    lifecycleAfter: active
+    dimensionSet:
+      - dimensionId: intensity
+        scope: global
+        value: 0.5
+    provenance: host_guest (formal_hospitality)
 ruleEffects: []
 styleGuidance:
-  tone: "Exploration and discovery. The island should feel beautiful and menacing at once — evidence of violence accumulates gradually, building unease. The château's appearance should feel like a mirage. Ivan at the door is a jump-scare; Zaroff's entrance is a relief that curdles into unease. End with Rainsford crossing the threshold, leaving the jungle for the gilded cage."
+  tone: Exploration and discovery. The island should feel beautiful and menacing
+    at once — evidence of violence accumulates gradually, building unease. The
+    château's appearance should feel like a mirage. Ivan at the door is a
+    jump-scare; Zaroff's entrance is a relief that curdles into unease. End with
+    Rainsford crossing the threshold, leaving the jungle for the gilded cage.

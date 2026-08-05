@@ -1,0 +1,15 @@
+types:
+  primary:
+    typeId: primary
+    description: Primary narrative thread type
+    allowedPhases:
+      - opening
+      - development
+      - resolution
+    lifecyclePolicy:
+      reopenPolicy: forbidden
+    timeDomain: story
+    stableGoals: []
+    stableMilestones: []
+    narrativeHints:
+      - Tracks the primary narrative progression.

@@ -1,0 +1,13 @@
+relationshipId: event_fourth_master_lu_narrator
+typeId: event_relationship
+initialEpoch:
+  epochId: event_fourth_master_lu_narrator:epoch-1
+  lifecycle: active
+  memberships:
+    - membershipId: event_fourth_master_lu_narrator:member:1
+      entityId: narrator
+      role: member
+    - membershipId: event_fourth_master_lu_narrator:member:2
+      entityId: fourth_master_lu
+      role: member
+  dimensions: []

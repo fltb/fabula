@@ -1,14 +1,37 @@
-id: david_agnes
-type: love_interest
-participants:
-  - david_copperfield
-  - agnes_wickfield
-bidirectional: true
-initialState:
-  trust: 30
-  emotionalDistance: 40
-  intensity: 20
-  status: "childhood_friendship"
-  notes: "David meets Agnes Wickfield when he arrives in Canterbury to lodge at her father's house. She is twelve, keeping house with a serene wisdom beyond her years. From their first meeting, Agnes is David's 'good angel' — she steadies him, counsels him, and quietly loves him throughout his infatuation with Dora. David, blind to his true feelings, treats her as a beloved sister and confidante. The relationship is profoundly asymmetrical in awareness: Agnes knows her love from childhood; David does not recognise his until after Dora's death, years later. When he finally does, he realises that Agnes has been the steady centre of his life all along — his 'better self' made flesh."
-establishedEvent: E06
-breakingEvent: E20
+relationshipId: david_agnes
+typeId: love_interest
+initialEpoch:
+  epochId: david_agnes:epoch-1
+  lifecycle: active
+  memberships:
+    - membershipId: david_agnes:member:1
+      entityId: david_copperfield
+      role: member
+    - membershipId: david_agnes:member:2
+      entityId: agnes_wickfield
+      role: member
+  dimensions:
+    - dimensionId: trust
+      scope: global
+      value: 30
+    - dimensionId: emotionalDistance
+      scope: global
+      value: 40
+    - dimensionId: intensity
+      scope: global
+      value: 20
+    - dimensionId: status
+      scope: global
+      value: childhood_friendship
+    - dimensionId: notes
+      scope: global
+      value: "David meets Agnes Wickfield when he arrives in Canterbury to lodge at
+        her father's house. She is twelve, keeping house with a serene wisdom
+        beyond her years. From their first meeting, Agnes is David's 'good
+        angel' — she steadies him, counsels him, and quietly loves him
+        throughout his infatuation with Dora. David, blind to his true feelings,
+        treats her as a beloved sister and confidante. The relationship is
+        profoundly asymmetrical in awareness: Agnes knows her love from
+        childhood; David does not recognise his until after Dora's death, years
+        later. When he finally does, he realises that Agnes has been the steady
+        centre of his life all along — his 'better self' made flesh."

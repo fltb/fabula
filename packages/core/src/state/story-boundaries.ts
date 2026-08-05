@@ -18,6 +18,7 @@ import type {
 import type { AdjacencyList } from './dag.ts';
 import { buildStoryOrderIndex, isProvenBefore } from './dag.ts';
 import { applyInitialFacts, applyNarrativeEvent } from './event-application.ts';
+import type { RelationshipReplayContext } from './relationship-replay.js';
 
 // ---------------------------------------------------------------------------
 // Interface
@@ -30,6 +31,16 @@ export interface StoryBoundaries {
   finalState: WorldState;
 }
 
+/** Fully materialized non-entity domains present before the first story event. */
+export interface NarrativeStateBaseline {
+  readonly epistemicLedger: WorldState['epistemicLedger'];
+  readonly propositionCatalog: WorldState['propositionCatalog'];
+  readonly commonGround: WorldState['commonGround'];
+  readonly threads: WorldState['threads'];
+  readonly relationships: WorldState['relationships'];
+  readonly rules: WorldState['rules'];
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -39,9 +50,9 @@ export function emptyWorldState(): WorldState {
   return {
     entities: {},
     relationships: {},
-    knowledge: {},
     epistemicLedger: { claims: {}, bySubject: {}, byProposition: {}, actLog: [] },
-    propositionCatalog: { version: 0, propositions: {}, dependencyGraph: {} },
+    propositionCatalog: { version: 1, propositions: {}, dependencyGraph: {} },
+    commonGround: [],
     threads: {},
     rules: {},
     facts: [],
@@ -66,17 +77,27 @@ function requireCompiledEvent(
   return event;
 }
 
-function applyBaseline(
+export function applyNarrativeBaseline(
   state: WorldState,
   initialFacts: readonly Fact[],
   initialThreads: readonly { id: string }[],
   branchPath: BranchPath,
   catalogs: EntityCatalogContext,
+  baseline?: NarrativeStateBaseline,
 ): Map<string, Set<string>> {
   const lifecycleChangesByCoordinate = new Map<string, Set<string>>();
 
+  if (baseline) {
+    state.epistemicLedger = structuredClone(baseline.epistemicLedger);
+    state.propositionCatalog = structuredClone(baseline.propositionCatalog);
+    state.commonGround = structuredClone(baseline.commonGround);
+    state.threads = structuredClone(baseline.threads);
+    state.relationships = structuredClone(baseline.relationships);
+    state.rules = structuredClone(baseline.rules);
+  }
   applyInitialFacts(state, initialFacts, { branchPath, catalogs });
   for (const thread of initialThreads) {
+    if (state.threads[thread.id]) continue;
     state.threads[thread.id] = {
       threadId: thread.id as ThreadId,
       status: 'planned' as ThreadLifecycle,
@@ -116,6 +137,8 @@ export function compileStoryBoundaries(
   branchPath?: BranchPath,
   initialThreads?: readonly { id: string }[],
   coordinatesByEventId?: ReadonlyMap<string, SceneStoryCoordinate>,
+  relationshipReplayContext?: RelationshipReplayContext,
+  baseline?: NarrativeStateBaseline,
 ): StoryBoundaries {
   const selectedBranch = branchPath ?? createEmptyBranchPath();
   const threadList = initialThreads ?? [];
@@ -136,14 +159,20 @@ export function compileStoryBoundaries(
   for (const targetId of order.topologicalOrder) {
     const event = requireCompiledEvent(eventsById, targetId);
     const state = emptyWorldState();
-    const lifecycleGuard = applyBaseline(state, initialFacts, threadList, selectedBranch, catalogs);
-
-    // Replay all events that are proven-before this target, in topological order
+    const lifecycleGuard = applyNarrativeBaseline(
+      state,
+      initialFacts,
+      threadList,
+      selectedBranch,
+      catalogs,
+      baseline,
+    );
     for (const candidateId of order.topologicalOrder) {
       if (candidateId === targetId) break;
       if (isProvenBefore(candidateId, targetId, order)) {
         applyNarrativeEvent(state, requireCompiledEvent(eventsById, candidateId), {
           catalogs,
+          relationshipReplayContext,
           branchPath: selectedBranch,
           lifecycleChangesByCoordinate: lifecycleGuard,
           storyCoordinate: coordinatesByEventId?.get(candidateId),
@@ -156,6 +185,7 @@ export function compileStoryBoundaries(
 
     applyNarrativeEvent(state, event, {
       catalogs,
+      relationshipReplayContext,
       branchPath: selectedBranch,
       lifecycleChangesByCoordinate: lifecycleGuard,
       storyCoordinate: coordinatesByEventId?.get(event.id),
@@ -167,16 +197,18 @@ export function compileStoryBoundaries(
 
   const finalState = emptyWorldState();
   // Final state: replay all ordinary events after baseline
-  const finalLifecycleGuard = applyBaseline(
+  const finalLifecycleGuard = applyNarrativeBaseline(
     finalState,
     initialFacts,
     threadList,
     selectedBranch,
     catalogs,
+    baseline,
   );
   for (const eventId of order.topologicalOrder) {
     applyNarrativeEvent(finalState, requireCompiledEvent(eventsById, eventId), {
       catalogs,
+      relationshipReplayContext,
       branchPath: selectedBranch,
       lifecycleChangesByCoordinate: finalLifecycleGuard,
       storyCoordinate: coordinatesByEventId?.get(eventId),
@@ -206,6 +238,8 @@ export function compileStoryBoundariesFromGraph(
   branchPath?: BranchPath,
   initialThreads?: readonly { id: string }[],
   coordinatesByEventId?: ReadonlyMap<string, SceneStoryCoordinate>,
+  relationshipReplayContext?: RelationshipReplayContext,
+  baseline?: NarrativeStateBaseline,
 ): StoryBoundaries {
   return compileStoryBoundaries(
     events,
@@ -215,5 +249,7 @@ export function compileStoryBoundariesFromGraph(
     branchPath,
     initialThreads,
     coordinatesByEventId,
+    relationshipReplayContext,
+    baseline,
   );
 }

@@ -1,14 +1,28 @@
-id: sr_qi_qian_moyin
-type: neighborly_friendship
-participants:
-  - sr_qi
-  - qian_moyin
-bidirectional: true
-initialState:
-  trust: 80
-  emotionalDistance: 20
-  intensity: 50
-  status: "邻居知己——老大爷与老诗人"
-  notes: "祁老人与钱默吟是多年邻居。祁老人虽不识字，但他打心眼里敬重读书人，觉得钱先生是个有学问的人。钱先生也尊重祁老人——老人家虽然保守唠叨，但一辈子勤劳本分、待人厚道，是北平底层市民里最正派的那一种。两人见面常聊几句——钱先生夸祁老人硬朗，祁老人夸钱先生有学问。但战争打破了一切：钱默吟被捕后他的家就散了，祁老人眼看着钱家破败却无能为力。钱默吟出狱后变了模样——脸上的肉全没了，牙也掉了，背上的伤口触目惊心。祁老人看着这个被日本人毁了的邻居，心里又怕又恨——他第一次意识到，退让和忍耐并不能保平安。钱默吟伤愈后悄悄从事抗日活动，祁老人隐约知道，但他什么都不说——老人的沉默本身就是一种态度。"
-establishedEvent: fall_of_beiping
-breakingEvent: qian_moyin_arrested
+relationshipId: sr_qi_qian_moyin
+typeId: neighborly_friendship
+initialEpoch:
+  epochId: sr_qi_qian_moyin:epoch-1
+  lifecycle: active
+  memberships:
+    - membershipId: sr_qi_qian_moyin:member:1
+      entityId: sr_qi
+      role: member
+    - membershipId: sr_qi_qian_moyin:member:2
+      entityId: qian_moyin
+      role: member
+  dimensions:
+    - dimensionId: trust
+      scope: global
+      value: 80
+    - dimensionId: emotionalDistance
+      scope: global
+      value: 20
+    - dimensionId: intensity
+      scope: global
+      value: 50
+    - dimensionId: status
+      scope: global
+      value: 邻居知己——老大爷与老诗人
+    - dimensionId: notes
+      scope: global
+      value: 祁老人与钱默吟是多年邻居。祁老人虽不识字，但他打心眼里敬重读书人，觉得钱先生是个有学问的人。钱先生也尊重祁老人——老人家虽然保守唠叨，但一辈子勤劳本分、待人厚道，是北平底层市民里最正派的那一种。两人见面常聊几句——钱先生夸祁老人硬朗，祁老人夸钱先生有学问。但战争打破了一切：钱默吟被捕后他的家就散了，祁老人眼看着钱家破败却无能为力。钱默吟出狱后变了模样——脸上的肉全没了，牙也掉了，背上的伤口触目惊心。祁老人看着这个被日本人毁了的邻居，心里又怕又恨——他第一次意识到，退让和忍耐并不能保平安。钱默吟伤愈后悄悄从事抗日活动，祁老人隐约知道，但他什么都不说——老人的沉默本身就是一种态度。

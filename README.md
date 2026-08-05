@@ -226,7 +226,7 @@ Historical documents are explicitly marked under [`docs/archive/`](docs/archive/
 - `fixtures/most-dangerous-game/` — English, 6 scenes / 3 chapters
 - `fixtures/arcane-aftermath/` — Chinese, 2 events
 - `fixtures/zhu-fu/` and `fixtures/zhu-fu-variants/` — regression and variation suites
-- `fixtures/dream-of-red-chamber/` — 36 events (`E01`–`E36`) across 4 chapters
+- `fixtures/dream-of-red-chamber/` — [`fixture-manifest.json`](./fixtures/dream-of-red-chamber/fixture-manifest.json) is the checked current inventory: 4 chapters, E01–E36; run `npm run count:drc -- fixtures/dream-of-red-chamber --check`
 
 ## License
 

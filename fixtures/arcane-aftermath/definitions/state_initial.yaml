@@ -1,72 +1,105 @@
 info:
-  currentEra: "Post-Arcane Season 1 — 3 weeks after the battle at the Piltover bridge"
-  politicalSituation: "Council in disarray, Zaun consolidating power, hextech restricted. Three council seats unfilled, emergency sessions postponed indefinitely."
-
+  currentEra: Post-Arcane Season 1 — 3 weeks after the battle at the Piltover bridge
+  politicalSituation: Council in disarray, Zaun consolidating power, hextech
+    restricted. Three council seats unfilled, emergency sessions postponed
+    indefinitely.
 timeAnchors:
   - id: arcane_s1_end
     at: day_0
-    description: "The conclusion of the battle at the Piltover bridge. Jinx's rocket struck the council chamber."
+    description: The conclusion of the battle at the Piltover bridge. Jinx's rocket
+      struck the council chamber.
   - id: vi_and_jinx_departure
     at: day_-21
-    description: "Vi departs Piltover following Jinx's trail. Caitlyn remains in Piltover, reassigned to internal affairs."
+    description: Vi departs Piltover following Jinx's trail. Caitlyn remains in
+      Piltover, reassigned to internal affairs.
   - id: seraphine_recruitment
     at:
       offset:
         amount: -120
         unit: day
-    description: "Camille formally recruited Seraphine as a hextech-empathic consultant."
+    description: Camille formally recruited Seraphine as a hextech-empathic consultant.
   - id: hextech_crystal_inventory
     at: day_-7
-    description: "The Piltover Council conducted a classified inventory of remaining hextech crystals."
-
+    description: The Piltover Council conducted a classified inventory of remaining
+      hextech crystals.
 threads:
-  - id: T1
-    name: "Hextech Weapon Smuggling"
-    type: primary_conflict
-    description: "Someone is smuggling hextech weapons from Piltover to Zaunite chem-barons. Three crystals are unaccounted for, and intelligence suggests they are being weaponized in an underground laboratory somewhere in the Entresol. Camille has been tasked with identifying the leak and recovering the crystals before they destabilize the region entirely."
+  - threadId: T1
+    name: Hextech Weapon Smuggling
+    description: Someone is smuggling hextech weapons from Piltover to Zaunite
+      chem-barons. Three crystals are unaccounted for, and intelligence suggests
+      they are being weaponized in an underground laboratory somewhere in the
+      Entresol. Camille has been tasked with identifying the leak and recovering
+      the crystals before they destabilize the region entirely.
+    typeId: primary_conflict
+    initialPhase: opening
     targetRevealChapter: 3
     initialProgress: "0.15"
-  - id: T2
-    name: "Camille's Personal Dilemma"
-    type: character_arc
-    description: "The investigation is forcing Camille to confront uncomfortable truths about her family's involvement in Zaun's exploitation. Ferros clan shipping records show unexplained gaps that coincide with the missing crystal timeline. Camille must choose between protecting her family's legacy and upholding the justice she has dedicated her life to."
+  - threadId: T2
+    name: Camille's Personal Dilemma
+    description: The investigation is forcing Camille to confront uncomfortable
+      truths about her family's involvement in Zaun's exploitation. Ferros clan
+      shipping records show unexplained gaps that coincide with the missing
+      crystal timeline. Camille must choose between protecting her family's
+      legacy and upholding the justice she has dedicated her life to.
+    typeId: character_arc
+    initialPhase: opening
     targetRevealChapter: 5
     initialProgress: "0.10"
-  - id: T3
-    name: "Seraphine's Double Burden"
-    type: character_arc
-    description: "Seraphine is torn between her growing empathy for Camille — sensing the suppressed guilt and grief beneath the Steel Shadow's cold exterior — and her own moral objections to being used as an intelligence tool. Her empathic abilities are also revealing something darker within the Enforcer Headquarters: a conspiracy that goes beyond smuggling, and someone in the building who is concealing violent intent."
+  - threadId: T3
+    name: Seraphine's Double Burden
+    description: "Seraphine is torn between her growing empathy for Camille —
+      sensing the suppressed guilt and grief beneath the Steel Shadow's cold
+      exterior — and her own moral objections to being used as an intelligence
+      tool. Her empathic abilities are also revealing something darker within
+      the Enforcer Headquarters: a conspiracy that goes beyond smuggling, and
+      someone in the building who is concealing violent intent."
+    typeId: character_arc
+    initialPhase: opening
     targetRevealChapter: 4
     initialProgress: "0.20"
-
 worldFacts:
   - id: council_disarray
-    value: "The Piltover Council is in disarray following the attack. Three council seats are unfilled, and emergency sessions have been postponed indefinitely."
-    description: "Public knowledge about council status"
+    value: The Piltover Council is in disarray following the attack. Three council
+      seats are unfilled, and emergency sessions have been postponed
+      indefinitely.
+    description: Public knowledge about council status
   - id: jayce_withdrawn
-    value: "Jayce Talis has withdrawn from public life. His current whereabouts are unknown to the general public."
-    description: "Public knowledge about Jayce Talis"
+    value: Jayce Talis has withdrawn from public life. His current whereabouts are
+      unknown to the general public.
+    description: Public knowledge about Jayce Talis
   - id: chem_barons_consolidating
-    value: "Zaun's chem-barons are consolidating power in the power vacuum left by Silco's death."
-    description: "Enforcer intelligence on Zaun power structure"
+    value: Zaun's chem-barons are consolidating power in the power vacuum left by
+      Silco's death.
+    description: Enforcer intelligence on Zaun power structure
   - id: firelights_neutrality
-    value: "The Firelights are maintaining a cautious neutrality, monitoring both Piltover and the chem-barons."
-    description: "Enforcer surveillance on Firelight movement"
+    value: The Firelights are maintaining a cautious neutrality, monitoring both
+      Piltover and the chem-barons.
+    description: Enforcer surveillance on Firelight movement
   - id: shimmer_production_decrease
-    value: "Shimmer production has decreased by approximately 40% since Silco's death, but new, more potent variants are appearing on the market."
-    description: "Zaun underground network intelligence"
+    value: Shimmer production has decreased by approximately 40% since Silco's
+      death, but new, more potent variants are appearing on the market.
+    description: Zaun underground network intelligence
   - id: enforcer_mole
-    value: "There is a mole within the Enforcer Headquarters providing information to Zaunite interests."
-    description: "Camille's analysis — suspected with 0.65 confidence"
+    value: There is a mole within the Enforcer Headquarters providing information to
+      Zaunite interests.
+    description: Camille's analysis — suspected with 0.65 confidence
   - id: ferros_logistics_diversion
-    value: "The missing hextech crystals were likely diverted using falsified shipping manifests through Ferros clan logistics."
-    description: "Camille's private investigation — suspected with 0.50 confidence"
+    value: The missing hextech crystals were likely diverted using falsified
+      shipping manifests through Ferros clan logistics.
+    description: Camille's private investigation — suspected with 0.50 confidence
   - id: anomalous_emotional_signature
-    value: "Seraphine has detected an anomalous emotional signature within HQ — someone whose emotional frequency is 'wrong' in ways she cannot fully articulate."
-    description: "Seraphine's empathic reading — suspected with 0.45 confidence"
+    value: Seraphine has detected an anomalous emotional signature within HQ —
+      someone whose emotional frequency is 'wrong' in ways she cannot fully
+      articulate.
+    description: Seraphine's empathic reading — suspected with 0.45 confidence
   - id: vi_and_caitlyn_absence
-    value: "Vi and Caitlyn are no longer in Piltover; Vi is pursuing Jinx, and Caitlyn has taken a leave of absence."
-    description: "Enforcer records — known fact"
+    value: Vi and Caitlyn are no longer in Piltover; Vi is pursuing Jinx, and
+      Caitlyn has taken a leave of absence.
+    description: Enforcer records — known fact
   - id: ambessa_influence
-    value: "Ambessa Medarda's influence in Piltover is growing in the council's absence, though her motives remain opaque."
-    description: "Political analysis — suspected with 0.55 confidence"
+    value: Ambessa Medarda's influence in Piltover is growing in the council's
+      absence, though her motives remain opaque.
+    description: Political analysis — suspected with 0.55 confidence
+knowledge:
+  claims: []
+  commonGround: []

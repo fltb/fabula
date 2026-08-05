@@ -2,7 +2,7 @@
 // ISS — Shared Types & Utilities
 // ============================================================================
 
-import type { EntityLookup, NarrativeEvent, RuleDefinition } from '../types/index.js';
+import type { EntityLookup, NarrativeEvent, RuleDeclaration } from '../types/index.js';
 
 // ─── Placeholder Detection ──────────────────────────────────────────────────
 
@@ -29,12 +29,12 @@ export interface ISSOptions {
   entities: EntityLookup;
   events: NarrativeEvent[];
   threads: Array<{ id: string; name: string }>;
-  rules: RuleDefinition[];
+  rules: RuleDeclaration[];
 }
 
 export interface StrictValidationContext {
   entities: EntityLookup;
   events: NarrativeEvent[];
-  rules: RuleDefinition[];
+  rules: RuleDeclaration[];
   threads: Array<{ id: string; name: string }>;
 }

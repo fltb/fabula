@@ -59,6 +59,30 @@ export const ruleTypeDefinitionSchema = z
   })
   .strict();
 
+export const ruleTypeCatalogSchema = z
+  .object({
+    types: z.record(z.string(), ruleTypeDefinitionSchema),
+  })
+  .strict()
+  .superRefine((catalog, ctx) => {
+    for (const [typeId, definition] of Object.entries(catalog.types)) {
+      if (definition.typeId !== typeId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['types', typeId, 'typeId'],
+          message: `Rule type map key "${typeId}" must match internal typeId "${definition.typeId}"`,
+        });
+      }
+    }
+  });
+
+export const ruleSpecificationDeclarationSchema = z
+  .object({
+    statement: z.string(),
+    constraints: z.array(ruleConstraintSchema),
+  })
+  .strict();
+
 // ——— RuleSpecification schema ———
 
 export const ruleSpecificationSchema = z
@@ -102,6 +126,21 @@ export const ruleExceptionSchema = z
     scopeBindings: z.record(z.string(), z.unknown()),
     condition: ruleExceptionConditionSchema.optional(),
     effect: ruleExceptionEffectSchema,
+  })
+  .strict();
+
+export const ruleDeclarationSchema = z
+  .object({
+    ruleId: ruleIdSchema,
+    name: z.string(),
+    typeId: z.string(),
+    initialEpochId: ruleEpochIdSchema,
+    initialSpecificationId: ruleSpecificationIdSchema,
+    initialActivation: ruleActivationSchema,
+    initialEffectiveness: ruleEffectivenessSchema,
+    scopeBindings: z.record(z.string(), z.unknown()),
+    exceptions: z.array(ruleExceptionSchema),
+    specifications: z.record(ruleSpecificationIdSchema, ruleSpecificationDeclarationSchema),
   })
   .strict();
 
@@ -161,56 +200,4 @@ export const ruleTransactionSchema = z
   })
   .strict();
 
-// ——— RuleEffectEntry (backward-compat) schema ———
-
-export const ruleEffectEntrySchema = z
-  .object({
-    rule: z.string(),
-    effect: z.enum(['reinforce', 'weaken', 'introduce_exception', 'nullify']),
-    evidence: z.string(),
-  })
-  .strict();
-
 export const ruleExceptionStatusSchema = z.enum(['active', 'suspended', 'revoked']);
-
-// ——— RuleDefinition (YAML) — kept for backward compat ———
-
-export const ruleDefinitionSchema = z
-  .object({
-    ruleId: z.string(),
-    name: z.string(),
-    category: z.string(),
-    type: z.string(),
-    statement: z.string(),
-    ruleClass: z
-      .enum(['natural_law', 'social_norm', 'moral_principle', 'game_rule', 'legal_code'])
-      .optional(),
-    logicalConsequences: z.array(
-      z.object({
-        description: z.string(),
-        check: z
-          .object({
-            type: z.enum(['state_invariant', 'transition_constraint', 'progression']),
-            filter: z.string(),
-            assert: z.string(),
-            unlessEvent: z.string().optional(),
-            direction: z.string().optional(),
-            tolerance: z.number().optional(),
-            severity: z.enum(['error', 'warning']),
-          })
-          .strict(),
-      }),
-    ),
-    exceptions: z
-      .array(
-        z
-          .object({
-            condition: z.string(),
-            note: z.string(),
-          })
-          .strict(),
-      )
-      .optional(),
-    evidenceChain: z.array(ruleEffectEntrySchema),
-  })
-  .strict();

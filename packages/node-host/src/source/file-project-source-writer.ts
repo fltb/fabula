@@ -35,12 +35,26 @@ const approved = (path: string): boolean =>
     'nova.yaml',
     'definitions/state_initial.yaml',
     'definitions/entity-types.yaml',
+    'definitions/thread-types.yaml',
+    'definitions/propositions.yaml',
+    'definitions/relationship-types.yaml',
+    'definitions/rule-types.yaml',
     'definitions/discourse-ledger.yaml',
   ].includes(path) ||
   /^definitions\/(characters|locations|items|factions|relationships|rules|narrators|assertions)\/[^/].*\.yaml$/.test(
     path,
   ) ||
   /^chapters\/chapter_[0-9]{2}\/(_chapter|E[^/]+)\.yaml$/.test(path);
+
+const REQUIRED_ROOTS = [
+  'nova.yaml',
+  'definitions/state_initial.yaml',
+  'definitions/entity-types.yaml',
+  'definitions/thread-types.yaml',
+  'definitions/propositions.yaml',
+  'definitions/relationship-types.yaml',
+  'definitions/rule-types.yaml',
+] as const;
 
 function validateLogicalPath(path: string): void {
   if (
@@ -135,6 +149,14 @@ export class FileProjectSourceWriter implements FileProjectSourceWriterContract 
     for (const change of changes) {
       validateLogicalPath(change.logicalPath);
       validateChangeInput(change);
+      if (
+        change.afterContent === null &&
+        REQUIRED_ROOTS.some((path) => path === change.logicalPath)
+      ) {
+        throw new SourceInputError(
+          `Required authoring document cannot be deleted: ${change.logicalPath}`,
+        );
+      }
       if (seen.has(change.logicalPath)) {
         throw new SourcePathError(`Duplicate change target: ${change.logicalPath}`);
       }

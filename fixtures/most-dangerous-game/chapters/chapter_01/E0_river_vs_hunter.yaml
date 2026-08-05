@@ -1,110 +1,141 @@
 event: E0
-title: "The River and the Hunter"
+title: The River and the Hunter
 narrativeOrder: 1
 sceneType: linear
 storyTime: night_0
 pov:
   character: rainsford
   type: third_person_limited
-sceneBrief: "On the deck of a yacht cutting through the moonless Caribbean night, Whitney reproaches Rainsford's dismissive attitude toward the animals they hunt. Rainsford laughs it off: 'The world is made up of two classes — the hunters and the huntees. Luckily, you and I are hunters.' Whitney goes to bed uneasy. Rainsford, alone, hears three gunshots in the darkness. He springs to the rail to peer into the darkness — and his pipe, striking a taut rope, is torn from his lips. He lunges for it and loses his balance, falling into the blood-warm Caribbean. The yacht speeds away. Stripping off his clothes, he swims toward the direction of the shots. An animal scream is cut short by a pistol shot. After a desperate swim, Rainsford drags himself onto the rocky shore of Ship-Trap Island and collapses into exhausted sleep."
+sceneBrief: "On the deck of a yacht cutting through the moonless Caribbean
+  night, Whitney reproaches Rainsford's dismissive attitude toward the animals
+  they hunt. Rainsford laughs it off: 'The world is made up of two classes — the
+  hunters and the huntees. Luckily, you and I are hunters.' Whitney goes to bed
+  uneasy. Rainsford, alone, hears three gunshots in the darkness. He springs to
+  the rail to peer into the darkness — and his pipe, striking a taut rope, is
+  torn from his lips. He lunges for it and loses his balance, falling into the
+  blood-warm Caribbean. The yacht speeds away. Stripping off his clothes, he
+  swims toward the direction of the shots. An animal scream is cut short by a
+  pistol shot. After a desperate swim, Rainsford drags himself onto the rocky
+  shore of Ship-Trap Island and collapses into exhausted sleep."
 beats:
-  - "On the deck of a yacht cutting through the moonless Caribbean night, Whitney reproaches Rainsford's dismissive attitude toward the animals they hunt."
-  - "Rainsford laughs it off: 'The world is made up of two classes — the hunters and the huntees."
-  - "Luckily, you and I are hunters.'"
-  - "Whitney goes to bed uneasy."
-  - "Rainsford, alone, hears three gunshots in the darkness."
-  - "He springs to the rail to peer into the darkness — and his pipe, striking a taut rope, is torn from his lips."
-  - "He lunges for it and loses his balance, falling into the blood-warm Caribbean."
-  - "The yacht speeds away."
-  - "Stripping off his clothes, he swims toward the direction of the shots."
-  - "An animal scream is cut short by a pistol shot."
-  - "After a desperate swim, Rainsford drags himself onto the rocky shore of Ship-Trap Island and collapses into exhausted sleep."
+  - On the deck of a yacht cutting through the moonless Caribbean night, Whitney
+    reproaches Rainsford's dismissive attitude toward the animals they hunt.
+  - "Rainsford laughs it off: 'The world is made up of two classes — the hunters
+    and the huntees."
+  - Luckily, you and I are hunters.'
+  - Whitney goes to bed uneasy.
+  - Rainsford, alone, hears three gunshots in the darkness.
+  - He springs to the rail to peer into the darkness — and his pipe, striking a
+    taut rope, is torn from his lips.
+  - He lunges for it and loses his balance, falling into the blood-warm
+    Caribbean.
+  - The yacht speeds away.
+  - Stripping off his clothes, he swims toward the direction of the shots.
+  - An animal scream is cut short by a pistol shot.
+  - After a desperate swim, Rainsford drags himself onto the rocky shore of
+    Ship-Trap Island and collapses into exhausted sleep.
 preconditions:
   - entity: rainsford
     attribute: location
     value: yacht_caribbean
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: status
     value: alive
-    confidence: 1.0
+    confidence: 1
   - entity: whitney
     attribute: location
     value: yacht_caribbean
-    confidence: 1.0
+    confidence: 1
   - entity: yacht_caribbean
     attribute: status
     value: underway
-    confidence: 1.0
+    confidence: 1
   - entity: time
     attribute: value
     value: night_0
-    confidence: 1.0
+    confidence: 1
 expectedPostconditions:
   - entity: rainsford
     attribute: knows_ship_trap_island
     value: true
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: heard_gunshots
     value: true
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: location
     value: ship_trap_shore
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: status
     value: alive
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: condition
     value: exhausted
-    confidence: 1.0
+    confidence: 1
   - entity: rainsford
     attribute: inventory
     value:
       clothes: lost
-    confidence: 1.0
+    confidence: 1
   - entity: yacht_caribbean
     attribute: rainsford_on_board
     value: false
-    confidence: 1.0
+    confidence: 1
   - entity: whitney
     attribute: location
     value: yacht_caribbean
-    confidence: 1.0
+    confidence: 1
 threadProgress:
   - thread: T2
-    advancement: "Whitney plants the seed — 'Perhaps the jaguar does' care about fear and pain. Rainsford dismisses it. He is about to learn what it means to be prey."
+    advancement: Whitney plants the seed — 'Perhaps the jaguar does' care about fear
+      and pain. Rainsford dismisses it. He is about to learn what it means to be
+      prey.
     progressAfter: 5
     progressTotal: 100
   - thread: T1
-    advancement: "Rainsford falls overboard and reaches the island. Survival begins."
+    advancement: Rainsford falls overboard and reaches the island. Survival begins.
     progressAfter: 15
     progressTotal: 100
 foreshadowing:
   - id: hunters_and_huntees
-    hint: "Rainsford declares the world divided into hunters and huntees — a worldview that will be violently inverted when he becomes the hunted."
+    hint: Rainsford declares the world divided into hunters and huntees — a
+      worldview that will be violently inverted when he becomes the hunted.
     targetRevealChapter: 5
     thread: T2
   - id: whitney_jaguar
-    hint: "Whitney insists the jaguar feels fear. Rainsford dismisses him. This moral question is the story's thematic core."
+    hint: Whitney insists the jaguar feels fear. Rainsford dismisses him. This moral
+      question is the story's thematic core.
     targetRevealChapter: 5
     thread: T2
   - id: three_gunshots
-    hint: "Three gunshots ring out in the night — Zaroff hunting his current quarry."
+    hint: Three gunshots ring out in the night — Zaroff hunting his current quarry.
     targetRevealChapter: 5
     thread: T1
 relationshipEffects:
-  - participants:
-      - rainsford
-      - whitney
-    effect: reinforce
-    direction: friendly_debate
-    newState:
-      type: philosophical_tension
-      intensity: 0.3
+  - type: relationship_transaction
+    effectId: E0:relationship:1
+    relationshipId: rainsford_whitney
+    epochId: rainsford_whitney:epoch-1
+    membershipAfter:
+      - membershipId: rainsford_whitney:member:1
+        entityId: rainsford
+        role: member
+      - membershipId: rainsford_whitney:member:2
+        entityId: whitney
+        role: member
+    lifecycleAfter: active
+    dimensionSet:
+      - dimensionId: intensity
+        scope: global
+        value: 0.3
+    provenance: friendly_debate (philosophical_tension)
 ruleEffects: []
 styleGuidance:
-  tone: "Begin with atmospheric, languid dialogue establishing Rainsford's confidence and Whitney's unease. The gunshots are an abrupt intrusion. The fall overboard should be sudden and shocking. The swim is a desperate, methodical fight for survival. End with exhausted collapse on the shore."
+  tone: Begin with atmospheric, languid dialogue establishing Rainsford's
+    confidence and Whitney's unease. The gunshots are an abrupt intrusion. The
+    fall overboard should be sudden and shocking. The swim is a desperate,
+    methodical fight for survival. End with exhausted collapse on the shore.

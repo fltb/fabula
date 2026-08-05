@@ -1,14 +1,43 @@
-id: uriah_heep_wickfield
-type: manipulator_victim
-participants:
-  - uriah_heep
-  - mr_wickfield
-bidirectional: false
-initialState:
-  trust: -50
-  emotionalDistance: 85
-  intensity: 70
-  status: "predator_grooming_employer"
-  notes: "Uriah Heep, the 'umble clerk from a charity school, insinuates himself into Mr Wickfield's legal practice and household. Mr Wickfield, a widower burdened by grief and a drinking problem, gradually falls under Heep's power. Heep exploits Wickfield's weaknesses: he encourages his drinking, manipulates him into signing documents he does not fully understand, forges his signature, and ultimately gains control of the firm. Heep's aim is twofold: to steal the business and to force Agnes Wickfield into marriage. Mr Wickfield, broken by guilt and drink, is too weak to resist. Heep's method is psychological warfare disguised as servility — his constant professions of 'umbleness' are a weapon, a performance that makes Wickfield trust him while Heep tightens every screw. The relationship ends at the great confrontation in Wickfield's office, when Micawber exposes Heep's frauds and Traddles takes legal control. Wickfield is freed but left a diminished man. The power dynamic is a study in parasitic manipulation: the 'umble servant becomes the master, and the master becomes the dependent."
-establishedEvent: E06
-breakingEvent: E16
+relationshipId: uriah_heep_wickfield
+typeId: manipulator_victim
+initialEpoch:
+  epochId: uriah_heep_wickfield:epoch-1
+  lifecycle: active
+  memberships:
+    - membershipId: uriah_heep_wickfield:member:1
+      entityId: uriah_heep
+      role: member
+    - membershipId: uriah_heep_wickfield:member:2
+      entityId: mr_wickfield
+      role: member
+  dimensions:
+    - dimensionId: trust
+      scope: global
+      value: -50
+    - dimensionId: emotionalDistance
+      scope: global
+      value: 85
+    - dimensionId: intensity
+      scope: global
+      value: 70
+    - dimensionId: status
+      scope: global
+      value: predator_grooming_employer
+    - dimensionId: notes
+      scope: global
+      value: "Uriah Heep, the 'umble clerk from a charity school, insinuates himself
+        into Mr Wickfield's legal practice and household. Mr Wickfield, a
+        widower burdened by grief and a drinking problem, gradually falls under
+        Heep's power. Heep exploits Wickfield's weaknesses: he encourages his
+        drinking, manipulates him into signing documents he does not fully
+        understand, forges his signature, and ultimately gains control of the
+        firm. Heep's aim is twofold: to steal the business and to force Agnes
+        Wickfield into marriage. Mr Wickfield, broken by guilt and drink, is too
+        weak to resist. Heep's method is psychological warfare disguised as
+        servility — his constant professions of 'umbleness' are a weapon, a
+        performance that makes Wickfield trust him while Heep tightens every
+        screw. The relationship ends at the great confrontation in Wickfield's
+        office, when Micawber exposes Heep's frauds and Traddles takes legal
+        control. Wickfield is freed but left a diminished man. The power dynamic
+        is a study in parasitic manipulation: the 'umble servant becomes the
+        master, and the master becomes the dependent."

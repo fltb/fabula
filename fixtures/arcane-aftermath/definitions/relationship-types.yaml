@@ -1,0 +1,19 @@
+types:
+  professional_mentor_asset:
+    typeId: professional_mentor_asset
+    label: professional mentor asset
+    description: Narrative relationship type professional_mentor_asset.
+    roles:
+      - roleId: member
+        label: Member
+        minCardinality: 2
+        maxCardinality: 2
+        allowedEntityKinds:
+          - character
+          - location
+          - item
+          - faction
+          - narrator
+          - assertion
+          - concept
+    continuityImpact: preserve

@@ -1,0 +1,43 @@
+types:
+  primary:
+    typeId: primary
+    description: primary narrative thread type
+    allowedPhases:
+      - opening
+      - development
+      - resolution
+    lifecyclePolicy:
+      reopenPolicy: forbidden
+    timeDomain: story
+    stableGoals: []
+    stableMilestones: []
+    narrativeHints:
+      - Tracks primary narrative progression.
+  thematic:
+    typeId: thematic
+    description: thematic narrative thread type
+    allowedPhases:
+      - opening
+      - development
+      - resolution
+    lifecyclePolicy:
+      reopenPolicy: forbidden
+    timeDomain: story
+    stableGoals: []
+    stableMilestones: []
+    narrativeHints:
+      - Tracks thematic narrative progression.
+  antagonist:
+    typeId: antagonist
+    description: antagonist narrative thread type
+    allowedPhases:
+      - opening
+      - development
+      - resolution
+    lifecyclePolicy:
+      reopenPolicy: forbidden
+    timeDomain: story
+    stableGoals: []
+    stableMilestones: []
+    narrativeHints:
+      - Tracks antagonist narrative progression.

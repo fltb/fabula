@@ -1,0 +1,29 @@
+types:
+  primary_conflict:
+    typeId: primary_conflict
+    description: primary_conflict narrative thread type
+    allowedPhases:
+      - opening
+      - development
+      - resolution
+    lifecyclePolicy:
+      reopenPolicy: forbidden
+    timeDomain: story
+    stableGoals: []
+    stableMilestones: []
+    narrativeHints:
+      - Tracks primary_conflict narrative progression.
+  character_arc:
+    typeId: character_arc
+    description: character_arc narrative thread type
+    allowedPhases:
+      - opening
+      - development
+      - resolution
+    lifecyclePolicy:
+      reopenPolicy: forbidden
+    timeDomain: story
+    stableGoals: []
+    stableMilestones: []
+    narrativeHints:
+      - Tracks character_arc narrative progression.

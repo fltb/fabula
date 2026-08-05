@@ -8,7 +8,7 @@ import type {
   ISSGap,
   ISSSnapshot,
   NarrativeEvent,
-  RuleDefinition,
+  RuleDeclaration,
 } from '../types/index.js';
 import { type ISSOptions, isPlaceholderValue } from './types.js';
 
@@ -49,9 +49,13 @@ function calcEntityReferenceCompleteness(
     for (const post of event.postconditions) {
       referencedIds.add(post.entityId);
     }
-    for (const rel of event.relationshipEffects) {
-      for (const m of rel.membershipAfter) {
-        referencedIds.add(m.entityId);
+    for (const effect of event.relationshipEffects) {
+      const transactions =
+        effect.type === 'relationship_transaction' ? [effect] : effect.newTransactions;
+      for (const transaction of transactions) {
+        for (const membership of transaction.membershipAfter) {
+          referencedIds.add(membership.entityId);
+        }
       }
     }
   }
@@ -94,10 +98,10 @@ function calcEntityReferenceCompleteness(
 /**
  * b. 规则可执行性 (Rule Executability) — max 15, threshold 12
  *
- * Each defined rule must have at least one logicalConsequences entry with
- * a non-null `check` object so the validator can actually enforce it.
+ * Each declared rule must have at least one constraint in one of its immutable
+ * specifications so the validator can actually enforce it.
  */
-function calcRuleExecutability(rules: RuleDefinition[]): ISSDimension {
+function calcRuleExecutability(rules: RuleDeclaration[]): ISSDimension {
   const MAX = 15;
   const THRESHOLD = 12;
 
@@ -105,8 +109,8 @@ function calcRuleExecutability(rules: RuleDefinition[]): ISSDimension {
   const gaps: ISSGap[] = [];
 
   for (const rule of rules) {
-    const hasCheck = rule.logicalConsequences.some(
-      (lc) => lc.check !== null && lc.check !== undefined,
+    const hasCheck = Object.values(rule.specifications).some(
+      (specification) => specification.constraints.length > 0,
     );
     if (hasCheck) {
       rulesWithChecks++;
@@ -114,18 +118,15 @@ function calcRuleExecutability(rules: RuleDefinition[]): ISSDimension {
       gaps.push({
         id: rule.ruleId,
         suggestion:
-          `Rule "${rule.name}" (${rule.ruleId}) has no executable checks. ` +
-          `Add at least one logicalConsequences entry with a complete check definition.`,
+          `Rule "${rule.name}" (${rule.ruleId}) has no executable constraints. ` +
+          `Add at least one specification with a complete constraints definition.`,
         fixAction: 'edit_file',
-        fixTarget: `rules/${rule.ruleId}.yaml`,
+        fixTarget: `definitions/rules/${rule.ruleId}.yaml`,
         template:
-          `logicalConsequences:\n` +
-          `  - description: "..."\n` +
-          `    check:\n` +
-          `      type: state_invariant | transition_constraint | progression\n` +
-          `      filter: "..."\n` +
-          `      assert: "..."\n` +
-          `      severity: error | warning`,
+          `specifications:\n` +
+          `  <specificationId>:\n` +
+          `    statement: "..."\n` +
+          `    constraints: []`,
       });
     }
   }

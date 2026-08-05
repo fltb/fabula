@@ -1,0 +1,85 @@
+types:
+  youthful_romance:
+    typeId: youthful_romance
+    label: youthful romance
+    description: Narrative relationship type youthful_romance.
+    roles:
+      - roleId: member
+        label: Member
+        minCardinality: 2
+        maxCardinality: 2
+        allowedEntityKinds: &a1
+          - character
+          - location
+          - item
+          - faction
+          - narrator
+          - assertion
+          - concept
+    continuityImpact: preserve
+  marriage:
+    typeId: marriage
+    label: marriage
+    description: Narrative relationship type marriage.
+    roles:
+      - roleId: member
+        label: Member
+        minCardinality: 2
+        maxCardinality: 2
+        allowedEntityKinds: *a1
+    continuityImpact: preserve
+  neighborly_friendship:
+    typeId: neighborly_friendship
+    label: neighborly friendship
+    description: Narrative relationship type neighborly_friendship.
+    roles:
+      - roleId: member
+        label: Member
+        minCardinality: 2
+        maxCardinality: 2
+        allowedEntityKinds: *a1
+    continuityImpact: preserve
+  brotherhood_ideal_vs_reality:
+    typeId: brotherhood_ideal_vs_reality
+    label: brotherhood ideal vs reality
+    description: Narrative relationship type brotherhood_ideal_vs_reality.
+    roles:
+      - roleId: member
+        label: Member
+        minCardinality: 2
+        maxCardinality: 2
+        allowedEntityKinds: *a1
+    continuityImpact: preserve
+  marriage_complicity:
+    typeId: marriage_complicity
+    label: marriage complicity
+    description: Narrative relationship type marriage_complicity.
+    roles:
+      - roleId: member
+        label: Member
+        minCardinality: 2
+        maxCardinality: 2
+        allowedEntityKinds: *a1
+    continuityImpact: preserve
+  friendship_mentorship:
+    typeId: friendship_mentorship
+    label: friendship mentorship
+    description: Narrative relationship type friendship_mentorship.
+    roles:
+      - roleId: member
+        label: Member
+        minCardinality: 2
+        maxCardinality: 2
+        allowedEntityKinds: *a1
+    continuityImpact: preserve
+  event_relationship:
+    typeId: event_relationship
+    label: Event relationship
+    description: Canonical relationship type for authored event interactions.
+    roles:
+      - roleId: member
+        label: Member
+        minCardinality: 2
+        maxCardinality: 2
+        allowedEntityKinds: *a1
+    continuityImpact: preserve

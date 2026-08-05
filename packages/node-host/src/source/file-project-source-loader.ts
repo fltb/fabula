@@ -28,8 +28,17 @@ const ENTITY_DIRS = [
   'rules',
   'narrators',
   'assertions',
-];
-const ROOT_FILES = ['nova.yaml', 'definitions/state_initial.yaml', 'definitions/entity-types.yaml'];
+] as const;
+const ROOT_FILES = [
+  'nova.yaml',
+  'definitions/state_initial.yaml',
+  'definitions/entity-types.yaml',
+  'definitions/thread-types.yaml',
+  'definitions/propositions.yaml',
+  'definitions/relationship-types.yaml',
+  'definitions/rule-types.yaml',
+] as const;
+const OPTIONAL_ROOT_FILES = ['definitions/discourse-ledger.yaml'] as const;
 function parseJsonValue(value: unknown): JsonValue | null {
   if (value === undefined) return null;
   try {
@@ -66,8 +75,13 @@ export class FileProjectSourceLoader implements FileProjectSourceLoaderContract 
   load(projectRoot: string): ProjectSourceSnapshotV1 {
     const root = realpathSync(projectRoot);
     const paths = new Set<string>();
-    for (const path of ROOT_FILES) paths.add(path);
-    for (const path of ['definitions/discourse-ledger.yaml']) paths.add(path);
+    for (const path of ROOT_FILES) {
+      if (!this.existsFile(root, path)) {
+        throw new SourcePathError(`Required authoring document is missing: ${path}`);
+      }
+      paths.add(path);
+    }
+    for (const path of OPTIONAL_ROOT_FILES) paths.add(path);
     for (const dir of ENTITY_DIRS) this.collect(root, `definitions/${dir}`, paths);
     this.collectChapters(root, paths);
     const documents: SourceDocumentV1[] = [...paths]

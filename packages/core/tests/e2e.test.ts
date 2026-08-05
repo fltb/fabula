@@ -111,6 +111,8 @@ describe('1. Full Pipeline with MockProvider', () => {
       initialFacts: ir.initialFacts,
       initialThreads: ir.initialThreads,
       timeAnchors: ir.data.timeAnchors,
+      relationshipReplayContext: ir.relationshipReplayContext,
+      baseline: ir.baseline,
     });
     for (const event of ir.runtimeEvents) sm.commit(event);
 

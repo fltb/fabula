@@ -33,7 +33,7 @@ import type {
   ContextPackage,
   NarrativeEvent,
 } from '../../types/index.ts';
-import type { RuleDefinition } from '../../types/rule.ts';
+import type { RuleDeclaration } from '../../types/rule.ts';
 import type { Message } from '../types.ts';
 import { zodExample } from '../util/zod-example.ts';
 
@@ -44,7 +44,7 @@ export interface RenderAnalysisInput {
   /** Previous validation error messages for self-correction context */
   previousErrors?: string[];
   /** Active rule definitions for rule consistency checks */
-  activeRules?: RuleDefinition[];
+  activeRules?: RuleDeclaration[];
   /** Dynamic analysis requirements from active validators */
   analysisRequirements?: AnalysisBlockRequirement[];
   /** Plugin prompt decorations — appended to the prompt AND included in the

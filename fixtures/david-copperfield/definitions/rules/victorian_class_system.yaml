@@ -1,43 +1,89 @@
 ruleId: victorian_class_system
-name: "Victorian Class Hierarchy"
-category: social_structure
-type: constraint
-statement: "Victorian England was rigidly stratified by class, with near-impermeable boundaries between the gentry, the middle class, and the labouring poor. Social identity was determined by birth, income source (land versus trade versus wage labour), education, manners, and dress. Class mobility was rare and usually downward; upward mobility required either extraordinary talent, fortunate patronage, or emigration. The gentry owned land and did not work for a living; the middle class derived income from professions and commerce; the working class sold their labour. Each class had its own codes of behaviour, marriage pools, and moral expectations. David Copperfield's life traces all three stations: he is born into the minor gentry, falls into the working class as a child labourer, and rises into the middle class as a novelist."
-ruleClass: social_norm
-logicalConsequences:
-  - description: "Gentlemen do not engage in trade"
-    check:
-      type: state_invariant
-      filter: "entity.social_class='gentry' AND entity.occupation CONTAINS 'trade'"
-      assert: "entity.social_standing.decreased=true"
-      severity: warning
-  - description: "Child labour is acceptable for the poor"
-    check:
-      type: transition_constraint
-      filter: "entity.age<14 AND entity.social_class='working_poor'"
-      assert: "entity.can_be_employed=true"
-      severity: warning
-  - description: "Marriage across class boundaries causes social friction"
-    check:
-      type: state_invariant
-      filter: "entity.spouse.social_class!=entity.social_class"
-      assert: "entity.social_strain>50"
-      severity: warning
+name: Victorian Class Hierarchy
+typeId: constraint
+initialEpochId: victorian_class_system:epoch-1
+initialSpecificationId: victorian_class_system:specification-1
+initialActivation: enabled
+initialEffectiveness: full
+scopeBindings: {}
 exceptions:
-  - condition: "A gentleman who loses his fortune may fall into the middle class but retains the manners and expectations of a gentleman"
-    note: "Mr Micawber is perpetually insolvent yet never loses his gentlemanly self-regard"
-  - condition: "Extraordinary literary or professional success can lift a man into a higher class than his birth"
-    note: "David Copperfield rises from child labourer to celebrated novelist — the exception, not the rule"
-evidenceChain:
-  - rule: victorian_class_system
-    effect: reinforce
-    evidence: "David is sent to work at Murdstone and Grinby's warehouse after his mother's death — the son of a gentleman becomes a child labourer, illustrating the steepness of the fall"
-  - rule: victorian_class_system
-    effect: reinforce
-    evidence: "Steerforth, the aristocratic friend, can seduce and abandon Emily, a fisherman's niece, with near-impunity — his class position shields him from consequences her class would suffer"
-  - rule: victorian_class_system
-    effect: reinforce
-    evidence: "The Micawbers cycle through debt and poverty but never lose their claim to gentility — their accent, manners, and expectations mark them as 'fallen gentlefolk,' not working poor"
-  - rule: victorian_class_system
-    effect: reinforce
-    evidence: "David's aunt Betsey Trotwood is an eccentric gentlewoman who maintains her independence through a small fortune — her class allows her the liberty of eccentricity denied to a poor woman"
+  - exceptionId: victorian_class_system:exception:1
+    status: active
+    constraintIds:
+      - victorian_class_system:constraint:1
+      - victorian_class_system:constraint:2
+      - victorian_class_system:constraint:3
+    scopeBindings: {}
+    condition:
+      type: expression
+      expression: A gentleman who loses his fortune may fall into the middle class but
+        retains the manners and expectations of a gentleman
+    effect:
+      type: exempt
+  - exceptionId: victorian_class_system:exception:2
+    status: active
+    constraintIds:
+      - victorian_class_system:constraint:1
+      - victorian_class_system:constraint:2
+      - victorian_class_system:constraint:3
+    scopeBindings: {}
+    condition:
+      type: expression
+      expression: Extraordinary literary or professional success can lift a man into a
+        higher class than his birth
+    effect:
+      type: exempt
+specifications:
+  victorian_class_system:specification-1:
+    statement: "Victorian England was rigidly stratified by class, with
+      near-impermeable boundaries between the gentry, the middle class, and the
+      labouring poor. Social identity was determined by birth, income source
+      (land versus trade versus wage labour), education, manners, and dress.
+      Class mobility was rare and usually downward; upward mobility required
+      either extraordinary talent, fortunate patronage, or emigration. The
+      gentry owned land and did not work for a living; the middle class derived
+      income from professions and commerce; the working class sold their labour.
+      Each class had its own codes of behaviour, marriage pools, and moral
+      expectations. David Copperfield's life traces all three stations: he is
+      born into the minor gentry, falls into the working class as a child
+      labourer, and rises into the middle class as a novelist."
+    constraints:
+      - constraintId: victorian_class_system:constraint:1
+        kind: state_invariant
+        enforcement: audit
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.social_class='gentry' AND entity.occupation CONTAINS 'trade'
+            => entity.social_standing.decreased=true
+      - constraintId: victorian_class_system:constraint:2
+        kind: transition_constraint
+        enforcement: audit
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.age<14 AND entity.social_class='working_poor' =>
+            entity.can_be_employed=true
+      - constraintId: victorian_class_system:constraint:3
+        kind: state_invariant
+        enforcement: audit
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.spouse.social_class!=entity.social_class =>
+            entity.social_strain>50

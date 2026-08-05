@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyThreadTransaction,
-  convertLegacyThreadProgress,
   initializeThreadRuntimeState,
   mergeThreadStates,
 } from '../../src/state/thread-replay.js';
@@ -240,7 +239,7 @@ describe('Thread Lifecycle Transitions', () => {
     applyThreadTransaction(threads, {
       thread: 'T1',
       runId: 'run-1' as ThreadRunId,
-      goalSet: [{ goalId: 'progress', status: 'active' }],
+      goalSet: [{ goalId: 'investigation', status: 'active' }],
       provenance: 'E1',
     });
     const hash2 = threads.T1?.semanticStateHash;
@@ -248,30 +247,52 @@ describe('Thread Lifecycle Transitions', () => {
   });
 });
 
-describe('Legacy ThreadProgressEntry conversion', () => {
-  it('converts scalar progress to structured transaction — active', () => {
-    const tx = convertLegacyThreadProgress(
-      { thread: 'T1', advancement: 'Found clue', progressAfter: 3, progressTotal: 10 },
-      'E1',
-    );
+describe('Canonical ThreadTransaction replay', () => {
+  it('applies explicit lifecycle, phase, goal, milestone, and binding fields', () => {
+    const threads: Record<string, ThreadRuntimeState> = {};
+    const tx: ThreadTransaction = {
+      thread: 'T1',
+      runId: 'run-1' as ThreadRunId,
+      status: 'active',
+      phase: 'investigation',
+      goalSet: [{ goalId: 'find_clue', status: 'active' }],
+      milestoneSet: [{ milestoneId: 'first_breakthrough', status: 'achieved' }],
+      bindingsAfter: { investigator: 'hero' },
+      advancement: 'Found the first clue',
+      provenance: 'E1',
+    };
 
-    expect(tx.thread).toBe('T1');
-    expect(tx.status).toBe('active');
-    expect(tx.goalSet).toHaveLength(1);
-    expect(tx.goalSet?.[0].goalId).toBe('progress');
-    expect(tx.goalSet?.[0].status).toBe('active');
-    expect(tx.advancement).toBe('Found clue');
-    expect(tx.provenance).toBe('E1');
+    applyThreadTransaction(threads, tx);
+
+    expect(threads.T1).toMatchObject({
+      status: 'active',
+      currentRunId: 'run-1',
+      phase: 'investigation',
+      bindings: { investigator: 'hero' },
+      goalStates: { find_clue: 'active' },
+      milestoneStates: { first_breakthrough: 'achieved' },
+    });
   });
 
-  it('converts complete progress to completed status', () => {
-    const tx = convertLegacyThreadProgress(
-      { thread: 'T1', advancement: 'Finished', progressAfter: 10, progressTotal: 10 },
-      'E2',
-    );
+  it('applies a canonical completion transaction on the active run', () => {
+    const threads: Record<string, ThreadRuntimeState> = {};
+    applyThreadTransaction(threads, {
+      thread: 'T1',
+      runId: 'run-1' as ThreadRunId,
+      status: 'active',
+      provenance: 'E1',
+    });
+    applyThreadTransaction(threads, {
+      thread: 'T1',
+      runId: 'run-1' as ThreadRunId,
+      status: 'completed',
+      goalSet: [{ goalId: 'find_clue', status: 'achieved' }],
+      advancement: 'Resolved the investigation',
+      provenance: 'E2',
+    });
 
-    expect(tx.status).toBe('completed');
-    expect(tx.goalSet?.[0].status).toBe('achieved');
+    expect(threads.T1?.status).toBe('completed');
+    expect(threads.T1?.goalStates.find_clue).toBe('achieved');
   });
 });
 
@@ -324,7 +345,7 @@ describe('mergeThreadStates', () => {
       currentRunId: 'run-1' as ThreadRunId,
       phase: '',
       bindings: {},
-      goalStates: { progress: 'active' },
+      goalStates: { investigation: 'active' },
       milestoneStates: {},
       semanticStateHash: 'h0',
     };
@@ -341,13 +362,13 @@ describe('mergeThreadStates', () => {
       currentRunId: 'run-1' as ThreadRunId,
       phase: '',
       bindings: {},
-      goalStates: { progress: 'active' },
+      goalStates: { investigation: 'active' },
       milestoneStates: {},
       semanticStateHash: 'h0',
     };
     const right: ThreadRuntimeState = {
       ...left,
-      goalStates: { progress: 'achieved' },
+      goalStates: { investigation: 'achieved' },
       semanticStateHash: 'h1',
     };
 

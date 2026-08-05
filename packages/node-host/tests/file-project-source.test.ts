@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ProjectSourceSnapshotV1, SourceDocumentV1 } from '@novalistically/core';
@@ -85,6 +85,12 @@ describe('sourceHash canonical identity across Core and Node Host', () => {
       'definitions/characters/é.yaml',
     ]);
   });
+});
+
+it('rejects an incomplete source topology when a required root is absent', () => {
+  const root = project();
+  unlinkSync(join(root, 'definitions', 'rule-types.yaml'));
+  expect(() => new FileProjectSourceLoaderImpl().load(root)).toThrow(SourcePathError);
 });
 
 describe('file project source boundary', () => {
@@ -233,7 +239,11 @@ describe('file project source boundary', () => {
       'definitions/characters/null.yaml',
       'definitions/characters/z.yaml',
       'definitions/entity-types.yaml',
+      'definitions/propositions.yaml',
+      'definitions/relationship-types.yaml',
+      'definitions/rule-types.yaml',
       'definitions/state_initial.yaml',
+      'definitions/thread-types.yaml',
       'nova.yaml',
     ]);
   });
@@ -302,6 +312,29 @@ describe('file project source boundary', () => {
     ).rejects.toBeInstanceOf(SourceInputError);
     expect(readFileSync(target)).toEqual(originalBytes);
     expect(loader.load(root).sourceHash).toBe(current.sourceHash);
+  });
+  it('rejects deletion of a required root before touching bytes', async () => {
+    const root = project();
+    const loader = new FileProjectSourceLoaderImpl();
+    const current = loader.load(root);
+    const before = current.documents.find(
+      (document) => document.logicalPath === 'definitions/rule-types.yaml',
+    );
+    if (!before) throw new Error('fixture missing rule-types catalog');
+    const target = join(root, ...before.logicalPath.split('/'));
+    const originalBytes = readFileSync(target);
+    await expect(
+      new FileProjectSourceWriterImpl().apply(root, current.sourceHash, [
+        {
+          logicalPath: before.logicalPath,
+          beforeContent: before.content,
+          beforeHash: before.contentHash,
+          afterContent: null,
+          afterHash: null,
+        },
+      ]),
+    ).rejects.toBeInstanceOf(SourceInputError);
+    expect(readFileSync(target)).toEqual(originalBytes);
   });
   it('serializes concurrent source compare-and-swap writers', async () => {
     const root = project();

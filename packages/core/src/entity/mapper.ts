@@ -1,3 +1,4 @@
+import type { ZodType } from 'zod';
 import { compileGameDialogueTree } from '../branch/game-dialogue-tree.ts';
 import type { ProjectSourceSnapshotV1 } from '../contracts/source.js';
 import { ConfigError } from '../errors.ts';
@@ -12,32 +13,50 @@ import {
   narratorAssertionSchema,
   narratorProfileSchema,
   plannedDiscourseLedgerSourceSchema,
-  relationshipDefinitionSchema,
-  ruleDefinitionSchema,
+  propositionCatalogSchema,
+  relationshipDeclarationSchema,
+  relationshipTypeCatalogSchema,
+  ruleDeclarationSchema,
+  ruleTypeCatalogSchema,
+  threadTypeCatalogSchema,
   worldInitialStateSchema,
 } from '../schemas/index.js';
 import { compilePlannedDiscourseLedger } from '../state/discourse-ledger.ts';
+import { validatePropositionCatalog } from '../state/knowledge-replay.ts';
 import type { NarrativeEllipsis } from '../types/corpus.js';
 import type {
   ChapterMetadata,
   CharacterDefinition,
+  ClaimEvidenceRecord,
   EntityTypeCatalogSource,
   EventFile,
   Fact,
   FactionDefinition,
   ItemDefinition,
+  KnowledgeTransaction,
   LocationDefinition,
+  Membership,
   NarrativeEllipsisFile,
   NarrativeEvent,
   NarratorAssertion,
   NarratorProfile,
   PlannedDiscourseLedgerSource,
-  RelationshipDefinition,
-  RuleDefinition,
+  PropositionCatalog,
+  RelationshipDeclaration,
+  RelationshipEffect,
+  RelationshipTypeCatalog,
+  RuleDeclaration,
+  RuleTypeCatalog,
+  RuntimeKnowledgeTransaction,
+  SourceClaimEvidence,
+  ThreadProgressEntry,
+  ThreadRunId,
+  ThreadTransaction,
+  ThreadTypeCatalog,
   TimeAnchor,
   WorldInitialState,
 } from '../types/index.js';
-import { convertRelationshipChange } from '../types/relationship.js';
+import { compileThreadCatalog } from './thread-catalog-compiler.js';
 import { factIdFrom, parseStoryTimestamp, resolveTemporalContext } from './timestamp.js';
 import type { ProjectData } from './types.js';
 import { loadProjectConfig, readYamlFile, readYamlFilesInDir } from './yaml-loader.js';
@@ -46,15 +65,391 @@ import { loadProjectConfig, readYamlFile, readYamlFilesInDir } from './yaml-load
 // EntityMapper — reads YAML definitions and maps to internal types
 // ============================================================================
 
+/**
+ * Read canonical declaration documents from a directory and require the
+ * file basename to equal the declaration id (map-key/file-ID validation).
+ */
+function readDeclarationsFromDir<T extends { [key in IdKey]: string }, IdKey extends string>(
+  dirPath: string,
+  schema: ZodType<T>,
+  snapshot: ProjectSourceSnapshotV1,
+  idKey: IdKey,
+): T[] {
+  return readYamlFilesInDir(dirPath, schema, snapshot)
+    .map((declaration) => {
+      const id = declaration[idKey];
+      const expected = `${dirPath}/${id}.yaml`;
+      if (!snapshot.documents.some((document) => document.logicalPath === expected)) {
+        throw new ConfigError(
+          `Declaration file name does not match ${idKey} "${id}": expected ${expected}`,
+          { path: `${dirPath}/${id}.yaml` },
+        );
+      }
+      return declaration;
+    })
+    .sort((a, b) => a[idKey].localeCompare(b[idKey]));
+}
+
+function collectEntityKinds(
+  characters: readonly CharacterDefinition[],
+  locations: readonly LocationDefinition[],
+  items: readonly ItemDefinition[],
+  factions: readonly FactionDefinition[],
+  worldInitialState: WorldInitialState,
+): ReadonlyMap<string, string> {
+  const kinds = new Map<string, string>();
+  const add = (id: string, kind: string): void => {
+    if (kinds.has(id)) {
+      throw new ConfigError(`Duplicate declared entity "${id}"`, {
+        path: `entity:${id}`,
+        phase: 'catalog',
+      });
+    }
+    kinds.set(id, kind);
+  };
+  for (const character of characters) add(character.id, 'character');
+  for (const location of locations) add(location.id, 'location');
+  for (const item of items) add(item.id, 'item');
+  for (const faction of factions) add(faction.id, 'faction');
+  for (const fact of worldInitialState.worldFacts) add(fact.id, 'concept');
+  return kinds;
+}
+
+function requireKnownEntity(
+  entityId: string,
+  entityKinds: ReadonlyMap<string, string>,
+  path: string,
+): void {
+  if (!entityKinds.has(entityId)) {
+    throw new ConfigError(`Unknown entity "${entityId}"`, { path, phase: 'catalog' });
+  }
+}
+
+function validatePropositions(
+  catalog: PropositionCatalog,
+  entityKinds: ReadonlyMap<string, string>,
+): void {
+  try {
+    validatePropositionCatalog(catalog);
+  } catch (error) {
+    throw new ConfigError(
+      `Invalid proposition catalog: ${error instanceof Error ? error.message : 'invalid dependency graph'}`,
+      { path: 'definitions/propositions.yaml', phase: 'catalog' },
+    );
+  }
+  for (const [propositionId, proposition] of Object.entries(catalog.propositions)) {
+    switch (proposition.kind) {
+      case 'grounded':
+        requireKnownEntity(
+          proposition.entityId,
+          entityKinds,
+          `definitions/propositions.yaml:propositions.${propositionId}.entityId`,
+        );
+        break;
+      case 'epistemic':
+        requireKnownEntity(
+          proposition.subject,
+          entityKinds,
+          `definitions/propositions.yaml:propositions.${propositionId}.subject`,
+        );
+        if (!catalog.propositions[proposition.propositionId]) {
+          throw new ConfigError(`Unknown proposition "${proposition.propositionId}"`, {
+            path: `definitions/propositions.yaml:propositions.${propositionId}.propositionId`,
+            phase: 'catalog',
+          });
+        }
+        break;
+      case 'act':
+        requireKnownEntity(
+          proposition.actor,
+          entityKinds,
+          `definitions/propositions.yaml:propositions.${propositionId}.actor`,
+        );
+        for (const recipient of proposition.recipients) {
+          requireKnownEntity(
+            recipient,
+            entityKinds,
+            `definitions/propositions.yaml:propositions.${propositionId}.recipients`,
+          );
+        }
+        for (const contentId of proposition.contentPropositions) {
+          if (!catalog.propositions[contentId]) {
+            throw new ConfigError(`Unknown proposition "${contentId}"`, {
+              path: `definitions/propositions.yaml:propositions.${propositionId}.contentPropositions`,
+              phase: 'catalog',
+            });
+          }
+        }
+        break;
+      case 'intensional':
+        break;
+    }
+  }
+}
+
+function validateInitialKnowledge(
+  worldInitialState: WorldInitialState,
+  propositionCatalog: PropositionCatalog,
+  entityKinds: ReadonlyMap<string, string>,
+): void {
+  for (const claim of worldInitialState.knowledge.claims) {
+    requireKnownEntity(
+      claim.subject,
+      entityKinds,
+      'definitions/state_initial.yaml:knowledge.claims',
+    );
+    if (!propositionCatalog.propositions[claim.propositionId]) {
+      throw new ConfigError(`Unknown proposition "${claim.propositionId}"`, {
+        path: 'definitions/state_initial.yaml:knowledge.claims',
+        phase: 'catalog',
+      });
+    }
+  }
+  for (const record of worldInitialState.knowledge.commonGround) {
+    if (!propositionCatalog.propositions[record.propositionId]) {
+      throw new ConfigError(`Unknown proposition "${record.propositionId}"`, {
+        path: 'definitions/state_initial.yaml:knowledge.commonGround',
+        phase: 'catalog',
+      });
+    }
+    for (const participant of record.participants) {
+      requireKnownEntity(
+        participant,
+        entityKinds,
+        'definitions/state_initial.yaml:knowledge.commonGround',
+      );
+    }
+  }
+}
+
+function validateRelationshipDeclarations(
+  declarations: readonly RelationshipDeclaration[],
+  typeCatalog: RelationshipTypeCatalog,
+  entityKinds: ReadonlyMap<string, string>,
+): void {
+  const seen = new Set<string>();
+  for (const declaration of declarations) {
+    if (seen.has(declaration.relationshipId)) {
+      throw new ConfigError(`Duplicate relationship "${declaration.relationshipId}"`, {
+        path: `definitions/relationships/${declaration.relationshipId}.yaml`,
+        phase: 'catalog',
+      });
+    }
+    seen.add(declaration.relationshipId);
+    const type = typeCatalog.types[declaration.typeId];
+    if (!type) {
+      throw new ConfigError(`Unknown relationship type "${declaration.typeId}"`, {
+        path: `definitions/relationships/${declaration.relationshipId}.yaml:typeId`,
+        phase: 'catalog',
+      });
+    }
+    const roles = new Map(type.roles.map((role) => [role.roleId, role]));
+    const memberships = new Set<string>();
+    const cardinality = new Map<string, number>();
+    for (const membership of declaration.initialEpoch.memberships) {
+      if (memberships.has(membership.membershipId)) {
+        throw new ConfigError(`Duplicate membership "${membership.membershipId}"`, {
+          path: `definitions/relationships/${declaration.relationshipId}.yaml:initialEpoch.memberships`,
+          phase: 'catalog',
+        });
+      }
+      memberships.add(membership.membershipId);
+      requireKnownEntity(
+        membership.entityId,
+        entityKinds,
+        `definitions/relationships/${declaration.relationshipId}.yaml:initialEpoch.memberships`,
+      );
+      if (!membership.role || !roles.has(membership.role)) {
+        throw new ConfigError(`Unknown relationship role "${membership.role ?? '<missing>'}"`, {
+          path: `definitions/relationships/${declaration.relationshipId}.yaml:initialEpoch.memberships`,
+          phase: 'catalog',
+        });
+      }
+      const role = roles.get(membership.role);
+      if (!role) continue;
+      if (!role.allowedEntityKinds.includes(entityKinds.get(membership.entityId) ?? '')) {
+        throw new ConfigError(
+          `Entity "${membership.entityId}" is not permitted in role "${role.roleId}"`,
+          {
+            path: `definitions/relationships/${declaration.relationshipId}.yaml:initialEpoch.memberships`,
+            phase: 'catalog',
+          },
+        );
+      }
+      cardinality.set(role.roleId, (cardinality.get(role.roleId) ?? 0) + 1);
+    }
+    const occupiedRolesByGroup = new Map<string, Set<string>>();
+    for (const role of type.roles) {
+      const count = cardinality.get(role.roleId) ?? 0;
+      if (count < role.minCardinality || count > role.maxCardinality) {
+        throw new ConfigError(`Invalid cardinality for relationship role "${role.roleId}"`, {
+          path: `definitions/relationships/${declaration.relationshipId}.yaml:initialEpoch.memberships`,
+          phase: 'catalog',
+        });
+      }
+      if (role.exclusiveGroup && count > 0) {
+        const occupied = occupiedRolesByGroup.get(role.exclusiveGroup) ?? new Set<string>();
+        occupied.add(role.roleId);
+        occupiedRolesByGroup.set(role.exclusiveGroup, occupied);
+      }
+    }
+    for (const [group, occupiedRoles] of occupiedRolesByGroup) {
+      if (occupiedRoles.size > 1) {
+        throw new ConfigError(`Exclusive relationship role group "${group}" has multiple roles`, {
+          path: `definitions/relationships/${declaration.relationshipId}.yaml:initialEpoch.memberships`,
+          phase: 'catalog',
+        });
+      }
+    }
+    for (const dimension of declaration.initialEpoch.dimensions) {
+      if (dimension.scope === 'role' && (!dimension.roleId || !roles.has(dimension.roleId))) {
+        throw new ConfigError(`Invalid role-scoped dimension "${dimension.dimensionId}"`, {
+          path: `definitions/relationships/${declaration.relationshipId}.yaml:initialEpoch.dimensions`,
+          phase: 'catalog',
+        });
+      }
+      if (
+        dimension.scope === 'member' &&
+        (!dimension.memberId || !memberships.has(dimension.memberId))
+      ) {
+        throw new ConfigError(`Invalid member-scoped dimension "${dimension.dimensionId}"`, {
+          path: `definitions/relationships/${declaration.relationshipId}.yaml:initialEpoch.dimensions`,
+          phase: 'catalog',
+        });
+      }
+      if (dimension.scope === 'positional' && !dimension.position) {
+        throw new ConfigError(`Invalid positional dimension "${dimension.dimensionId}"`, {
+          path: `definitions/relationships/${declaration.relationshipId}.yaml:initialEpoch.dimensions`,
+          phase: 'catalog',
+        });
+      }
+    }
+  }
+}
+
+function validateRuleBindings(
+  bindings: Record<string, unknown>,
+  entityKinds: ReadonlyMap<string, string>,
+  path: string,
+): void {
+  for (const [binding, value] of Object.entries(bindings)) {
+    if (typeof value === 'string') requireKnownEntity(value, entityKinds, `${path}.${binding}`);
+  }
+}
+
+function validateRuleDeclarations(
+  declarations: readonly RuleDeclaration[],
+  typeCatalog: RuleTypeCatalog,
+  entityKinds: ReadonlyMap<string, string>,
+): void {
+  const seen = new Set<string>();
+  for (const declaration of declarations) {
+    if (seen.has(declaration.ruleId)) {
+      throw new ConfigError(`Duplicate rule "${declaration.ruleId}"`, {
+        path: `definitions/rules/${declaration.ruleId}.yaml`,
+        phase: 'catalog',
+      });
+    }
+    seen.add(declaration.ruleId);
+    if (!typeCatalog.types[declaration.typeId]) {
+      throw new ConfigError(`Unknown rule type "${declaration.typeId}"`, {
+        path: `definitions/rules/${declaration.ruleId}.yaml:typeId`,
+        phase: 'catalog',
+      });
+    }
+    if (!declaration.specifications[declaration.initialSpecificationId]) {
+      throw new ConfigError(
+        `Unknown initial specification "${declaration.initialSpecificationId}"`,
+        {
+          path: `definitions/rules/${declaration.ruleId}.yaml:initialSpecificationId`,
+          phase: 'catalog',
+        },
+      );
+    }
+    validateRuleBindings(
+      declaration.scopeBindings,
+      entityKinds,
+      `definitions/rules/${declaration.ruleId}.yaml:scopeBindings`,
+    );
+    const constraintIds = new Set(
+      Object.values(declaration.specifications).flatMap((specification) =>
+        specification.constraints.map((constraint) => constraint.constraintId),
+      ),
+    );
+    for (const exception of declaration.exceptions) {
+      validateRuleBindings(
+        exception.scopeBindings,
+        entityKinds,
+        `definitions/rules/${declaration.ruleId}.yaml:exceptions.${exception.exceptionId}.scopeBindings`,
+      );
+      for (const constraintId of exception.constraintIds) {
+        if (!constraintIds.has(constraintId)) {
+          throw new ConfigError(`Unknown rule constraint "${constraintId}"`, {
+            path: `definitions/rules/${declaration.ruleId}.yaml:exceptions.${exception.exceptionId}`,
+            phase: 'catalog',
+          });
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Memberships of a canonical relationship effect for participant extraction.
+ */
+function relationshipMemberships(effect: RelationshipEffect): Membership[] {
+  return effect.type === 'relationship_transaction'
+    ? effect.membershipAfter
+    : effect.newTransactions.flatMap((transaction) => transaction.membershipAfter);
+}
+
+/**
+ * Normalize authored knowledge transactions into runtime form: parse authored
+ * timestamps once (shared with Fact validity), stamp the event id, and keep
+ * only explicit writes/acts/common ground.
+ */
+function normalizeKnowledgeTransactions(eventFile: EventFile): RuntimeKnowledgeTransaction[] {
+  return (eventFile.knowledgeTransactions ?? []).map((transaction: KnowledgeTransaction) => {
+    switch (transaction.type) {
+      case 'claim_write':
+        return {
+          ...transaction,
+          evidence: transaction.evidence.map(
+            (entry: SourceClaimEvidence): ClaimEvidenceRecord => ({
+              ...entry,
+              acquiredAt: parseStoryTimestamp(entry.acquiredAt),
+            }),
+          ),
+        };
+      case 'information_act':
+        return {
+          ...transaction,
+          timestamp: parseStoryTimestamp(transaction.timestamp),
+          eventId: eventFile.event,
+        };
+      case 'common_ground':
+        return {
+          ...transaction,
+          establishedAt: parseStoryTimestamp(transaction.establishedAt),
+          provenance: eventFile.event,
+        };
+      default:
+        throw new ConfigError('Unsupported knowledge transaction', { phase: 'knowledge' });
+    }
+  });
+}
+
 export class EntityMapper {
-  private snapshot: ProjectSourceSnapshotV1;
+  private readonly snapshot: ProjectSourceSnapshotV1;
   private narratorProfiles: Record<string, NarratorProfile> = {};
+  private projectData: ProjectData | null = null;
 
   constructor(snapshot: ProjectSourceSnapshotV1) {
     this.snapshot = snapshot;
   }
 
   loadProject(): ProjectData {
+    if (this.projectData) return this.projectData;
     const snapshot = this.snapshot;
     const config = loadProjectConfig(snapshot);
     const defsDir = 'definitions';
@@ -63,16 +458,6 @@ export class EntityMapper {
       characterDefinitionSchema,
       snapshot,
     ) as CharacterDefinition[];
-    const relationships = readYamlFilesInDir(
-      `${defsDir}/relationships`,
-      relationshipDefinitionSchema,
-      snapshot,
-    ) as RelationshipDefinition[];
-    const rules = readYamlFilesInDir(
-      `${defsDir}/rules`,
-      ruleDefinitionSchema,
-      snapshot,
-    ) as RuleDefinition[];
     const locations = readYamlFilesInDir(
       `${defsDir}/locations`,
       locationDefinitionSchema,
@@ -126,20 +511,77 @@ export class EntityMapper {
       schema: entityTypeCatalogSourceSchema,
       snapshot,
     }) as EntityTypeCatalogSource;
+    const threadTypeCatalog = readYamlFile({
+      logicalPath: 'definitions/thread-types.yaml',
+      schema: threadTypeCatalogSchema,
+      snapshot,
+    }) as ThreadTypeCatalog;
+    const propositionCatalog = readYamlFile({
+      logicalPath: 'definitions/propositions.yaml',
+      schema: propositionCatalogSchema,
+      snapshot,
+    }) as PropositionCatalog;
+    const relationshipTypeCatalog = readYamlFile({
+      logicalPath: 'definitions/relationship-types.yaml',
+      schema: relationshipTypeCatalogSchema,
+      snapshot,
+    }) as RelationshipTypeCatalog;
+    const ruleTypeCatalog = readYamlFile({
+      logicalPath: 'definitions/rule-types.yaml',
+      schema: ruleTypeCatalogSchema,
+      snapshot,
+    }) as RuleTypeCatalog;
     const worldInitialState = readYamlFile({
       logicalPath: 'definitions/state_initial.yaml',
       schema: worldInitialStateSchema,
       snapshot,
-    }) as WorldInitialState | null;
+    }) as WorldInitialState;
+    const { declarations: threadDeclarations } = compileThreadCatalog(
+      threadTypeCatalog,
+      worldInitialState.threads ?? [],
+    );
+    void threadDeclarations;
+    const relationshipDeclarations = readDeclarationsFromDir(
+      `${defsDir}/relationships`,
+      relationshipDeclarationSchema,
+      snapshot,
+      'relationshipId',
+    ) as RelationshipDeclaration[];
+    const ruleDeclarations = readDeclarationsFromDir(
+      `${defsDir}/rules`,
+      ruleDeclarationSchema,
+      snapshot,
+      'ruleId',
+    ) as RuleDeclaration[];
+    const entityKinds = collectEntityKinds(
+      characters,
+      locations,
+      items,
+      factions,
+      worldInitialState,
+    );
+    validatePropositions(propositionCatalog, entityKinds);
+    validateInitialKnowledge(worldInitialState, propositionCatalog, entityKinds);
+    validateRelationshipDeclarations(
+      relationshipDeclarations,
+      relationshipTypeCatalog,
+      entityKinds,
+    );
+    validateRuleDeclarations(ruleDeclarations, ruleTypeCatalog, entityKinds);
     const timeAnchors: TimeAnchor[] =
-      worldInitialState?.timeAnchors?.map((anchor) => {
+      worldInitialState.timeAnchors?.map((anchor) => {
         const at = parseStoryTimestamp(anchor.at);
         if (at.type === 'indeterminate')
           throw new ConfigError(`Time anchor '${anchor.id}' must have a locatable timestamp`, {
             path: `anchor:${anchor.id}.at`,
             phase: 'timestamp',
           });
-        return { id: anchor.id, at, description: anchor.description };
+        return {
+          id: anchor.id,
+          at,
+          description: anchor.description,
+          significance: anchor.significance,
+        };
       }) ?? [];
     const chapters = new Map<number, { metadata: ChapterMetadata | null; events: EventFile[] }>();
     const chapterPaths = [
@@ -177,11 +619,9 @@ export class EntityMapper {
       }
       chapters.set(chapterNum, { metadata, events });
     }
-    return {
+    this.projectData = {
       config,
       characters,
-      relationships,
-      rules,
       locations,
       items,
       factions,
@@ -192,7 +632,87 @@ export class EntityMapper {
       discourseLedger,
       narratorAssertions,
       entityTypeCatalogSource,
+      threadTypeCatalog,
+      propositionCatalog,
+      relationshipTypeCatalog,
+      ruleTypeCatalog,
+      relationshipDeclarations,
+      ruleDeclarations,
     };
+    return this.projectData;
+  }
+
+  /**
+   * Map scalar EventFile threadProgress once into catalog-checked
+   * ThreadTransaction(s). Rejects unknown declarations/types and duplicate
+   * thread writes per event; never a second state source at replay time.
+   */
+  private normalizeThreadProgress(eventFile: EventFile): ThreadTransaction[] {
+    const entries = eventFile.threadProgress ?? [];
+    if (entries.length === 0) return [];
+    const data = this.requireProjectData();
+    const declarationByThread = new Map(
+      (data.worldInitialState.threads ?? []).map((thread) => [thread.threadId, thread]),
+    );
+    const seen = new Set<string>();
+    return entries.map((tp: ThreadProgressEntry) => {
+      if (seen.has(tp.thread)) {
+        throw new ConfigError(
+          `Duplicate thread write for "${tp.thread}" in event "${eventFile.event}"`,
+          {
+            eventId: eventFile.event,
+            path: `event:${eventFile.event}.threadProgress.${tp.thread}`,
+            phase: 'thread_progress',
+          },
+        );
+      }
+      seen.add(tp.thread);
+      const declaration = declarationByThread.get(tp.thread);
+      if (!declaration) {
+        throw new ConfigError(
+          `Unknown thread "${tp.thread}" in event "${eventFile.event}" — not declared in state_initial.yaml`,
+          {
+            eventId: eventFile.event,
+            path: `event:${eventFile.event}.threadProgress.${tp.thread}`,
+            phase: 'thread_progress',
+          },
+        );
+      }
+      const typeDef = data.threadTypeCatalog.types[declaration.typeId];
+      if (!typeDef) {
+        throw new ConfigError(
+          `Thread "${tp.thread}" references unknown thread type "${declaration.typeId}"`,
+          {
+            eventId: eventFile.event,
+            path: `event:${eventFile.event}.threadProgress.${tp.thread}`,
+            phase: 'thread_progress',
+          },
+        );
+      }
+      const completed = tp.progressAfter >= tp.progressTotal;
+      return {
+        thread: tp.thread,
+        runId: `run-${tp.thread}` as ThreadRunId,
+        status: completed ? ('completed' as const) : ('active' as const),
+        phase: typeDef.allowedPhases[0] ?? '',
+        goalSet: typeDef.stableGoals.map((goal) => ({
+          goalId: goal.goalId,
+          status: completed ? ('achieved' as const) : ('active' as const),
+        })),
+        milestoneSet: [],
+        provenance: eventFile.event,
+        advancement: tp.advancement,
+      };
+    });
+  }
+
+  private requireProjectData(): ProjectData {
+    if (!this.projectData) {
+      throw new ConfigError('Project must be loaded before mapping events', {
+        phase: 'mapper',
+      });
+    }
+    return this.projectData;
   }
 
   /** Map EventFile to NarrativeEvent (internal type) */
@@ -234,8 +754,7 @@ export class EntityMapper {
     for (const pc of preconditions) participantSet.add(pc.entityId);
     for (const pc of postconditions) participantSet.add(pc.entityId);
     for (const re of eventFile.relationshipEffects ?? []) {
-      participantSet.add(re.participants[0]);
-      participantSet.add(re.participants[1]);
+      for (const membership of relationshipMemberships(re)) participantSet.add(membership.entityId);
     }
     if (eventFile.pov?.character) participantSet.add(eventFile.pov.character);
 
@@ -263,26 +782,19 @@ export class EntityMapper {
       preconditions,
       postconditions,
       choices: eventFile.choices,
-      threadProgress: (eventFile.threadProgress ?? []).map((tp) => ({
-        thread: tp.thread,
-        advancement: tp.advancement,
-        progressAfter: tp.progressAfter,
-        progressTotal: tp.progressTotal,
-      })),
+      threadProgress: this.normalizeThreadProgress(eventFile),
+      greyLines: eventFile.greyLines,
       foreshadowing: (eventFile.foreshadowing ?? []).map((f) => ({
         id: f.id,
         hint: f.hint,
         targetRevealChapter: f.targetRevealChapter,
         thread: f.thread,
       })),
-      relationshipEffects: (eventFile.relationshipEffects ?? []).map((re, idx) =>
-        convertRelationshipChange(re, eventFile.event, idx),
-      ),
-      ruleEffects: (eventFile.ruleEffects ?? []).map((re) => ({
-        rule: re.rule,
-        effect: re.effect,
-        evidence: re.evidence,
-      })),
+      relationshipEffects: eventFile.relationshipEffects ?? [],
+      ...(eventFile.knowledgeTransactions && eventFile.knowledgeTransactions.length > 0
+        ? { knowledgeTransactions: normalizeKnowledgeTransactions(eventFile) }
+        : {}),
+      ruleEffects: eventFile.ruleEffects ?? [],
       styleGuidance: eventFile.styleGuidance,
       source: 'event_file',
       causalPredecessors: eventFile.causalPredecessors,

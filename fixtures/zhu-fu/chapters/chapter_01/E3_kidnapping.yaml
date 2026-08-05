@@ -1,5 +1,5 @@
 event: E3
-title: "被卖改嫁——出格的反抗"
+title: 被卖改嫁——出格的反抗
 narrativeOrder: 4
 sceneType: flashback
 storyTime: spring_after_escape
@@ -7,25 +7,25 @@ narrationTime: new_year_eve
 tense: past
 discourseMode: action
 arcPosition: rising
-emotionalValence: "terror_resistance_acceptance"
-conflictType: "person_vs_society"
+emotionalValence: terror_resistance_acceptance
+conflictType: person_vs_society
 resolutionType: negative_resolution
 pov:
   character: narrator
   type: first_person
-sceneBrief: "新年才过，祥林嫂在河边淘米时看见对岸一个男人——像是夫家的堂伯——她失色地缩回。过了几天，婆婆带人来了：先是声称要她回去帮忙春耕。四叔说'既是她的婆婆要她回去，那有什么话可说的呢？'婆婆结清了她的工钱（一千七百五十文，她一文未花全存着），收拾了铺盖衣物。那天上午，祥林嫂在河边淘米时，一只白篷船突然靠岸，两个男人跳出来把她抱住，塞进船里——她不停嚎骂，被堵了嘴。卫老婆子从船舱里钻出来——原来她是同谋。祥林嫂被捆着抬上花轿，一路嚎哭到贺家坳。拜堂时她一头撞在香案角上，额上碰了一个大窟窿，鲜血直流。人们七手八脚把她按住，强行拜了堂。然而到了年底，卫老婆子来拜年时说：她生了个儿子，母子都胖了——'她真是交了好运了'。贺老六有力气，会做活，房子是自家的，上头没有婆婆——她度过了两年安稳日子。"
+sceneBrief: 新年才过，祥林嫂在河边淘米时看见对岸一个男人——像是夫家的堂伯——她失色地缩回。过了几天，婆婆带人来了：先是声称要她回去帮忙春耕。四叔说'既是她的婆婆要她回去，那有什么话可说的呢？'婆婆结清了她的工钱（一千七百五十文，她一文未花全存着），收拾了铺盖衣物。那天上午，祥林嫂在河边淘米时，一只白篷船突然靠岸，两个男人跳出来把她抱住，塞进船里——她不停嚎骂，被堵了嘴。卫老婆子从船舱里钻出来——原来她是同谋。祥林嫂被捆着抬上花轿，一路嚎哭到贺家坳。拜堂时她一头撞在香案角上，额上碰了一个大窟窿，鲜血直流。人们七手八脚把她按住，强行拜了堂。然而到了年底，卫老婆子来拜年时说：她生了个儿子，母子都胖了——'她真是交了好运了'。贺老六有力气，会做活，房子是自家的，上头没有婆婆——她度过了两年安稳日子。
 beats:
-  - "新年才过，祥林嫂在河边淘米时看见对岸一个男人——像是夫家的堂伯——她失色地缩回。"
-  - "过了几天，婆婆带人来了：先是声称要她回去帮忙春耕。"
-  - "四叔说'既是她的婆婆要她回去，那有什么话可说的呢？"
+  - 新年才过，祥林嫂在河边淘米时看见对岸一个男人——像是夫家的堂伯——她失色地缩回。
+  - 过了几天，婆婆带人来了：先是声称要她回去帮忙春耕。
+  - 四叔说'既是她的婆婆要她回去，那有什么话可说的呢？
   - "'婆婆结清了她的工钱（一千七百五十文，她一文未花全存着），收拾了铺盖衣物。"
-  - "那天上午，祥林嫂在河边淘米时，一只白篷船突然靠岸，两个男人跳出来把她抱住，塞进船里——她不停嚎骂，被堵了嘴。"
-  - "卫老婆子从船舱里钻出来——原来她是同谋。"
-  - "祥林嫂被捆着抬上花轿，一路嚎哭到贺家坳。"
-  - "拜堂时她一头撞在香案角上，额上碰了一个大窟窿，鲜血直流。"
-  - "人们七手八脚把她按住，强行拜了堂。"
-  - "然而到了年底，卫老婆子来拜年时说：她生了个儿子，母子都胖了——'她真是交了好运了'。"
-  - "贺老六有力气，会做活，房子是自家的，上头没有婆婆——她度过了两年安稳日子。"
+  - 那天上午，祥林嫂在河边淘米时，一只白篷船突然靠岸，两个男人跳出来把她抱住，塞进船里——她不停嚎骂，被堵了嘴。
+  - 卫老婆子从船舱里钻出来——原来她是同谋。
+  - 祥林嫂被捆着抬上花轿，一路嚎哭到贺家坳。
+  - 拜堂时她一头撞在香案角上，额上碰了一个大窟窿，鲜血直流。
+  - 人们七手八脚把她按住，强行拜了堂。
+  - 然而到了年底，卫老婆子来拜年时说：她生了个儿子，母子都胖了——'她真是交了好运了'。
+  - 贺老六有力气，会做活，房子是自家的，上头没有婆婆——她度过了两年安稳日子。
 preconditions:
   - entity: xianglins_wife
     attribute: location
@@ -37,19 +37,19 @@ expectedPostconditions:
   - entity: xianglins_wife
     attribute: location
     value: he_family_hollow
-    confidence: 1.0
+    confidence: 1
   - entity: xianglins_wife
     attribute: marital_status
     value: remarried
-    confidence: 1.0
+    confidence: 1
   - entity: xianglins_wife
     attribute: appearance
-    value: "forehead_scar_from_altar_collision"
-    confidence: 1.0
+    value: forehead_scar_from_altar_collision
+    confidence: 1
   - entity: xianglins_wife
     attribute: has_ah_mao
     value: true
-    confidence: 1.0
+    confidence: 1
   - entity: xianglins_wife
     attribute: emotionalState
     value: content_with_new_family
@@ -57,49 +57,76 @@ expectedPostconditions:
   - entity: he_laoliu
     attribute: marital_status
     value: married
-    confidence: 1.0
+    confidence: 1
   - entity: mother_in_law
     attribute: financial_state
-    value: "gained_80000_cash_from_sale"
-    confidence: 1.0
+    value: gained_80000_cash_from_sale
+    confidence: 1
   - entity: xianglins_wife
     attribute: social_status
-    narrativeHint: "她被卖改嫁后，在鲁镇人眼中已从'值得同情的寡妇'变成了'败坏风俗的女人'。她额头上的伤疤——她反抗的印记——后来被看客当作笑柄。"
-    confidence: 1.0
+    narrativeHint: 她被卖改嫁后，在鲁镇人眼中已从'值得同情的寡妇'变成了'败坏风俗的女人'。她额头上的伤疤——她反抗的印记——后来被看客当作笑柄。
+    confidence: 1
   - entity: old_mrs_wei
     attribute: role_in_kidnapping
     value: inside_agent
-    confidence: 1.0
+    confidence: 1
 threadProgress:
   - thread: T1
-    advancement: "祥林嫂被婆婆卖掉，以八十千的价钱从劳动力变成了婚姻商品。但她短暂交了好运：贺老六有力气、没婆婆、有房子，年底生下阿毛——这是她一生最好的时光。"
+    advancement: 祥林嫂被婆婆卖掉，以八十千的价钱从劳动力变成了婚姻商品。但她短暂交了好运：贺老六有力气、没婆婆、有房子，年底生下阿毛——这是她一生最好的时光。
     progressAfter: 55
     progressTotal: 100
 relationshipEffects:
-  - participants:
-      - he_laoliu
-      - xianglins_wife
-    effect: establish
-    direction: forced_marriage_growing_into_stability
-    newState:
-      type: stable_marriage
-      intensity: 60
-  - participants:
-      - mother_in_law
-      - xianglins_wife
-    effect: dissolve
-    direction: property_transferred
-    newState:
-      type: ownership_transferred
-      intensity: 100
-  - participants:
-      - fourth_master_lu
-      - xianglins_wife
-    effect: dissolve
-    direction: employment_terminated_by_clan_right
-    newState:
-      type: former_employee
-      intensity: 20
+  - type: relationship_transaction
+    effectId: E3:relationship:1
+    relationshipId: he_laoliu_xianglins_wife
+    epochId: he_laoliu_xianglins_wife:epoch-1
+    membershipAfter:
+      - membershipId: he_laoliu_xianglins_wife:member:1
+        entityId: he_laoliu
+        role: member
+      - membershipId: he_laoliu_xianglins_wife:member:2
+        entityId: xianglins_wife
+        role: member
+    lifecycleAfter: active
+    dimensionSet:
+      - dimensionId: intensity
+        scope: global
+        value: 60
+    provenance: forced_marriage_growing_into_stability (stable_marriage)
+  - type: relationship_transaction
+    effectId: E3:relationship:2
+    relationshipId: mother_in_law_xianglins_wife
+    epochId: mother_in_law_xianglins_wife:epoch-1
+    membershipAfter:
+      - membershipId: mother_in_law_xianglins_wife:member:1
+        entityId: mother_in_law
+        role: member
+      - membershipId: mother_in_law_xianglins_wife:member:2
+        entityId: xianglins_wife
+        role: member
+    lifecycleAfter: dissolved
+    dimensionSet:
+      - dimensionId: intensity
+        scope: global
+        value: 100
+    provenance: property_transferred (ownership_transferred)
+  - type: relationship_transaction
+    effectId: E3:relationship:3
+    relationshipId: fourth_master_lu_xianglins_wife
+    epochId: fourth_master_lu_xianglins_wife:epoch-1
+    membershipAfter:
+      - membershipId: fourth_master_lu_xianglins_wife:member:1
+        entityId: fourth_master_lu
+        role: member
+      - membershipId: fourth_master_lu_xianglins_wife:member:2
+        entityId: xianglins_wife
+        role: member
+    lifecycleAfter: dissolved
+    dimensionSet:
+      - dimensionId: intensity
+        scope: global
+        value: 20
+    provenance: employment_terminated_by_clan_right (former_employee)
 introduces:
   - type: location
     id: he_family_hollow
@@ -121,19 +148,25 @@ introduces:
       condition: well
       motivation: financial_gain
 ruleEffects:
-  - rule: patriarchal_clan_authority
-    effect: reinforce
-    evidence: "婆婆有权卖儿媳——以八十千的价钱卖给贺老六。四老爷认可：'既是她的婆婆要她回去，那有什么话可说的呢？'"
-  - rule: husbands_authority
-    effect: reinforce
-    evidence: "祥林嫂以头撞香案——她的反抗不是拒绝婚姻本身，而是捍卫寡妇的贞节：她不该改嫁，不该侍奉第二个男人。"
+  - type: rule_transaction
+    ruleId: patriarchal_clan_authority
+    operation: enable
+    evidence: 婆婆有权卖儿媳——以八十千的价钱卖给贺老六。四老爷认可：'既是她的婆婆要她回去，那有什么话可说的呢？'
+    epochId: patriarchal_clan_authority:epoch-1
+    specificationId: patriarchal_clan_authority:specification-1
+  - type: rule_transaction
+    ruleId: husbands_authority
+    operation: enable
+    evidence: 祥林嫂以头撞香案——她的反抗不是拒绝婚姻本身，而是捍卫寡妇的贞节：她不该改嫁，不该侍奉第二个男人。
+    epochId: husbands_authority:epoch-1
+    specificationId: husbands_authority:specification-1
 styleGuidance:
-  tone: "戏剧化的暴力→日常的安宁。绑架场景需紧张急促，撞香案需突然而剧烈，年底的好消息需平静温暖。"
+  tone: 戏剧化的暴力→日常的安宁。绑架场景需紧张急促，撞香案需突然而剧烈，年底的好消息需平静温暖。
   targetWordCount: 1500
-  scenePacing: "快速推进的绑架→撞香案的剧烈停顿→跳跃到年底的好消息——三个节奏形成了'暴力→反抗→平静'的叙事曲线。"
+  scenePacing: 快速推进的绑架→撞香案的剧烈停顿→跳跃到年底的好消息——三个节奏形成了'暴力→反抗→平静'的叙事曲线。
 duration:
   type: summary
-  storyDuration: "从新年过后到年底生子，约1年"
+  storyDuration: 从新年过后到年底生子，约1年
   narrativeLength: 1500
 frequency:
   type: singulative
@@ -144,45 +177,45 @@ anachrony:
   type: analepsis
   scope: external
   function: completing
-  distance: "约4年前——祥林嫂被卖改嫁时期"
+  distance: 约4年前——祥林嫂被卖改嫁时期
 narrativeChecklist:
   items:
-    - dimension: "暴力叙述"
-      description: "白篷船绑架——'一个抱住她，一个帮着，拖进船去了'——暴力被平淡叙述的叙事距离感"
+    - dimension: 暴力叙述
+      description: 白篷船绑架——'一个抱住她，一个帮着，拖进船去了'——暴力被平淡叙述的叙事距离感
       required: true
-    - dimension: "反抗与创伤"
+    - dimension: 反抗与创伤
       description: "'一头撞在香案角上，头上碰了一个大窟窿，鲜血直流'——祥林嫂一生唯一也是最激烈的反抗"
       required: true
-    - dimension: "交易语言"
-      description: "卫老婆子用经济计算包装人口贩卖——'财礼'、'八十千'、'好打算'——人性的商品化"
+    - dimension: 交易语言
+      description: 卫老婆子用经济计算包装人口贩卖——'财礼'、'八十千'、'好打算'——人性的商品化
       required: true
-    - dimension: "话语控制"
+    - dimension: 话语控制
       description: "'出格'一词——反抗被规范化为反常，叙事者的价值观通过标签渗透"
       required: false
 authorNotes:
-  - "本场以《祝福》原文为唯一表述基准：优先保持 sourceContext 中原句的语序、关键词、对白与留白。"
-  - "白篷船、花轿与卫老婆子的叙述必须保留原作的平淡转述；不得用电影式追逐、旁白谴责或新增反抗细节替代。"
+  - 本场以《祝福》原文为唯一表述基准：优先保持 sourceContext 中原句的语序、关键词、对白与留白。
+  - 白篷船、花轿与卫老婆子的叙述必须保留原作的平淡转述；不得用电影式追逐、旁白谴责或新增反抗细节替代。
 sourceContext:
   entries:
-    - excerpt: "河里面上午就泊了一只白篷船，篷是全盖起来的，不知道什么人在里面……待到祥林嫂出来淘米，刚刚要跪下去，那船里便突然跳出两个男人来，像是山里人，一个抱住她，一个帮着，拖进船去了。"
+    - excerpt: 河里面上午就泊了一只白篷船，篷是全盖起来的，不知道什么人在里面……待到祥林嫂出来淘米，刚刚要跪下去，那船里便突然跳出两个男人来，像是山里人，一个抱住她，一个帮着，拖进船去了。
       classification: STYLE
-      styleNote: "绑架以“没人理会—突然跳出—拖进船去”的冷静句序推进；暴力不作感官夸张。"
+      styleNote: 绑架以“没人理会—突然跳出—拖进船去”的冷静句序推进；暴力不作感官夸张。
     - excerpt: "'这有什么依不依。——闹是谁也总要闹一闹的，只要用绳子一捆，塞在花轿里，抬到男家，捺上花冠，拜堂，关上房门，就完事了。'"
       classification: STYLE
-      styleNote: "卫老婆子的叙述距离——她用'完事了'三个字解构了祥林嫂的激烈反抗（撞头出血），暴露了叙述者群体的冷漠。"
-    - excerpt: "她一头撞在香案角上，头上碰了一个大窟窿，鲜血直流"
+      styleNote: 卫老婆子的叙述距离——她用'完事了'三个字解构了祥林嫂的激烈反抗（撞头出血），暴露了叙述者群体的冷漠。
+    - excerpt: 她一头撞在香案角上，头上碰了一个大窟窿，鲜血直流
       classification: STYLE
-      styleNote: "撞香案只用原文的突发动作、伤口与鲜血收束，不添加反抗口号或心理独白。"
+      styleNote: 撞香案只用原文的突发动作、伤口与鲜血收束，不添加反抗口号或心理独白。
 greyLines:
   - id: gl_boat
-    imagery: "白篷船——命运摆渡"
+    imagery: 白篷船——命运摆渡
     nodes:
       - eventId: E3
-        semanticAccumulation: "白篷船——祥林嫂被婆婆派来的人从河边绑架，'篷是全盖起来的，不知道什么人在里面'"
+        semanticAccumulation: 白篷船——祥林嫂被婆婆派来的人从河边绑架，'篷是全盖起来的，不知道什么人在里面'
         narrativeOrder: 4
   - id: gl_scar
-    imagery: "额角伤疤——反抗的标记沦为笑柄"
+    imagery: 额角伤疤——反抗的标记沦为笑柄
     nodes:
       - eventId: E3
-        semanticAccumulation: "一头撞在香案角上，头上碰了一个大窟窿，鲜血直流——最激烈的反抗瞬间"
+        semanticAccumulation: 一头撞在香案角上，头上碰了一个大窟窿，鲜血直流——最激烈的反抗瞬间
         narrativeOrder: 4

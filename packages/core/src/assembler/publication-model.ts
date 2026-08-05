@@ -41,9 +41,15 @@ export interface ScopeEventData {
 
 export interface ScopeThreadProgressEntry {
   readonly thread: string;
-  readonly advancement: string;
-  readonly progressAfter: number;
-  readonly progressTotal: number;
+  readonly advancement?: string;
+  /** Absolute goal status writes carried by the canonical transaction. */
+  readonly goalSet?: ReadonlyArray<{ readonly goalId: string; readonly status: string }>;
+  /** Absolute milestone status writes carried by the canonical transaction. */
+  readonly milestoneSet?: ReadonlyArray<{
+    readonly milestoneId: string;
+    readonly status: string;
+  }>;
+  readonly status?: string;
 }
 
 export interface ScopeForeshadowEntry {
@@ -55,12 +61,13 @@ export interface ScopeForeshadowEntry {
 export interface ScopeRelationshipEntry {
   readonly membershipAfter?: ReadonlyArray<{ readonly entityId: string }>;
   readonly dimensionSet?: ReadonlyArray<{ readonly dimensionId: string; readonly value: unknown }>;
-  readonly provenance?: string;
+  /** Lifecycle transition written by the canonical transaction. */
+  readonly lifecycleAfter?: string;
 }
 
 export interface ScopeRuleEntry {
-  readonly rule: string;
-  readonly effect: string;
+  readonly ruleId: string;
+  readonly operation: string;
   readonly evidence: string;
 }
 
@@ -94,10 +101,11 @@ export function collectDerivedData(
     if (!verifiedHeads.has(event.eventId)) continue;
 
     for (const progress of event.threadProgress) {
+      const goalSet = progress.goalSet ?? [];
       threads[progress.thread] = {
-        advancement: progress.advancement,
-        progressAfter: progress.progressAfter,
-        progressTotal: progress.progressTotal,
+        advancement: progress.advancement ?? '',
+        goalAchieved: goalSet.filter((goal) => goal.status === 'achieved').length,
+        goalTotal: goalSet.length,
       };
     }
 
@@ -121,7 +129,7 @@ export function collectDerivedData(
       );
       relationships.push({
         participants: participants.length >= 2 ? [participants[0], participants[1]] : [],
-        effect: effect.provenance?.replace('compat:RelationshipChange:', '') ?? 'change',
+        effect: effect.lifecycleAfter ?? 'change',
         direction: stringValue(direction?.value),
         newState:
           type || intensity
@@ -135,8 +143,8 @@ export function collectDerivedData(
 
     for (const effect of event.ruleEffects) {
       rules.push({
-        rule: effect.rule,
-        effect: effect.effect,
+        ruleId: effect.ruleId,
+        operation: effect.operation,
         evidence: effect.evidence,
         eventId: event.eventId,
       });

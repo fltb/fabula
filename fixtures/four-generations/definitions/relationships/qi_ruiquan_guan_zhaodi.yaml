@@ -1,14 +1,28 @@
-id: qi_ruiquan_guan_zhaodi
-type: youthful_romance
-participants:
-  - qi_ruiquan
-  - guan_zhaodi
-bidirectional: false
-initialState:
-  trust: 20
-  emotionalDistance: 85
-  intensity: 35
-  status: "少年情愫——终将分道扬镳"
-  notes: "瑞全与招弟之间有一种朦胧的少年情愫。招弟是冠家最漂亮的小女儿，活泼爱笑，未沾世俗烟尘。瑞全年轻气盛，走在胡同里遇到招弟，心里会微微一动。但是战争把一切都推向了极端——瑞全选择了出走抗日，招弟在父母的汉奸家庭中长大，渐渐被熏染成了另一个模样。当瑞全两年后秘密潜回北平执行任务时，再见招弟，他发现她已经完全变了——她染上了汉奸家庭的习气，轻浮、虚荣、毫无是非之心。那个曾经让他心动的姑娘已经死了。两个人的选择从一开始就是背道而驰的：他走向战场和牺牲，她走向享乐和堕落。在民族大义的洪流中，这点少年情愫连一朵浪花都算不上。"
-establishedEvent: fall_of_beiping
-breakingEvent: spring_of_next_year
+relationshipId: qi_ruiquan_guan_zhaodi
+typeId: youthful_romance
+initialEpoch:
+  epochId: qi_ruiquan_guan_zhaodi:epoch-1
+  lifecycle: active
+  memberships:
+    - membershipId: qi_ruiquan_guan_zhaodi:member:1
+      entityId: qi_ruiquan
+      role: member
+    - membershipId: qi_ruiquan_guan_zhaodi:member:2
+      entityId: guan_zhaodi
+      role: member
+  dimensions:
+    - dimensionId: trust
+      scope: global
+      value: 20
+    - dimensionId: emotionalDistance
+      scope: global
+      value: 85
+    - dimensionId: intensity
+      scope: global
+      value: 35
+    - dimensionId: status
+      scope: global
+      value: 少年情愫——终将分道扬镳
+    - dimensionId: notes
+      scope: global
+      value: 瑞全与招弟之间有一种朦胧的少年情愫。招弟是冠家最漂亮的小女儿，活泼爱笑，未沾世俗烟尘。瑞全年轻气盛，走在胡同里遇到招弟，心里会微微一动。但是战争把一切都推向了极端——瑞全选择了出走抗日，招弟在父母的汉奸家庭中长大，渐渐被熏染成了另一个模样。当瑞全两年后秘密潜回北平执行任务时，再见招弟，他发现她已经完全变了——她染上了汉奸家庭的习气，轻浮、虚荣、毫无是非之心。那个曾经让他心动的姑娘已经死了。两个人的选择从一开始就是背道而驰的：他走向战场和牺牲，她走向享乐和堕落。在民族大义的洪流中，这点少年情愫连一朵浪花都算不上。

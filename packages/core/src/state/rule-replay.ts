@@ -7,7 +7,6 @@
 import { RuleConstraintViolationError } from '../errors.js';
 import type {
   RuleConstraint,
-  RuleEffectEntry,
   RuleEpochId,
   RuleEvaluationRecord,
   RuleId,
@@ -41,10 +40,12 @@ export function applyRuleTransaction(
   const evaluationRecords: RuleEvaluationRecord[] = [];
   const ruleId = tx.ruleId;
 
-  // Phase 1: Read state before
+  // Runtime rules are materialized from canonical declarations before replay.
   if (!rules[ruleId]) {
-    // Initialize a new rule runtime state
-    rules[ruleId] = createDefaultRuntimeState(ruleId, tx);
+    throw new RuleConstraintViolationError(
+      `Cannot apply rule transaction ${ruleId}: rule declaration is not materialized`,
+      { path: ruleId, eventId: context?.nodeId, phase: 'rule-replay' },
+    );
   }
 
   const state = rules[ruleId];
@@ -126,70 +127,6 @@ export function evaluateConstraints(
 }
 
 /**
- * convertLegacyRuleEffect — Convert a RuleEffectEntry to a RuleTransaction.
- * Backward compat mapping:
- *   reinforce  → enable + audit
- *   weaken     → suspend
- *   introduce_exception → add_exception
- *   nullify    → set_effectiveness:nullified
- * Generated epoch/exception identities derive deterministically from the rule
- * and causal event ID (never wall-clock), so replay is reproducible.
- */
-export function convertLegacyRuleEffect(entry: RuleEffectEntry, nodeId: string): RuleTransaction {
-  const base = {
-    type: 'rule_transaction' as const,
-    ruleId: entry.rule,
-    evidence: entry.evidence,
-    operation: 'enable' as const,
-  };
-
-  switch (entry.effect) {
-    case 'reinforce':
-      return {
-        ...base,
-        operation: 'enable' as const,
-        epochId: deriveEpochId(entry.rule, nodeId),
-        specificationId: `${entry.rule}-spec`,
-      };
-    case 'weaken':
-      return { ...base, operation: 'suspend' as const };
-    case 'introduce_exception':
-      return {
-        ...base,
-        operation: 'add_exception' as const,
-        exception: {
-          exceptionId: `${entry.rule}-exc-${nodeId}`,
-          status: 'active' as const,
-          constraintIds: [],
-          scopeBindings: {},
-          effect: { type: 'exempt' as const },
-        },
-      };
-    case 'nullify':
-      return {
-        ...base,
-        operation: 'set_effectiveness' as const,
-        newEffectiveness: 'nullified' as const,
-      };
-  }
-}
-
-/**
- * isLegacyRuleEffect — Check if an entry is a legacy RuleEffectEntry.
- */
-export function isLegacyRuleEffect(entry: unknown): entry is RuleEffectEntry {
-  if (typeof entry !== 'object' || entry === null) return false;
-  const e = entry as Record<string, unknown>;
-  return (
-    typeof e.rule === 'string' &&
-    typeof e.effect === 'string' &&
-    ['reinforce', 'weaken', 'introduce_exception', 'nullify'].includes(e.effect as string) &&
-    typeof e.evidence === 'string' &&
-    e.type !== 'rule_transaction'
-  );
-}
-
-/**
  * generateEvaluationRecord — Create a RuleEvaluationRecord for result tracking.
  */
 export function generateEvaluationRecord(
@@ -221,18 +158,6 @@ export function generateEvaluationRecord(
 /** Derive a deterministic epoch identity from semantic inputs (rule + causal node). */
 function deriveEpochId(ruleId: string, nodeId: string): string {
   return `${ruleId}-epoch-${nodeId}`;
-}
-
-function createDefaultRuntimeState(ruleId: string, tx: RuleTransaction): RuleRuntimeState {
-  return {
-    ruleId,
-    currentEpoch: tx.epochId ?? `${ruleId}-epoch-default`,
-    specificationId: tx.specificationId ?? `${ruleId}-spec`,
-    activation: 'dormant',
-    effectiveness: 'full',
-    scopeBindings: {},
-    exceptions: [],
-  };
 }
 
 function evaluateConstraint(

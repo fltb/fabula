@@ -6,28 +6,19 @@ import type {
   BranchPath,
   EntityCatalogContext,
   EntityRuntimeState,
-  EpochId,
   Fact,
   NarrativeEvent,
-  RelationshipChange,
-  RelationshipRuntimeState,
-  RelationshipTransaction,
   SceneStoryCoordinate,
-  ThreadTransaction,
   WorldState,
 } from '../types/index.js';
-import { convertRelationshipChange } from '../types/relationship.js';
-import { applyRelationshipTransaction } from './relationship-replay.js';
+import { applyClaimTransaction, recordInformationAct } from './knowledge-replay.js';
 import {
-  applyRuleTransaction,
-  convertLegacyRuleEffect,
-  isLegacyRuleEffect,
-} from './rule-replay.js';
-import {
-  applyThreadTransaction,
-  convertLegacyThreadProgress,
-  isLegacyThreadProgress,
-} from './thread-replay.js';
+  applyRelationshipIdentityTransitionGroup,
+  applyRelationshipTransaction,
+  type RelationshipReplayContext,
+} from './relationship-replay.js';
+import { applyRuleTransaction } from './rule-replay.js';
+import { applyThreadTransaction } from './thread-replay.js';
 
 /** Synthetic event prefix for entity activation transitions. */
 export const INTRODUCTION_EVENT_PREFIX = 'system:introduction:';
@@ -46,6 +37,12 @@ export function parseIntroductionTransition(
 export interface EventApplicationOptions {
   /** The one shared catalog pair; required, no optional fallback. */
   catalogs: EntityCatalogContext;
+  /**
+   * Relationship replay context (declarations + type catalog). Required:
+   * replay fails closed whenever an event carries relationship effects and
+   * this context is absent — there is no default relationship handling.
+   */
+  relationshipReplayContext?: RelationshipReplayContext;
   branchPath?: BranchPath;
   lifecycleChangesByCoordinate?: Map<string, Set<string>>;
   storyCoordinate?: SceneStoryCoordinate;
@@ -562,80 +559,95 @@ function validateParticipants(
   }
 }
 
-function applyTransactions(state: WorldState, event: NarrativeEvent): void {
-  for (const progress of event.threadProgress) {
-    const transaction = isLegacyThreadProgress(progress)
-      ? convertLegacyThreadProgress(progress, event.id)
-      : (progress as unknown as ThreadTransaction);
-    applyThreadTransaction(state.threads, transaction);
-  }
+function requireKnownProposition(state: WorldState, propositionId: string, eventId: string): void {
+  if (state.propositionCatalog.propositions[propositionId]) return;
+  throw new ConfigError(`Unknown proposition "${propositionId}" in event ${eventId}`, {
+    path: `knowledge:${propositionId}`,
+    eventId,
+    phase: 'knowledge',
+  });
+}
 
-  for (let index = 0; index < event.relationshipEffects.length; index += 1) {
-    const relationship = event.relationshipEffects[index];
-    const transaction: RelationshipTransaction =
-      'participants' in relationship && !('effectId' in relationship)
-        ? convertRelationshipChange(relationship as unknown as RelationshipChange, event.id, index)
-        : relationship;
-
-    // Legacy compat: a dissolved epoch must not be forced through an invalid
-    // dissolved→active transition. When a legacy-converted transaction targets
-    // a dissolved epoch with lifecycleAfter 'active', route to a new epoch
-    // instead. Explicit transactions remain strictly validated.
-    const finalTx =
-      transaction.provenance?.startsWith('compat:') &&
-      transaction.lifecycleAfter === 'active' &&
-      transaction.epochId
-        ? routeLegacyReestablishment(state.relationships, transaction)
-        : transaction;
-
-    applyRelationshipTransaction(state.relationships, finalTx);
-  }
-
-  for (const effect of event.ruleEffects) {
-    if (isLegacyRuleEffect(effect)) {
-      applyRuleTransaction(state.rules, convertLegacyRuleEffect(effect, event.id), {
-        nodeId: event.id,
-      });
-    } else {
-      applyRuleTransaction(state.rules, effect as never, { nodeId: event.id });
+function applyKnowledgeTransactions(state: WorldState, event: NarrativeEvent): void {
+  for (const transaction of event.knowledgeTransactions ?? []) {
+    switch (transaction.type) {
+      case 'claim_write':
+        requireKnownProposition(state, transaction.propositionId, event.id);
+        state.epistemicLedger = applyClaimTransaction(
+          state.epistemicLedger,
+          transaction.subject,
+          transaction.propositionId,
+          transaction.assessment,
+          transaction.evidence,
+        );
+        break;
+      case 'information_act':
+        for (const propositionId of transaction.contentPropositions) {
+          requireKnownProposition(state, propositionId, event.id);
+        }
+        state.epistemicLedger = recordInformationAct(state.epistemicLedger, {
+          type: transaction.actType,
+          actor: transaction.actor,
+          recipients: transaction.recipients,
+          contentPropositions: transaction.contentPropositions,
+          timestamp: transaction.timestamp,
+          eventId: transaction.eventId,
+          storyBoundary: transaction.storyBoundary,
+          inWorldSource: transaction.inWorldSource,
+          corpusProvenance: transaction.corpusProvenance,
+          warrantJustification: transaction.warrantJustification,
+        });
+        break;
+      case 'common_ground':
+        requireKnownProposition(state, transaction.propositionId, event.id);
+        state.commonGround.push({
+          propositionId: transaction.propositionId,
+          participants: [...transaction.participants],
+          establishedAt: transaction.establishedAt,
+          establishedBy: transaction.establishedBy ?? transaction.provenance ?? event.id,
+        });
+        break;
     }
   }
 }
 
-/**
- * Route a legacy-converted transaction targeting a dissolved epoch to a new
- * epoch instead of attempting an invalid dissolved→active transition.
- * Returns the original transaction unchanged if no re-route is needed.
- * Explicit (non-legacy) transactions are never modified.
- */
-function routeLegacyReestablishment(
-  relationships: Record<string, RelationshipRuntimeState>,
-  tx: RelationshipTransaction,
-): RelationshipTransaction {
-  const relState = relationships[tx.relationshipId];
-  if (!relState || !tx.epochId) return tx;
-  const existingEpoch = relState.epochs[tx.epochId];
-  if (existingEpoch?.lifecycle !== 'dissolved') return tx;
+function applyTransactions(
+  state: WorldState,
+  event: NarrativeEvent,
+  options: EventApplicationOptions,
+): void {
+  for (const transaction of event.threadProgress) {
+    applyThreadTransaction(state.threads, transaction);
+  }
 
-  // Legacy re-establishment after dissolution: create a new epoch with a
-  // deterministically derived ID that is collision-free even with sparse epochs.
-  const epochPrefix = tx.epochId.substring(0, tx.epochId.lastIndexOf('_'));
-  // Parse existing numeric suffixes among epochs matching the same prefix pattern
-  // to find the maximum value, then allocate max+1. This is deterministic
-  // (order-independent, depends only on the set of existing IDs) and guarantees
-  // no collision with any existing epoch for this relationship.
-  let maxSuffix = 0;
-  for (const key of Object.keys(relState.epochs)) {
-    if (key.startsWith(`${epochPrefix}_`)) {
-      const suffix = key.slice(epochPrefix.length + 1);
-      const num = parseInt(suffix, 10);
-      if (!Number.isNaN(num) && num > maxSuffix) {
-        maxSuffix = num;
+  if (event.relationshipEffects.length > 0) {
+    const relationshipReplayContext = options.relationshipReplayContext;
+    if (!relationshipReplayContext) {
+      throw new ConfigError(
+        `Event ${event.id} carries relationship effects but no relationship replay context was provided`,
+        { eventId: event.id, phase: options.phase ?? 'replay' },
+      );
+    }
+
+    for (const effect of event.relationshipEffects) {
+      if (effect.type === 'identity_transition') {
+        applyRelationshipIdentityTransitionGroup(
+          state.relationships,
+          effect,
+          relationshipReplayContext,
+        );
+      } else {
+        applyRelationshipTransaction(state.relationships, effect, relationshipReplayContext);
       }
     }
   }
-  const nextNum = maxSuffix + 1;
-  return { ...tx, epochId: `${epochPrefix}_${nextNum}` as unknown as EpochId };
+
+  for (const transaction of event.ruleEffects) {
+    applyRuleTransaction(state.rules, transaction, {
+      nodeId: event.id,
+    });
+  }
+  applyKnowledgeTransactions(state, event);
 }
 
 /**
@@ -664,7 +676,7 @@ export function applyNarrativeEvent(
   validatePreconditions(state, event, branchPath, phase, options.catalogs);
   const introducedThisEvent = applyPostconditions(state, event, branchPath, options);
   validateParticipants(state, event, introducedThisEvent, phase);
-  applyTransactions(state, event);
+  applyTransactions(state, event, options);
 
   // Required fields are checked after introduction writes complete.
   if (introductionTarget) {

@@ -1,0 +1,187 @@
+types:
+  state_invariant:
+    typeId: state_invariant
+    name: 汉奸告密与白色恐怖
+    category: social_control
+    ruleClass: social_norm
+    defaultConstraints:
+      - constraintId: hanjian_social_pressure:constraint:1
+        kind: transition_constraint
+        enforcement: hard
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: event.cause='informing' => entity.status='arrested' OR
+            entity.status='taken_away'
+      - constraintId: hanjian_social_pressure:constraint:2
+        kind: state_invariant
+        enforcement: audit
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.tags CONTAINS 'hanjian' => entity.allies.size<=1 AND
+            entity.enemies.size>=2
+      - constraintId: hanjian_social_pressure:constraint:3
+        kind: state_invariant
+        enforcement: audit
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.tags CONTAINS 'law_abiding_citizen' AND
+            entity.neighbor.is_suspicious=true =>
+            entity.distance_from_suspicious_person>=50
+      - constraintId: hanjian_social_pressure:constraint:4
+        kind: state_invariant
+        enforcement: hard
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.political_stance='resistance' =>
+            entity.is_public_about_resistance=false
+  constraint:
+    typeId: constraint
+    name: 四世同堂的宗法家庭秩序
+    category: social_structure
+    ruleClass: social_norm
+    defaultConstraints:
+      - constraintId: patriarchal_family_order:constraint:1
+        kind: state_invariant
+        enforcement: audit
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.id='sr_qi' => entity.authority>=90 AND
+            entity.final_decision_maker=true
+      - constraintId: patriarchal_family_order:constraint:2
+        kind: state_invariant
+        enforcement: audit
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.id='qi_ruixuan' => entity.financial_responsibility>=80 AND
+            entity.status='teaching'
+      - constraintId: patriarchal_family_order:constraint:3
+        kind: state_invariant
+        enforcement: audit
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.id='yunmei' => entity.housework_burden>=90
+      - constraintId: patriarchal_family_order:constraint:4
+        kind: state_invariant
+        enforcement: hard
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.family='qi_family' AND entity.marital_status='已婚' =>
+            entity.income_shares_with_family=true
+      - constraintId: patriarchal_family_order:constraint:5
+        kind: transition_constraint
+        enforcement: audit
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: event.id='famine_winter' => sr_qi.authority<50 OR
+            qi_ruixuan.confidence_in_order<30
+  dilemma:
+    typeId: dilemma
+    name: 民族大义与个人选择
+    category: ethical_dilemma
+    ruleClass: moral_principle
+    defaultConstraints:
+      - constraintId: national_resistance_moral:constraint:1
+        kind: state_invariant
+        enforcement: audit
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.choice='leave_to_resist' => entity.guilt_about_family>=60
+      - constraintId: national_resistance_moral:constraint:2
+        kind: state_invariant
+        enforcement: audit
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.choice='stay_and_support_family' AND entity.political_stance
+            CONTAINS 'patriotic' => entity.sense_of_shame>=70
+      - constraintId: national_resistance_moral:constraint:3
+        kind: state_invariant
+        enforcement: hard
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.choice='collaboration' => entity.power>=60 AND
+            entity.dignity<=20
+      - constraintId: national_resistance_moral:constraint:4
+        kind: state_invariant
+        enforcement: audit
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.social_class='lower_class' => entity.patriotic_instinct>=60
+            AND entity.resistance_capacity<=30

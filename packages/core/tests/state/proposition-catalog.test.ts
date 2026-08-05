@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { describe, expect, it } from 'vitest';
+import { propositionCatalogSchema } from '../../src/schemas/knowledge.js';
 import { validatePropositionCatalog } from '../../src/state/knowledge-replay.js';
 import type { PropositionCatalog } from '../../src/types/index.js';
 
@@ -154,10 +155,12 @@ describe('PropositionCatalog', () => {
     expect(() => validatePropositionCatalog(catalog)).not.toThrow();
   });
 
-  it('catalog is versioned', () => {
+  it('catalog version is a literal 1 (source contract)', () => {
     const v1: PropositionCatalog = { version: 1, propositions: {}, dependencyGraph: {} };
-    const v2: PropositionCatalog = { version: 2, propositions: {}, dependencyGraph: {} };
     expect(v1.version).toBe(1);
-    expect(v2.version).toBe(2);
+    expect(
+      propositionCatalogSchema.safeParse({ version: 2, propositions: {}, dependencyGraph: {} })
+        .success,
+    ).toBe(false);
   });
 });

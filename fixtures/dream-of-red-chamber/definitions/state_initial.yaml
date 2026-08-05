@@ -2,77 +2,85 @@ info:
   currentEra: 18世纪清朝乾隆年间，金陵（今南京）贾氏家族全盛时期
   politicalSituation: 清朝乾隆盛世，表面上国泰民安，实则官场腐败、贫富悬殊。贾府作为百年世家，依靠祖荫和裙带关系维持着表面的荣华富贵。宗法制度、科举仕途、门第观念是社会的底层运行逻辑。
 timeAnchors:
-- id: stone_myth
-  at: day_-2000
-  description: 顽石被女娲遗弃于大荒山无稽崖青埂峰，后经一僧一道携入红尘，历尽悲欢。通灵宝玉随神瑛侍者（宝玉前身）与绛珠仙草（黛玉前身）下凡历劫——僧道论石、太虚对联发生于此时。
-- id: lin_daiyu_enters_jiafu
-  at: day_0
-  description: 林黛玉初入荣国府，拜见贾母、见宝玉。红楼梦故事正式展开。
-- id: xue_family_arrives
-  at: day_60
-  description: 薛姨妈携薛蟠、薛宝钗进京投奔贾府，住在梨香院。
-- id: jia_yuanchun_visited
-  at: day_365
-  description: 贾元春封贤德妃，省亲大观园。大观园始建并启用。
-- id: sisters_move_into_garden
-  at: day_400
-  description: 元春命家中姊妹入住大观园，宝玉、黛玉、宝钗、探春、李纨等各择院落居住。
-- id: chaojian_daguanyuan
-  at: day_800
-  description: 王夫人抄检大观园，晴雯被逐、司棋被撵，大观园由盛转衰。
-- id: daiyu_dies
-  at: day_1000
-  description: 林黛玉在宝玉与宝钗大婚之夜泪尽而亡。
-- id: jiafu_raided
-  at: day_1100
-  description: 贾府被朝廷查抄，宁国府首当其冲，家道彻底败落。
+  - id: stone_myth
+    at: day_-2000
+    description: 顽石被女娲遗弃于大荒山无稽崖青埂峰，后经一僧一道携入红尘，历尽悲欢。通灵宝玉随神瑛侍者（宝玉前身）与绛珠仙草（黛玉前身）下凡历劫——僧道论石、太虚对联发生于此时。
+  - id: lin_daiyu_enters_jiafu
+    at: day_0
+    description: 林黛玉初入荣国府，拜见贾母、见宝玉。红楼梦故事正式展开。
+  - id: xue_family_arrives
+    at: day_60
+    description: 薛姨妈携薛蟠、薛宝钗进京投奔贾府，住在梨香院。
+  - id: jia_yuanchun_visited
+    at: day_365
+    description: 贾元春封贤德妃，省亲大观园。大观园始建并启用。
+  - id: sisters_move_into_garden
+    at: day_400
+    description: 元春命家中姊妹入住大观园，宝玉、黛玉、宝钗、探春、李纨等各择院落居住。
+  - id: chaojian_daguanyuan
+    at: day_800
+    description: 王夫人抄检大观园，晴雯被逐、司棋被撵，大观园由盛转衰。
+  - id: daiyu_dies
+    at: day_1000
+    description: 林黛玉在宝玉与宝钗大婚之夜泪尽而亡。
+  - id: jiafu_raided
+    at: day_1100
+    description: 贾府被朝廷查抄，宁国府首当其冲，家道彻底败落。
 threads:
-- id: T1
-  name: 宝玉之悟
-  type: primary
-  description: 贾宝玉从脂粉堆中的富贵闲人，历经爱情悲剧、家族败落，最终看破红尘、出家为僧的完整心路历程。
-  targetRevealChapter: 120
-  initialProgress: '0.00'
-- id: T2
-  name: 木石前盟与金玉良缘
-  type: primary
-  description: 宝黛钗三人的爱情悲剧主线。黛玉以泪还债的还泪神话，宝钗金锁配宝玉的宿命之说，三人纠缠的情感与命运。
-  targetRevealChapter: 120
-  initialProgress: '0.00'
-- id: T3
-  name: 百年世家之衰
-  type: thematic
-  description: 贾府从“钟鸣鼎食之家，诗书簪缨之族”到彻底败落的必然命运。经济上的入不敷出、官场上的斗争倾轧、子孙的不肖堕落，内因外因共同导致百年世家的崩塌。
-  targetRevealChapter: 120
-  initialProgress: '0.00'
-- id: T4
-  name: 金陵十二钗之悲
-  type: thematic
-  description: 十二位女子——元春、迎春、探春、惜春、黛玉、宝钗、湘云、凤姐、李纨、可卿、妙玉、巧姐——各自的悲剧命运，从元春的宫闱之悲到巧姐的沦落烟花，各有各的无奈与凄惨。
-  targetRevealChapter: 120
-  initialProgress: '0.00'
-- id: T5
-  name: 红楼之梦
-  type: thematic
-  description: 从太虚幻境下凡历劫到回归仙界的神话框架。石头记、金陵十二钗判词、红楼梦曲共同构成了人生如梦、万境归空的总体哲学基调。
-  targetRevealChapter: 120
-  initialProgress: '0.00'
+  - threadId: T1
+    name: 宝玉之悟
+    description: 贾宝玉从脂粉堆中的富贵闲人，历经爱情悲剧、家族败落，最终看破红尘、出家为僧的完整心路历程。
+    typeId: primary
+    initialPhase: opening
+    targetRevealChapter: 120
+    initialProgress: "0.00"
+  - threadId: T2
+    name: 木石前盟与金玉良缘
+    description: 宝黛钗三人的爱情悲剧主线。黛玉以泪还债的还泪神话，宝钗金锁配宝玉的宿命之说，三人纠缠的情感与命运。
+    typeId: primary
+    initialPhase: opening
+    targetRevealChapter: 120
+    initialProgress: "0.00"
+  - threadId: T3
+    name: 百年世家之衰
+    description: 贾府从“钟鸣鼎食之家，诗书簪缨之族”到彻底败落的必然命运。经济上的入不敷出、官场上的斗争倾轧、子孙的不肖堕落，内因外因共同导致百年世家的崩塌。
+    typeId: thematic
+    initialPhase: opening
+    targetRevealChapter: 120
+    initialProgress: "0.00"
+  - threadId: T4
+    name: 金陵十二钗之悲
+    description: 十二位女子——元春、迎春、探春、惜春、黛玉、宝钗、湘云、凤姐、李纨、可卿、妙玉、巧姐——各自的悲剧命运，从元春的宫闱之悲到巧姐的沦落烟花，各有各的无奈与凄惨。
+    typeId: thematic
+    initialPhase: opening
+    targetRevealChapter: 120
+    initialProgress: "0.00"
+  - threadId: T5
+    name: 红楼之梦
+    description: 从太虚幻境下凡历劫到回归仙界的神话框架。石头记、金陵十二钗判词、红楼梦曲共同构成了人生如梦、万境归空的总体哲学基调。
+    typeId: thematic
+    initialPhase: opening
+    targetRevealChapter: 120
+    initialProgress: "0.00"
 worldFacts:
-- id: jia_jia_genealogy
-  value: 贾氏宁荣二公之后，分为宁国府和荣国府两支。宁国公贾演，荣国公贾源。贾母是荣国府辈分最高的长辈。
-  description: 贾氏家族的基本谱系
-- id: jade_and_gold_lock
-  value: 贾宝玉衔玉而生，玉上镌有莫失莫忘、仙寿恒昌。薛宝钗有金锁，上镌不离不弃、芳龄永继。这两句话正好是一对，因此有金玉良缘之说。
-  description: 金玉良缘的谶语
-- id: the_story_of_the_stone
-  value: 整个故事是一块被女娲遗弃的顽石所记，故又名《石头记》。顽石被一僧一道携入红尘，历经悲欢离合，最终回归大荒山无稽崖青埂峰，石上字迹历历叙说这段故事。
-  description: 红楼梦的神话叙事框架
-- id: twelve_beauties_fates
-  value: 金陵十二钗的判词和红楼梦十二支曲子在太虚幻境中已预示了众女子的命运——元春的虎兕相逢、迎春的狼嚎、探春的远嫁、惜春的出家、黛玉的泪尽、宝钗的守寡、湘云的流离、凤姐的被休、李纨的封诰、可卿的悬梁、妙玉的沦落、巧姐的烟花劫。
-  description: 金陵十二钗的悲剧命运预言
-- id: jiafu_economy
-  value: 贾府表面繁华，实则入不敷出多年。月钱、节礼、宴席、人情往来开销巨大，而田庄收入连年歉收。王熙凤暗中放高利贷以弥补家用亏空。
-  description: 贾府的经济困境
-- id: qin_keqing_mystery
-  value: 秦可卿身份特殊，宁国府长孙媳，早逝。贾珍为其大办丧事逾制越礼，葬礼规格之高震惊朝野。可卿之死疑点重重，有淫丧天香楼之说。
-  description: 秦可卿之死是红楼梦中的一大疑案
+  - id: jia_jia_genealogy
+    value: 贾氏宁荣二公之后，分为宁国府和荣国府两支。宁国公贾演，荣国公贾源。贾母是荣国府辈分最高的长辈。
+    description: 贾氏家族的基本谱系
+  - id: jade_and_gold_lock
+    value: 贾宝玉衔玉而生，玉上镌有莫失莫忘、仙寿恒昌。薛宝钗有金锁，上镌不离不弃、芳龄永继。这两句话正好是一对，因此有金玉良缘之说。
+    description: 金玉良缘的谶语
+  - id: the_story_of_the_stone
+    value: 整个故事是一块被女娲遗弃的顽石所记，故又名《石头记》。顽石被一僧一道携入红尘，历经悲欢离合，最终回归大荒山无稽崖青埂峰，石上字迹历历叙说这段故事。
+    description: 红楼梦的神话叙事框架
+  - id: twelve_beauties_fates
+    value: 金陵十二钗的判词和红楼梦十二支曲子在太虚幻境中已预示了众女子的命运——元春的虎兕相逢、迎春的狼嚎、探春的远嫁、惜春的出家、黛玉的泪尽、宝钗的守寡、湘云的流离、凤姐的被休、李纨的封诰、可卿的悬梁、妙玉的沦落、巧姐的烟花劫。
+    description: 金陵十二钗的悲剧命运预言
+  - id: jiafu_economy
+    value: 贾府表面繁华，实则入不敷出多年。月钱、节礼、宴席、人情往来开销巨大，而田庄收入连年歉收。王熙凤暗中放高利贷以弥补家用亏空。
+    description: 贾府的经济困境
+  - id: qin_keqing_mystery
+    value: 秦可卿身份特殊，宁国府长孙媳，早逝。贾珍为其大办丧事逾制越礼，葬礼规格之高震惊朝野。可卿之死疑点重重，有淫丧天香楼之说。
+    description: 秦可卿之死是红楼梦中的一大疑案
+knowledge:
+  claims: []
+  commonGround: []

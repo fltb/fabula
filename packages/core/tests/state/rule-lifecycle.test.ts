@@ -1,19 +1,38 @@
 // ============================================================================
 // rule-lifecycle.test.ts — Rule lifecycle: activation, effectiveness, epochs,
 // amend/replace operations, RuleTransaction application
+//
+// Every direct replay starts from a pre-materialized canonical RuleRuntimeState
+// (declaration-derived baseline, activation 'dormant'); rule transactions never
+// create rules implicitly.
 // ============================================================================
 
 import { describe, expect, it } from 'vitest';
-import { applyRuleTransaction, convertLegacyRuleEffect } from '../../src/state/rule-replay.js';
-import type { RuleException, RuleRuntimeState, RuleTransaction } from '../../src/types/index.js';
+import { applyRuleTransaction } from '../../src/state/rule-replay.js';
+import type { RuleRuntimeState, RuleTransaction } from '../../src/types/index.js';
 
-function makeEmptyState(): Record<string, RuleRuntimeState> {
-  return {};
+/**
+ * Build a canonical materialized rule map for one rule. Mirrors Stage 2
+ * declaration materialization: each declared rule seeds exactly one
+ * RuleRuntimeState with its declared identity and a dormant baseline.
+ */
+function makeMaterializedRules(ruleId: string): Record<string, RuleRuntimeState> {
+  return {
+    [ruleId]: {
+      ruleId,
+      currentEpoch: 'epoch-0',
+      specificationId: 'spec-v0',
+      activation: 'dormant',
+      effectiveness: 'full',
+      scopeBindings: {},
+      exceptions: [],
+    },
+  };
 }
 
 describe('Rule lifecycle — activation', () => {
   it('should enable a rule', () => {
-    const rules = makeEmptyState();
+    const rules = makeMaterializedRules('test_rule');
     const tx: RuleTransaction = {
       type: 'rule_transaction',
       ruleId: 'test_rule',
@@ -26,7 +45,7 @@ describe('Rule lifecycle — activation', () => {
   });
 
   it('should suspend a rule', () => {
-    const rules = makeEmptyState();
+    const rules = makeMaterializedRules('test_rule');
     const enable: RuleTransaction = {
       type: 'rule_transaction',
       ruleId: 'test_rule',
@@ -45,7 +64,7 @@ describe('Rule lifecycle — activation', () => {
   });
 
   it('should revoke a rule', () => {
-    const rules = makeEmptyState();
+    const rules = makeMaterializedRules('test_rule');
     const enable: RuleTransaction = {
       type: 'rule_transaction',
       ruleId: 'test_rule',
@@ -66,7 +85,7 @@ describe('Rule lifecycle — activation', () => {
 
 describe('Rule lifecycle — effectiveness', () => {
   it('should set effectiveness to nullified', () => {
-    const rules = makeEmptyState();
+    const rules = makeMaterializedRules('test_rule');
     const enable: RuleTransaction = {
       type: 'rule_transaction',
       ruleId: 'test_rule',
@@ -88,7 +107,7 @@ describe('Rule lifecycle — effectiveness', () => {
   });
 
   it('should set effectiveness to limited', () => {
-    const rules = makeEmptyState();
+    const rules = makeMaterializedRules('test_rule');
     const enable: RuleTransaction = {
       type: 'rule_transaction',
       ruleId: 'test_rule',
@@ -110,7 +129,7 @@ describe('Rule lifecycle — effectiveness', () => {
 
 describe('Rule lifecycle — epoch management', () => {
   it('should amend a rule (close old epoch, start new)', () => {
-    const rules = makeEmptyState();
+    const rules = makeMaterializedRules('test_rule');
     const enable: RuleTransaction = {
       type: 'rule_transaction',
       ruleId: 'test_rule',
@@ -137,7 +156,7 @@ describe('Rule lifecycle — epoch management', () => {
   });
 
   it('should replace a rule (new epoch, cleared exceptions)', () => {
-    const rules = makeEmptyState();
+    const rules = makeMaterializedRules('test_rule');
     const enable: RuleTransaction = {
       type: 'rule_transaction',
       ruleId: 'test_rule',
@@ -179,7 +198,7 @@ describe('Rule lifecycle — epoch management', () => {
 
 describe('Rule lifecycle — exception management', () => {
   it('should add an exception', () => {
-    const rules = makeEmptyState();
+    const rules = makeMaterializedRules('test_rule');
     const enable: RuleTransaction = {
       type: 'rule_transaction',
       ruleId: 'test_rule',
@@ -187,19 +206,18 @@ describe('Rule lifecycle — exception management', () => {
       evidence: 'enable',
     };
     applyRuleTransaction(rules, enable);
-    const exc: RuleException = {
-      exceptionId: 'exc-1',
-      status: 'active',
-      constraintIds: ['c1'],
-      scopeBindings: {},
-      effect: { type: 'exempt' },
-    };
     const addExc: RuleTransaction = {
       type: 'rule_transaction',
       ruleId: 'test_rule',
       operation: 'add_exception',
       evidence: 'add',
-      exception: exc,
+      exception: {
+        exceptionId: 'exc-1',
+        status: 'active',
+        constraintIds: ['c1'],
+        scopeBindings: {},
+        effect: { type: 'exempt' },
+      },
     };
     applyRuleTransaction(rules, addExc);
     expect(rules.test_rule.exceptions).toHaveLength(1);
@@ -207,7 +225,7 @@ describe('Rule lifecycle — exception management', () => {
   });
 
   it('should remove an exception', () => {
-    const rules = makeEmptyState();
+    const rules = makeMaterializedRules('test_rule');
     const enable: RuleTransaction = {
       type: 'rule_transaction',
       ruleId: 'test_rule',
@@ -215,12 +233,12 @@ describe('Rule lifecycle — exception management', () => {
       evidence: 'enable',
     };
     applyRuleTransaction(rules, enable);
-    const exc: RuleException = {
+    const exc = {
       exceptionId: 'exc-1',
       status: 'active',
       constraintIds: [],
       scopeBindings: {},
-      effect: { type: 'exempt' },
+      effect: { type: 'exempt' as const },
     };
     applyRuleTransaction(rules, {
       type: 'rule_transaction',
@@ -238,43 +256,5 @@ describe('Rule lifecycle — exception management', () => {
       exception: exc,
     });
     expect(rules.test_rule.exceptions).toHaveLength(0);
-  });
-});
-
-describe('Rule lifecycle — backward compat (convertLegacyRuleEffect)', () => {
-  it('should convert reinforce to enable', () => {
-    const tx = convertLegacyRuleEffect(
-      { rule: 'test_rule', effect: 'reinforce', evidence: 'test' },
-      'event-1',
-    );
-    expect(tx.operation).toBe('enable');
-    expect(tx.ruleId).toBe('test_rule');
-  });
-
-  it('should convert weaken to suspend', () => {
-    const tx = convertLegacyRuleEffect(
-      { rule: 'test_rule', effect: 'weaken', evidence: 'test' },
-      'event-1',
-    );
-    expect(tx.operation).toBe('suspend');
-  });
-
-  it('should convert introduce_exception to add_exception', () => {
-    const tx = convertLegacyRuleEffect(
-      { rule: 'test_rule', effect: 'introduce_exception', evidence: 'test' },
-      'event-1',
-    );
-    expect(tx.operation).toBe('add_exception');
-    expect(tx.exception).toBeDefined();
-    expect(tx.exception?.effect.type).toBe('exempt');
-  });
-
-  it('should convert nullify to set_effectiveness:nullified', () => {
-    const tx = convertLegacyRuleEffect(
-      { rule: 'test_rule', effect: 'nullify', evidence: 'test' },
-      'event-1',
-    );
-    expect(tx.operation).toBe('set_effectiveness');
-    expect(tx.newEffectiveness).toBe('nullified');
   });
 });

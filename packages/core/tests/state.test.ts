@@ -25,6 +25,7 @@ import type {
   RuleRuntimeState,
   RuleTransaction,
   Snapshot,
+  ThreadRunId,
   WorldState,
 } from '../src/types/index.js';
 
@@ -558,10 +559,10 @@ describe('SnapshotEngine', () => {
           main: {
             threadId: 'main',
             status: 'active',
-            currentRunId: 'legacy-main',
+            currentRunId: 'run-main' as ThreadRunId,
             phase: '',
             bindings: {},
-            goalStates: { progress: 'active' },
+            goalStates: { investigation: 'active' },
             milestoneStates: {},
             semanticStateHash: 'h0',
           },
@@ -907,9 +908,9 @@ describe('ReplayEngine', () => {
       expect(state).toEqual({
         entities: {},
         relationships: {},
-        knowledge: {},
         epistemicLedger: { claims: {}, bySubject: {}, byProposition: {}, actLog: [] },
-        propositionCatalog: { version: 0, propositions: {}, dependencyGraph: {} },
+        propositionCatalog: { version: 1, propositions: {}, dependencyGraph: {} },
+        commonGround: [],
         threads: {},
         rules: {},
         facts: [],
@@ -945,21 +946,25 @@ describe('ReplayEngine', () => {
       });
     });
 
-    it('should update thread progress', () => {
+    it('should apply canonical thread transactions', () => {
       const events: NarrativeEvent[] = [
         makeEvent(1, {
           threadProgress: [
             {
               thread: 'mystery',
+              runId: 'mystery-run-1' as ThreadRunId,
+              status: 'active',
+              goalSet: [{ goalId: 'investigation', status: 'active' }],
               advancement: 'Discovered clue',
-              progressAfter: 1,
-              progressTotal: 10,
+              provenance: 'event_1',
             },
             {
               thread: 'romance',
+              runId: 'romance-run-1' as ThreadRunId,
+              status: 'active',
+              goalSet: [{ goalId: 'relationship', status: 'active' }],
               advancement: 'Met love interest',
-              progressAfter: 1,
-              progressTotal: 5,
+              provenance: 'event_1',
             },
           ],
         }),
@@ -967,9 +972,11 @@ describe('ReplayEngine', () => {
           threadProgress: [
             {
               thread: 'mystery',
+              runId: 'mystery-run-1' as ThreadRunId,
+              status: 'active',
+              goalSet: [{ goalId: 'investigation', status: 'active' }],
               advancement: 'Found evidence',
-              progressAfter: 3,
-              progressTotal: 10,
+              provenance: 'event_2',
             },
           ],
         }),
@@ -979,17 +986,42 @@ describe('ReplayEngine', () => {
 
       expect(state.threads.mystery).toBeDefined();
       expect(state.threads.mystery?.status).toBe('active');
-      expect(state.threads.mystery?.goalStates.progress).toBe('active');
+      expect(state.threads.mystery?.goalStates.investigation).toBe('active');
       expect(state.threads.romance).toBeDefined();
       expect(state.threads.romance?.status).toBe('active');
-      expect(state.threads.romance?.goalStates.progress).toBe('active');
+      expect(state.threads.romance?.goalStates.relationship).toBe('active');
     });
 
     it('should update relationship state', () => {
+      const relationshipEngine = new ReplayEngine(CATALOG_CONTEXT, {
+        relationshipDeclarations: [
+          {
+            relationshipId: 'rel_camille_npc_gear',
+            typeId: 'friendship',
+            initialEpoch: {
+              epochId: 'epoch_1',
+              lifecycle: 'active',
+              memberships: [],
+              dimensions: [],
+            },
+          },
+        ],
+        relationshipTypeCatalog: {
+          types: {
+            friendship: {
+              typeId: 'friendship',
+              label: 'Friendship',
+              roles: [],
+              continuityImpact: 'preserve',
+            },
+          },
+        },
+      });
       const events: NarrativeEvent[] = [
         makeEvent(1, {
           relationshipEffects: [
             {
+              type: 'relationship_transaction',
               effectId: 'evt1_rel_0',
               relationshipId: 'rel_camille_npc_gear',
               epochId: 'epoch_1',
@@ -1010,6 +1042,7 @@ describe('ReplayEngine', () => {
         makeEvent(2, {
           relationshipEffects: [
             {
+              type: 'relationship_transaction',
               effectId: 'evt2_rel_0',
               relationshipId: 'rel_camille_npc_gear',
               epochId: 'epoch_1',
@@ -1029,7 +1062,7 @@ describe('ReplayEngine', () => {
         }),
       ];
 
-      const state = engine.replay(events);
+      const state = relationshipEngine.replay(events);
 
       const relKey = 'rel_camille_npc_gear';
       expect(state.relationships[relKey]).toBeDefined();
@@ -1056,31 +1089,47 @@ describe('ReplayEngine', () => {
 
       const state = engine.replay(events, { initialFacts: INITIAL_FACTS });
 
-      // Legacy state.knowledge shim is removed — epistemic ledger handles knowledge now
-      expect(state.knowledge.camille).toBeUndefined();
+      expect('knowledge' in state).toBe(false);
       expect(state.epistemicLedger).toBeDefined();
       // The entity attribute was still written via normal set path
       expect(state.entities.camille?.knows).toBe('camille_is_hero');
       expect(state.entities.camille?.knowledge).toBe('camille_is_chosen');
     });
 
-    it('should handle rule effects', () => {
-      const events: NarrativeEvent[] = [
-        makeEvent(1, {
-          ruleEffects: [
-            { rule: 'magic_conservation', effect: 'reinforce', evidence: 'Magic is limited' },
-          ],
-        }),
-        makeEvent(2, {
-          ruleEffects: [
-            { rule: 'magic_conservation', effect: 'reinforce', evidence: 'Casting costs energy' },
-          ],
-        }),
+    it('should handle rule transactions', () => {
+      // Canonical materialized baseline: declared rules are seeded as dormant
+      // before any transaction is applied (no implicit rule creation).
+      const rules: Record<string, RuleRuntimeState> = {
+        magic_conservation: {
+          ruleId: 'magic_conservation',
+          currentEpoch: 'magic_conservation-epoch-0',
+          specificationId: 'magic_conservation-spec-v0',
+          activation: 'dormant',
+          effectiveness: 'full',
+          scopeBindings: {},
+          exceptions: [],
+        },
+      };
+      const events: RuleTransaction[] = [
+        {
+          type: 'rule_transaction',
+          ruleId: 'magic_conservation',
+          operation: 'enable',
+          evidence: 'Magic is limited',
+        },
+        {
+          type: 'rule_transaction',
+          ruleId: 'magic_conservation',
+          operation: 'enable',
+          evidence: 'Casting costs energy',
+        },
       ];
 
-      const state = engine.replay(events);
+      for (let i = 0; i < events.length; i++) {
+        applyRuleTransaction(rules, events[i], { nodeId: `evt_${i + 1}` });
+      }
 
-      const ruleState = state.rules.magic_conservation;
+      const ruleState = rules.magic_conservation;
       expect(ruleState.activation).toBe('enabled');
       expect(ruleState.effectiveness).toBe('full');
       expect(ruleState.ruleId).toBe('magic_conservation');
@@ -1355,9 +1404,9 @@ describe('StateManager', () => {
       expect(state).toEqual({
         entities: {},
         relationships: {},
-        knowledge: {},
         epistemicLedger: { claims: {}, bySubject: {}, byProposition: {}, actLog: [] },
-        propositionCatalog: { version: 0, propositions: {}, dependencyGraph: {} },
+        propositionCatalog: { version: 1, propositions: {}, dependencyGraph: {} },
+        commonGround: [],
         threads: {},
         rules: {},
         facts: [],
@@ -1369,7 +1418,14 @@ describe('StateManager', () => {
         makeEvent(1, {
           postconditions: [makeFact('camille', 'age', 25)],
           threadProgress: [
-            { thread: 'main', advancement: 'Start', progressAfter: 1, progressTotal: 10 },
+            {
+              thread: 'main',
+              runId: 'main-run-1' as ThreadRunId,
+              status: 'active',
+              goalSet: [{ goalId: 'investigation', status: 'active' }],
+              advancement: 'Start',
+              provenance: 'event_1',
+            },
           ],
         }),
       );
@@ -1384,7 +1440,7 @@ describe('StateManager', () => {
       expect(state.entities.camille.age).toBe(26);
       expect(state.threads.main).toBeDefined();
       expect(state.threads.main?.status).toBe('active');
-      expect(state.threads.main?.goalStates.progress).toBe('active');
+      expect(state.threads.main?.goalStates.investigation).toBe('active');
     });
 
     it('should honor branch path filtering', () => {
@@ -1641,8 +1697,8 @@ describe('StateManager', () => {
 });
 
 // ============================================================================
-// Rule replay determinism — legacy rule effects and explicit amend/replace
-// fallbacks must produce identical semantic state regardless of wall-clock.
+// Rule replay determinism — canonical RuleTransactions applied to materialized
+// rule states must produce identical semantic state regardless of wall-clock.
 // ============================================================================
 
 describe('Rule replay determinism', () => {
@@ -1650,43 +1706,85 @@ describe('Rule replay determinism', () => {
     vi.useRealTimers();
   });
 
-  it('replays identical legacy rule effects to identical WorldState under different clocks', () => {
-    const events: NarrativeEvent[] = [
-      makeEvent(1, {
-        ruleEffects: [
-          { rule: 'magic_conservation', effect: 'reinforce', evidence: 'Magic is limited' },
-        ],
-      }),
-      makeEvent(2, {
-        ruleEffects: [
-          {
-            rule: 'magic_conservation',
-            effect: 'introduce_exception',
-            evidence: 'Ritual exemption',
-          },
-          { rule: 'oath_binding', effect: 'reinforce', evidence: 'Oaths hold' },
-        ],
-      }),
+  /** Canonical materialized baseline: declared rules seed dormant runtime states. */
+  function makeMaterializedRules(): Record<string, RuleRuntimeState> {
+    return {
+      magic_conservation: {
+        ruleId: 'magic_conservation',
+        currentEpoch: 'magic_conservation-epoch-0',
+        specificationId: 'magic_conservation-spec-v0',
+        activation: 'dormant',
+        effectiveness: 'full',
+        scopeBindings: {},
+        exceptions: [],
+      },
+      oath_binding: {
+        ruleId: 'oath_binding',
+        currentEpoch: 'oath_binding-epoch-0',
+        specificationId: 'oath_binding-spec-v0',
+        activation: 'dormant',
+        effectiveness: 'full',
+        scopeBindings: {},
+        exceptions: [],
+      },
+    };
+  }
+
+  it('replays identical canonical RuleTransactions to identical rules state under different clocks', () => {
+    const magicTx: RuleTransaction[] = [
+      {
+        type: 'rule_transaction',
+        ruleId: 'magic_conservation',
+        operation: 'enable',
+        evidence: 'Magic is limited',
+      },
+      {
+        type: 'rule_transaction',
+        ruleId: 'magic_conservation',
+        operation: 'add_exception',
+        evidence: 'Ritual exemption',
+        exception: {
+          exceptionId: 'magic_conservation-exc-2',
+          status: 'active',
+          constraintIds: [],
+          scopeBindings: {},
+          effect: { type: 'exempt' },
+        },
+      },
     ];
+    const oathTx: RuleTransaction = {
+      type: 'rule_transaction',
+      ruleId: 'oath_binding',
+      operation: 'enable',
+      evidence: 'Oaths hold',
+    };
 
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2025-01-01T00:00:00Z'));
-    const first = new ReplayEngine(CATALOG_CONTEXT).replay(events);
+    const first = makeMaterializedRules();
+    for (let i = 0; i < magicTx.length; i++) {
+      applyRuleTransaction(first, magicTx[i], { nodeId: `evt_${i + 1}` });
+    }
+    applyRuleTransaction(first, oathTx, { nodeId: 'evt_2' });
 
     vi.setSystemTime(new Date('2026-06-15T12:00:00Z'));
-    const second = new ReplayEngine(CATALOG_CONTEXT).replay(events);
+    const second = makeMaterializedRules();
+    for (let i = 0; i < magicTx.length; i++) {
+      applyRuleTransaction(second, magicTx[i], { nodeId: `evt_${i + 1}` });
+    }
+    applyRuleTransaction(second, oathTx, { nodeId: 'evt_2' });
 
-    // Full semantic WorldState equality — no wall-clock fingerprint anywhere.
+    // Full semantic rules-ledger equality — no wall-clock fingerprint anywhere.
     expect(second).toEqual(first);
 
-    // Epoch/exception identities are stable, derived from rule + event ID.
-    const magic = first.rules.magic_conservation;
+    // Canonical epoch/exception identities are stable and explicit.
+    const magic = first.magic_conservation;
     expect(magic?.activation).toBe('enabled');
     expect(magic?.effectiveness).toBe('full');
-    expect(magic?.currentEpoch).toBe(`magic_conservation-epoch-${events[0].id}`);
-    expect(magic?.exceptions[0]?.exceptionId).toBe(`magic_conservation-exc-${events[1].id}`);
+    expect(magic?.currentEpoch).toBe('magic_conservation-epoch-0');
+    expect(magic?.exceptions[0]?.exceptionId).toBe('magic_conservation-exc-2');
     expect(magic?.exceptions[0]?.status).toBe('active');
-    expect(first.rules.oath_binding?.currentEpoch).toBe(`oath_binding-epoch-${events[1].id}`);
+    expect(first.oath_binding?.currentEpoch).toBe('oath_binding-epoch-0');
   });
 
   it('derives stable fallback epochs for amend/replace without epochId under different clocks', () => {
@@ -1704,14 +1802,29 @@ describe('Rule replay determinism', () => {
       specificationId: 'contract_law-spec-v2',
     };
 
+    // Canonical materialized baseline: contract_law is declared before replay.
+    function makeContractLawRules(): Record<string, RuleRuntimeState> {
+      return {
+        contract_law: {
+          ruleId: 'contract_law',
+          currentEpoch: 'contract_law-epoch-0',
+          specificationId: 'contract_law-spec-v1',
+          activation: 'enabled',
+          effectiveness: 'full',
+          scopeBindings: {},
+          exceptions: [],
+        },
+      };
+    }
+
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2025-01-01T00:00:00Z'));
-    const first: Record<string, RuleRuntimeState> = {};
+    const first = makeContractLawRules();
     applyRuleTransaction(first, amend, { nodeId: 'E10' });
     applyRuleTransaction(first, replace, { nodeId: 'E11' });
 
     vi.setSystemTime(new Date('2026-06-15T12:00:00Z'));
-    const second: Record<string, RuleRuntimeState> = {};
+    const second = makeContractLawRules();
     applyRuleTransaction(second, amend, { nodeId: 'E10' });
     applyRuleTransaction(second, replace, { nodeId: 'E11' });
 

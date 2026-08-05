@@ -1,5 +1,5 @@
 event: E5
-title: "捐门槛与致命喝止——你放着罢"
+title: 捐门槛与致命喝止——你放着罢
 narrativeOrder: 6
 sceneType: flashback
 storyTime: winter_solstice
@@ -7,26 +7,26 @@ narrationTime: new_year_eve
 tense: past
 discourseMode: description
 arcPosition: climax
-emotionalValence: "terror_hopeful_collapse"
-conflictType: "person_vs_society"
-resolutionType: "negative_resolution"
+emotionalValence: terror_hopeful_collapse
+conflictType: person_vs_society
+resolutionType: negative_resolution
 pov:
   character: narrator
   type: first_person
-sceneBrief: "祥林嫂反复讲述阿毛的故事，但鲁镇人从掉泪到厌烦到嘲弄——他们开始故意逗她说'祥林嫂，你们的阿毛如果还在，不是也就有这么大了么？'后来又专拿她额上的伤疤取乐，问她'你那时怎么竟肯了？'，她只能无言地走开。柳妈来做帮工，一日问她额角上的伤疤来历，随后告诉她：到了阴司，两个死鬼男人会争她，阎罗王只好把她锯成两半分给他们。柳妈建议她到土地庙捐一条门槛作为替身——给千人踏万人跨，以此赎罪。祥林嫂恐惧万分，独自到西头的土地庙求捐门槛。庙祝起初不肯，等她哭了才答应——十二元鹰洋，她攒了将近一年。捐完之后她精神舒畅，眼光也分外有神。但冬至祭祀时，当她坦然伸手去拿酒杯和筷子时，四婶慌忙大叫：'你放着罢，祥林嫂！'她像被炮烙似的缩了手，脸色同时变成灰黑——连捐了门槛也洗不清她的'污秽'。从此她不再开口，眼睛窅陷下去，头发在几个月内花白，记性也坏了，连淘米也忘记。她变成了一个木偶人。"
+sceneBrief: 祥林嫂反复讲述阿毛的故事，但鲁镇人从掉泪到厌烦到嘲弄——他们开始故意逗她说'祥林嫂，你们的阿毛如果还在，不是也就有这么大了么？'后来又专拿她额上的伤疤取乐，问她'你那时怎么竟肯了？'，她只能无言地走开。柳妈来做帮工，一日问她额角上的伤疤来历，随后告诉她：到了阴司，两个死鬼男人会争她，阎罗王只好把她锯成两半分给他们。柳妈建议她到土地庙捐一条门槛作为替身——给千人踏万人跨，以此赎罪。祥林嫂恐惧万分，独自到西头的土地庙求捐门槛。庙祝起初不肯，等她哭了才答应——十二元鹰洋，她攒了将近一年。捐完之后她精神舒畅，眼光也分外有神。但冬至祭祀时，当她坦然伸手去拿酒杯和筷子时，四婶慌忙大叫：'你放着罢，祥林嫂！'她像被炮烙似的缩了手，脸色同时变成灰黑——连捐了门槛也洗不清她的'污秽'。从此她不再开口，眼睛窅陷下去，头发在几个月内花白，记性也坏了，连淘米也忘记。她变成了一个木偶人。
 beats:
-  - "祥林嫂反复讲述阿毛的故事，但鲁镇人从掉泪到厌烦到嘲弄——他们开始故意逗她说'祥林嫂，你们的阿毛如果还在，不是也就有这么大了么？"
+  - 祥林嫂反复讲述阿毛的故事，但鲁镇人从掉泪到厌烦到嘲弄——他们开始故意逗她说'祥林嫂，你们的阿毛如果还在，不是也就有这么大了么？
   - "'后来又专拿她额上的伤疤取乐，问她'你那时怎么竟肯了？"
   - "'，她只能无言地走开。"
-  - "柳妈来做帮工，一日问她额角上的伤疤来历，随后告诉她：到了阴司，两个死鬼男人会争她，阎罗王只好把她锯成两半分给他们。"
-  - "柳妈建议她到土地庙捐一条门槛作为替身——给千人踏万人跨，以此赎罪。"
-  - "祥林嫂恐惧万分，独自到西头的土地庙求捐门槛。"
-  - "庙祝起初不肯，等她哭了才答应——十二元鹰洋，她攒了将近一年。"
-  - "捐完之后她精神舒畅，眼光也分外有神。"
-  - "但冬至祭祀时，当她坦然伸手去拿酒杯和筷子时，四婶慌忙大叫：'你放着罢，祥林嫂！"
+  - 柳妈来做帮工，一日问她额角上的伤疤来历，随后告诉她：到了阴司，两个死鬼男人会争她，阎罗王只好把她锯成两半分给他们。
+  - 柳妈建议她到土地庙捐一条门槛作为替身——给千人踏万人跨，以此赎罪。
+  - 祥林嫂恐惧万分，独自到西头的土地庙求捐门槛。
+  - 庙祝起初不肯，等她哭了才答应——十二元鹰洋，她攒了将近一年。
+  - 捐完之后她精神舒畅，眼光也分外有神。
+  - 但冬至祭祀时，当她坦然伸手去拿酒杯和筷子时，四婶慌忙大叫：'你放着罢，祥林嫂！
   - "'她像被炮烙似的缩了手，脸色同时变成灰黑——连捐了门槛也洗不清她的'污秽'。"
-  - "从此她不再开口，眼睛窅陷下去，头发在几个月内花白，记性也坏了，连淘米也忘记。"
-  - "她变成了一个木偶人。"
+  - 从此她不再开口，眼睛窅陷下去，头发在几个月内花白，记性也坏了，连淘米也忘记。
+  - 她变成了一个木偶人。
 preconditions:
   - entity: xianglins_wife
     attribute: location
@@ -41,109 +41,135 @@ expectedPostconditions:
   - entity: xianglins_wife
     attribute: spiritual_state
     value: broken
-    confidence: 1.0
+    confidence: 1
   - entity: xianglins_wife
     attribute: has_donated_threshold
     value: true
-    confidence: 1.0
+    confidence: 1
   - entity: xianglins_wife
     attribute: work_capability
     value: diminished
-    confidence: 1.0
+    confidence: 1
   - entity: xianglins_wife
     attribute: appearance
-    value: "grey_black_face_sunken_eyes_white_hair_wooden_puppet"
-    confidence: 1.0
+    value: grey_black_face_sunken_eyes_white_hair_wooden_puppet
+    confidence: 1
   - entity: xianglins_wife
     attribute: emotionalState
     value: spiritually_devastated
-    confidence: 1.0
+    confidence: 1
   - entity: fourth_aunt
     attribute: attitude_toward_xianglins_wife
     value: increasingly_annoyed
-    confidence: 1.0
+    confidence: 1
   - entity: xianglins_wife
     attribute: social_status
-    narrativeHint: "捐门槛之后她以为自己赎了罪——'神气很舒畅，眼光也分外有神'。但冬至祭祀时四婶的喝止——'你放着罢，祥林嫂！'——揭示了一个残酷真相：在民间信仰中，捐门槛可以赎来世的罪，但挡不住今世社会的排斥。仪式的不洁是由人决定的，不是由神决定的。"
-    confidence: 1.0
+    narrativeHint: 捐门槛之后她以为自己赎了罪——'神气很舒畅，眼光也分外有神'。但冬至祭祀时四婶的喝止——'你放着罢，祥林嫂！'——揭示了一个残酷真相：在民间信仰中，捐门槛可以赎来世的罪，但挡不住今世社会的排斥。仪式的不洁是由人决定的，不是由神决定的。
+    confidence: 1
   - entity: liu_ma
     attribute: effect_on_xianglins_wife
-    narrativeHint: "柳妈的出发点是好意——她真心相信捐门槛能救人。但她的地狱恐吓和捐门槛建议共同摧毁了祥林嫂：地狱故事制造了前所未有的恐惧，而捐了门槛后被拒绝则证明这恐惧即使按规则去化解也无法消除。柳妈是无意的毁灭者，也是这套信仰体系的受害者。"
+    narrativeHint: 柳妈的出发点是好意——她真心相信捐门槛能救人。但她的地狱恐吓和捐门槛建议共同摧毁了祥林嫂：地狱故事制造了前所未有的恐惧，而捐了门槛后被拒绝则证明这恐惧即使按规则去化解也无法消除。柳妈是无意的毁灭者，也是这套信仰体系的受害者。
     confidence: 0.9
 threadProgress:
   - thread: T1
-    advancement: "柳妈的地狱恐吓→祥林嫂捐门槛→冬至祭祀被喝止——这是祥林嫂精神崩溃的完整链条。她从恐惧到希望（捐了门槛）再到彻底绝望（捐了也没用），故事的核心悲剧在此完成。"
+    advancement: 柳妈的地狱恐吓→祥林嫂捐门槛→冬至祭祀被喝止——这是祥林嫂精神崩溃的完整链条。她从恐惧到希望（捐了门槛）再到彻底绝望（捐了也没用），故事的核心悲剧在此完成。
     progressAfter: 90
     progressTotal: 100
   - thread: T2
-    advancement: "灵魂问题从理论变成了迫在眉睫的恐怖：柳妈的地狱描述让祥林嫂第一次具体地想象了来世惩罚。捐门槛是她尝试的答案——她遵循了规则、付出了代价，但规则被证明是无效的。"
+    advancement: 灵魂问题从理论变成了迫在眉睫的恐怖：柳妈的地狱描述让祥林嫂第一次具体地想象了来世惩罚。捐门槛是她尝试的答案——她遵循了规则、付出了代价，但规则被证明是无效的。
     progressAfter: 75
     progressTotal: 100
   - thread: T3
-    advancement: "看客对祥林嫂的态度完成了从同情到嘲弄的转变——他们专拿她的额疤取乐，还故意逗她讲阿毛。她的痛苦已经彻底沦为鲁镇人的消遣。"
+    advancement: 看客对祥林嫂的态度完成了从同情到嘲弄的转变——他们专拿她的额疤取乐，还故意逗她讲阿毛。她的痛苦已经彻底沦为鲁镇人的消遣。
     progressAfter: 80
     progressTotal: 100
   - thread: T4
-    advancement: "冬至祭祀——祝福的核心仪式——成为祥林嫂精神死亡的地点。四婶的喝止不是偶然的冲动，而是整个祝福体系对'不洁者'的结构性排斥。"
+    advancement: 冬至祭祀——祝福的核心仪式——成为祥林嫂精神死亡的地点。四婶的喝止不是偶然的冲动，而是整个祝福体系对'不洁者'的结构性排斥。
     progressAfter: 70
     progressTotal: 100
 foreshadowing:
   - id: her_inevitable_expulsion
-    hint: "四婶开始觉得她越来越不像样——'祥林嫂怎么这样了？倒不如那时不留她'。驱逐已是时间问题。"
+    hint: 四婶开始觉得她越来越不像样——'祥林嫂怎么这样了？倒不如那时不留她'。驱逐已是时间问题。
     targetRevealChapter: 3
     thread: T1
 relationshipEffects:
-  - participants:
-      - liu_ma
-      - xianglins_wife
-    effect: establish
-    direction: spiritual_advisor_becomes_destroyer
-    newState:
-      type: well_intentioned_disaster
-      intensity: 90
-  - participants:
-      - fourth_aunt
-      - xianglins_wife
-    effect: change
-    direction: from_pity_to_rejection
-    newState:
-      type: unwanted_burden
-      intensity: 80
+  - type: relationship_transaction
+    effectId: E5:relationship:1
+    relationshipId: liu_ma_xianglins_wife
+    epochId: liu_ma_xianglins_wife:epoch-1
+    membershipAfter:
+      - membershipId: liu_ma_xianglins_wife:member:1
+        entityId: liu_ma
+        role: member
+      - membershipId: liu_ma_xianglins_wife:member:2
+        entityId: xianglins_wife
+        role: member
+    lifecycleAfter: active
+    dimensionSet:
+      - dimensionId: intensity
+        scope: global
+        value: 90
+    provenance: spiritual_advisor_becomes_destroyer (well_intentioned_disaster)
+  - type: relationship_transaction
+    effectId: E5:relationship:2
+    relationshipId: event_fourth_aunt_xianglins_wife
+    epochId: event_fourth_aunt_xianglins_wife:epoch-1
+    membershipAfter:
+      - membershipId: event_fourth_aunt_xianglins_wife:member:1
+        entityId: fourth_aunt
+        role: member
+      - membershipId: event_fourth_aunt_xianglins_wife:member:2
+        entityId: xianglins_wife
+        role: member
+    lifecycleAfter: active
+    dimensionSet:
+      - dimensionId: intensity
+        scope: global
+        value: 80
+    provenance: from_pity_to_rejection (unwanted_burden)
 ruleEffects:
-  - rule: religious_authority
-    effect: reinforce
-    evidence: "柳妈的地狱恐吓——阎罗王将祥林嫂锯成两半分给两个死鬼丈夫——使她陷入前所未有的恐惧。"
-  - rule: widow_purity
-    effect: reinforce
-    evidence: "四婶冬至祭祀时的喝止——'你放着罢，祥林嫂！'——证明捐门槛也不能洗清寡妇的'不洁'标签。"
-  - rule: husbands_authority
-    effect: reinforce
-    evidence: "来世的两个死鬼男人将争夺她——她死后仍然被两个丈夫平分，不得自主。"
+  - type: rule_transaction
+    ruleId: religious_authority
+    operation: enable
+    evidence: 柳妈的地狱恐吓——阎罗王将祥林嫂锯成两半分给两个死鬼丈夫——使她陷入前所未有的恐惧。
+    epochId: religious_authority:epoch-1
+    specificationId: religious_authority:specification-1
+  - type: rule_transaction
+    ruleId: widow_purity
+    operation: enable
+    evidence: 四婶冬至祭祀时的喝止——'你放着罢，祥林嫂！'——证明捐门槛也不能洗清寡妇的'不洁'标签。
+    epochId: widow_purity:epoch-1
+    specificationId: widow_purity:specification-1
+  - type: rule_transaction
+    ruleId: husbands_authority
+    operation: enable
+    evidence: 来世的两个死鬼男人将争夺她——她死后仍然被两个丈夫平分，不得自主。
+    epochId: husbands_authority:epoch-1
+    specificationId: husbands_authority:specification-1
 styleGuidance:
-  tone: "从阿毛故事的重复疲劳→柳妈的骇人地狱描述→捐门槛的短暂希望→冬至喝止的致命一击。四个阶段的情绪色调截然不同，需在同一个场景中完成过渡。"
+  tone: 从阿毛故事的重复疲劳→柳妈的骇人地狱描述→捐门槛的短暂希望→冬至喝止的致命一击。四个阶段的情绪色调截然不同，需在同一个场景中完成过渡。
   targetWordCount: 1500
-  scenePacing: "柳妈的对话需要用日常闲聊的平淡口吻说出最恐怖的内容——越是轻描淡写，越显残酷。捐门槛后的短暂舒朗要写得真切（让读者几乎相信她真的得到救赎了），然后冬至喝止要像一道闪电击碎一切。"
+  scenePacing: 柳妈的对话需要用日常闲聊的平淡口吻说出最恐怖的内容——越是轻描淡写，越显残酷。捐门槛后的短暂舒朗要写得真切（让读者几乎相信她真的得到救赎了），然后冬至喝止要像一道闪电击碎一切。
   characterVoice:
-    liu_ma: "柳妈的语气是关心的、絮叨的、认真的——她不是在吓人，而是在分享她深信的事实。'你呀，我想：这总是你自己愿意了……'——用家常话讲地狱。"
-    fourth_aunt: "一声'你放着罢，祥林嫂！'——短短几个字，要读出恐慌和厌恶混合的力度。"
-
+    liu_ma: 柳妈的语气是关心的、絮叨的、认真的——她不是在吓人，而是在分享她深信的事实。'你呀，我想：这总是你自己愿意了……'——用家常话讲地狱。
+    fourth_aunt: 一声'你放着罢，祥林嫂！'——短短几个字，要读出恐慌和厌恶混合的力度。
 narrativeChecklist:
   items:
-    - dimension: "仪式排除"
+    - dimension: 仪式排除
       description: "'不干不净，祖宗是不吃的'——祭祀体系的科学化排斥。祥林嫂从最勤快的祝福参与者变为永久禁忌"
       required: true
-    - dimension: "致命对话"
+    - dimension: 致命对话
       description: "'你放着罢'两次重复——四婶用最少的字完成了最彻底的精神处决"
       required: true
-    - dimension: "希望→崩溃"
-      description: "捐门槛的漫长积攒('快够一年')与瞬间崩溃('炮烙似的缩手')的时间对比——希望的建立与摧毁"
+    - dimension: 希望→崩溃
+      description: 捐门槛的漫长积攒('快够一年')与瞬间崩溃('炮烙似的缩手')的时间对比——希望的建立与摧毁
       required: true
-    - dimension: "伤疤笑谈"
-      description: "镇上人用祥林嫂的伤疤开玩笑——'你那时怎么后来竟依了呢？'——创伤变成消遣，社会冷漠的微观机制"
+    - dimension: 伤疤笑谈
+      description: 镇上人用祥林嫂的伤疤开玩笑——'你那时怎么后来竟依了呢？'——创伤变成消遣，社会冷漠的微观机制
       required: false
 duration:
   type: summary
-  storyDuration: "从捐门槛积攒到被喝止，数月"
+  storyDuration: 从捐门槛积攒到被喝止，数月
   narrativeLength: 1500
 frequency:
   type: singulative
@@ -154,24 +180,24 @@ anachrony:
   type: analepsis
   scope: external
   function: completing
-  distance: "约1年前——祥林嫂精神崩溃过程"
+  distance: 约1年前——祥林嫂精神崩溃过程
 sourceContext:
   entries:
-    - excerpt: "这种人虽然似乎很可怜，但是败坏风俗的，用她帮忙还可以，祭祀时候可用不着她沾手，一切饭菜，只好自己做，否则，不干不净，祖宗是不吃的。"
+    - excerpt: 这种人虽然似乎很可怜，但是败坏风俗的，用她帮忙还可以，祭祀时候可用不着她沾手，一切饭菜，只好自己做，否则，不干不净，祖宗是不吃的。
       classification: FACT
-      styleNote: "四叔的判决——'不干不净'将祥林嫂从祭祀体系永久排除。这是她社会死亡的关键转折。"
+      styleNote: 四叔的判决——'不干不净'将祥林嫂从祭祀体系永久排除。这是她社会死亡的关键转折。
     - excerpt: "'祥林嫂，你放着罢！我来摆。'四婶慌忙的说。她讪讪的缩了手，又去取烛台。'祥林嫂，你放着罢！我来拿。'四婶又慌忙的说。"
       classification: STYLE
-      styleNote: "鲁迅的致命重复——'你放着罢'两次出现，第二次省略了宾语，四婶用最少的语言完成了最彻底的拒绝。这是全文最简洁也最残忍的对话。"
-    - excerpt: "她像是受了炮烙似的缩手，脸色同时变作灰黑，也不再去取烛台，只是失神的站着……这一回她的变化非常大，第二天，不但眼睛凹陷下去，连精神也更不济了。"
+      styleNote: 鲁迅的致命重复——'你放着罢'两次出现，第二次省略了宾语，四婶用最少的语言完成了最彻底的拒绝。这是全文最简洁也最残忍的对话。
+    - excerpt: 她像是受了炮烙似的缩手，脸色同时变作灰黑，也不再去取烛台，只是失神的站着……这一回她的变化非常大，第二天，不但眼睛凹陷下去，连精神也更不济了。
       classification: FACT
-      styleNote: "捐门槛赎罪的彻底失败——'炮烙似的'是鲁迅唯一一次用酷刑比喻祥林嫂的反应，标志着精神世界的最后坍塌。"
+      styleNote: 捐门槛赎罪的彻底失败——'炮烙似的'是鲁迅唯一一次用酷刑比喻祥林嫂的反应，标志着精神世界的最后坍塌。
 greyLines:
   - id: gl_wooden
     imagery: 木刻与木偶——物化进程
     nodes:
       - eventId: E5
-        semanticAccumulation: "沦为被观看的展览品——'她大约从他们的笑容和声调上，也知道是在嘲笑她'"
+        semanticAccumulation: 沦为被观看的展览品——'她大约从他们的笑容和声调上，也知道是在嘲笑她'
         narrativeOrder: 6
   - id: gl_eye
     imagery: 眼珠间或一轮——最后的生命迹象
@@ -189,17 +215,17 @@ greyLines:
     imagery: 额角伤疤——反抗的标记沦为笑柄
     nodes:
       - eventId: E5
-        semanticAccumulation: "伤疤成为众人嘲笑的谈资——'你那时怎么后来竟依了呢？'——反抗被消解为八卦"
+        semanticAccumulation: 伤疤成为众人嘲笑的谈资——'你那时怎么后来竟依了呢？'——反抗被消解为八卦
         narrativeOrder: 6
   - id: gl_foolish
     imagery: 我真傻，真的——创伤重复
     nodes:
       - eventId: E5
-        semanticAccumulation: "重复讲述变成全镇的笑柄——'他们都能背诵她的话，一听到就烦厌得头痛'"
+        semanticAccumulation: 重复讲述变成全镇的笑柄——'他们都能背诵她的话，一听到就烦厌得头痛'
         narrativeOrder: 6
   - id: gl_hair
     imagery: 头发与容貌的逐次褪色
     nodes:
       - eventId: E5
-        semanticAccumulation: "外貌进一步憔悴——'死尸似的脸上又整日没有笑影'"
+        semanticAccumulation: 外貌进一步憔悴——'死尸似的脸上又整日没有笑影'
         narrativeOrder: 6

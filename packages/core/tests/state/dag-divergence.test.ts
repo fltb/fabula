@@ -22,6 +22,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { compileEntityTypeCatalog } from '../../src/entity/entity-catalog-compiler.js';
 import { buildStoryOrderIndex } from '../../src/state/dag.ts';
 import { ReplayEngine } from '../../src/state/replay.ts';
+import { applyRuleTransaction } from '../../src/state/rule-replay.js';
 import { compileStoryBoundaries } from '../../src/state/story-boundaries.ts';
 import type {
   EntityCatalogContext,
@@ -31,6 +32,8 @@ import type {
   EntityTypeDefinitionSource,
   Fact,
   NarrativeEvent,
+  RuleRuntimeState,
+  RuleTransaction,
 } from '../../src/types/index.ts';
 
 // ─── Synthetic catalog (explicit; no default catalog) ───────────────────────
@@ -260,34 +263,61 @@ describe('DAG determinism: identical inputs produce equal outputs independent of
     expect(first.finalState.entities.hero?.location).toBe('end');
     expect(first.finalState.entities.hero?.name).toBe('Hero');
   });
-  it('replays legacy rule effects to identical WorldState at different clock times', () => {
-    const T = heroIntroduction();
-    const A: NarrativeEvent = {
-      ...event('A', 1, 2),
-      ruleEffects: [{ rule: 'magic_conservation', effect: 'reinforce', evidence: 'A casts' }],
+  it('applies canonical RuleTransactions to identical materialized states at different clock times', () => {
+    // Deterministic rule replay: every transaction is applied to a canonical
+    // pre-materialized RuleRuntimeState (declaration-derived baseline). No
+    // conversion, no implicit rule creation — so clock time cannot leak in.
+    function makeRules(): Record<string, RuleRuntimeState> {
+      return {
+        magic_conservation: {
+          ruleId: 'magic_conservation',
+          currentEpoch: 'magic_conservation-epoch-0',
+          specificationId: 'magic_conservation-spec-v0',
+          activation: 'dormant',
+          effectiveness: 'full',
+          scopeBindings: {},
+          exceptions: [],
+        },
+      };
+    }
+
+    const A: RuleTransaction = {
+      type: 'rule_transaction',
+      ruleId: 'magic_conservation',
+      operation: 'enable',
+      evidence: 'A casts',
     };
-    const C: NarrativeEvent = {
-      ...event('C', 5, 3),
-      ruleEffects: [
-        { rule: 'magic_conservation', effect: 'introduce_exception', evidence: 'C is exempt' },
-      ],
+    const C: RuleTransaction = {
+      type: 'rule_transaction',
+      ruleId: 'magic_conservation',
+      operation: 'add_exception',
+      evidence: 'C is exempt',
+      exception: {
+        exceptionId: 'magic_conservation-exc-C',
+        status: 'active',
+        constraintIds: [],
+        scopeBindings: {},
+        effect: { type: 'exempt' },
+      },
     };
-    const B = event('B', 9, 1, [], [fact('hero', 'status', 'first')]);
-    const events = [T, A, C, B];
 
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2025-01-01T00:00:00Z'));
-    const first = new ReplayEngine(CATALOG_CONTEXT).replay(events);
+    const first = makeRules();
+    applyRuleTransaction(first, A, { nodeId: 'A' });
+    applyRuleTransaction(first, C, { nodeId: 'C' });
 
     vi.setSystemTime(new Date('2026-06-15T12:00:00Z'));
-    const second = new ReplayEngine(CATALOG_CONTEXT).replay(events);
+    const second = makeRules();
+    applyRuleTransaction(second, A, { nodeId: 'A' });
+    applyRuleTransaction(second, C, { nodeId: 'C' });
 
-    // Full WorldState equality across clocks, including the rules ledger.
+    // Full rules-ledger equality across clocks.
     expect(second).toEqual(first);
 
-    // Legacy-derived epoch/exception identities are stable (rule + event ID).
-    const magic = first.rules.magic_conservation;
-    expect(magic?.currentEpoch).toBe('magic_conservation-epoch-A');
+    // Canonical epoch/exception identities are stable and explicit.
+    const magic = first.magic_conservation;
+    expect(magic?.currentEpoch).toBe('magic_conservation-epoch-0');
     expect(magic?.activation).toBe('enabled');
     expect(magic?.exceptions[0]?.exceptionId).toBe('magic_conservation-exc-C');
     expect(magic?.exceptions[0]?.status).toBe('active');

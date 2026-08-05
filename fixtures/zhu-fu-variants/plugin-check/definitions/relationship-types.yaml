@@ -1,0 +1,74 @@
+types:
+  forced_then_beloved_husband:
+    typeId: forced_then_beloved_husband
+    label: forced then beloved husband
+    description: Narrative relationship type forced_then_beloved_husband.
+    roles:
+      - roleId: member
+        label: Member
+        minCardinality: 2
+        maxCardinality: 2
+        allowedEntityKinds: &a1
+          - character
+          - location
+          - item
+          - faction
+          - narrator
+          - assertion
+          - concept
+    continuityImpact: preserve
+  witness_subject:
+    typeId: witness_subject
+    label: witness subject
+    description: Narrative relationship type witness_subject.
+    roles:
+      - roleId: member
+        label: Member
+        minCardinality: 2
+        maxCardinality: 2
+        allowedEntityKinds: *a1
+    continuityImpact: preserve
+  owner_property:
+    typeId: owner_property
+    label: owner property
+    description: Narrative relationship type owner_property.
+    roles:
+      - roleId: member
+        label: Member
+        minCardinality: 2
+        maxCardinality: 2
+        allowedEntityKinds: *a1
+    continuityImpact: preserve
+  coworker_spiritual_advisor:
+    typeId: coworker_spiritual_advisor
+    label: coworker spiritual advisor
+    description: Narrative relationship type coworker_spiritual_advisor.
+    roles:
+      - roleId: member
+        label: Member
+        minCardinality: 2
+        maxCardinality: 2
+        allowedEntityKinds: *a1
+    continuityImpact: preserve
+  master_servant:
+    typeId: master_servant
+    label: master servant
+    description: Narrative relationship type master_servant.
+    roles:
+      - roleId: member
+        label: Member
+        minCardinality: 2
+        maxCardinality: 2
+        allowedEntityKinds: *a1
+    continuityImpact: preserve
+  event_relationship:
+    typeId: event_relationship
+    label: Event relationship
+    description: Canonical relationship type for authored event interactions.
+    roles:
+      - roleId: member
+        label: Member
+        minCardinality: 2
+        maxCardinality: 2
+        allowedEntityKinds: *a1
+    continuityImpact: preserve

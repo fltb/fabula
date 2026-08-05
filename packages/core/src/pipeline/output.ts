@@ -12,7 +12,7 @@ import type { Message } from '../ai/types.ts';
 import { countNarrativeText, NARRATIVE_TEXT_COUNT_VERSION } from '../assembler/count.ts';
 import type { JsonValue } from '../contracts/json.ts';
 import type { BranchSet, Condition } from '../types/branch.ts';
-import type { GameDialogueChoice } from '../types/index.ts';
+import type { GameDialogueChoice, RelationshipTransaction } from '../types/index.ts';
 import type { RenderJob, RenderRequestRecord, RenderSceneResult } from './render.js';
 
 /** JSON-safe projection of a provider request record for an output intent. */
@@ -177,10 +177,11 @@ function collectAllReferenceFiles(jobs: RenderJob[], results: RenderSceneResult[
 
     // Thread progress — keyed by thread ID
     for (const tp of event.threadProgress) {
+      const goalSet = tp.goalSet ?? [];
       threads[tp.thread] = {
-        advancement: tp.advancement,
-        progressAfter: tp.progressAfter,
-        progressTotal: tp.progressTotal,
+        advancement: tp.advancement ?? '',
+        goalAchieved: goalSet.filter((goal) => goal.status === 'achieved').length,
+        goalTotal: goalSet.length,
       };
     }
 
@@ -196,29 +197,21 @@ function collectAllReferenceFiles(jobs: RenderJob[], results: RenderSceneResult[
 
     // Relationship effects — derive participants, direction, type, intensity
     for (const re of event.relationshipEffects) {
-      const participants = re.membershipAfter.map((m) => m.entityId);
-      const directionDim = re.dimensionSet?.find((d) => d.dimensionId === 'direction');
-      const typeDim = re.dimensionSet?.find((d) => d.dimensionId === 'type');
-      const intensityDim = re.dimensionSet?.find((d) => d.dimensionId === 'intensity');
-      const entry: Record<string, unknown> = {
-        participants: participants.length >= 2 ? [participants[0], participants[1]] : [],
-        effect: re.provenance?.replace('compat:RelationshipChange:', '') ?? 'change',
-        direction: (directionDim?.value as string) ?? '',
-      };
-      if (typeDim || intensityDim) {
-        entry.newState = {
-          type: (typeDim?.value as string) ?? '',
-          intensity: (intensityDim?.value as number) ?? 0,
-        };
+      if (re.type === 'identity_transition') {
+        // Identity transition groups project each established transaction.
+        for (const transaction of re.newTransactions) {
+          relationships.push(projectRelationshipEntry(transaction));
+        }
+        continue;
       }
-      relationships.push(entry);
+      relationships.push(projectRelationshipEntry(re));
     }
 
-    // Rule effects — each entry carries the rule as key
+    // Rule effects — each transaction carries the rule as ruleId
     for (const r of event.ruleEffects) {
       rules.push({
-        rule: r.rule,
-        effect: r.effect,
+        ruleId: r.ruleId,
+        operation: r.operation,
         evidence: r.evidence,
         eventId: event.id,
       });
@@ -226,6 +219,26 @@ function collectAllReferenceFiles(jobs: RenderJob[], results: RenderSceneResult[
   }
 
   return { threads, foreshadowing, relationships, rules };
+}
+
+/** JSON-safe relationship entry projection for canonical relationship transactions. */
+function projectRelationshipEntry(re: RelationshipTransaction): Record<string, unknown> {
+  const participants = re.membershipAfter.map((m) => m.entityId);
+  const directionDim = re.dimensionSet?.find((d) => d.dimensionId === 'direction');
+  const typeDim = re.dimensionSet?.find((d) => d.dimensionId === 'type');
+  const intensityDim = re.dimensionSet?.find((d) => d.dimensionId === 'intensity');
+  const entry: Record<string, unknown> = {
+    participants: participants.length >= 2 ? [participants[0], participants[1]] : [],
+    effect: re.lifecycleAfter ?? 'change',
+    direction: (directionDim?.value as string) ?? '',
+  };
+  if (typeDim || intensityDim) {
+    entry.newState = {
+      type: (typeDim?.value as string) ?? '',
+      intensity: (intensityDim?.value as number) ?? 0,
+    };
+  }
+  return entry;
 }
 
 /** Build JSON-safe scene metadata for an output entry. */

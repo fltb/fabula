@@ -3,6 +3,7 @@
 > 撰写日期：2026-07-24
 > 分析范围：Fabula 系统的叙事规划（Narrative Planning）层——TODO.md 中完全缺失的前向事件生成层
 > 项目名：Fabula（仓库 github.com/fltb/fabula）
+> **历史设计记录**：本文保留 2026-07-24 的分析与提案，不代表当前实现。当前 Core 没有 `NarrativePlanner`；`SurfacePlanner` 仅组织已写场景的渲染分组，绝不生成或写入 `NarrativeEvent`。以 [`docs/current-state.md`](../../current-state.md) 为准。
 
 ---
 

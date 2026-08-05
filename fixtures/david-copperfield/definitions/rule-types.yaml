@@ -1,0 +1,46 @@
+types:
+  constraint:
+    typeId: constraint
+    name: Child Labour in Victorian England
+    category: economic_exploitation
+    ruleClass: social_norm
+    defaultConstraints:
+      - constraintId: child_labor_exploitation:constraint:1
+        kind: transition_constraint
+        enforcement: hard
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.age<14 AND entity.parent.status IN ('deceased',
+            'remarried_to_cruel') => entity.employed=true
+      - constraintId: child_labor_exploitation:constraint:2
+        kind: state_invariant
+        enforcement: audit
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.age<14 AND entity.employed=true => entity.wages <
+            entity.living_cost
+      - constraintId: child_labor_exploitation:constraint:3
+        kind: state_invariant
+        enforcement: audit
+        applicableEffectiveness:
+          - full
+          - limited
+          - nullified
+        scope: {}
+        predicate:
+          version: "1"
+          type: simple
+          expression: entity.age<14 AND entity.employed=true =>
+            entity.can_resist_employer=false

@@ -1,0 +1,63 @@
+types:
+  manipulator_victim:
+    typeId: manipulator_victim
+    label: manipulator victim
+    description: Narrative relationship type manipulator_victim.
+    roles:
+      - roleId: member
+        label: Member
+        minCardinality: 2
+        maxCardinality: 2
+        allowedEntityKinds: &a1
+          - character
+          - location
+          - item
+          - faction
+          - narrator
+          - assertion
+          - concept
+    continuityImpact: preserve
+  love_interest:
+    typeId: love_interest
+    label: love interest
+    description: Narrative relationship type love_interest.
+    roles:
+      - roleId: member
+        label: Member
+        minCardinality: 2
+        maxCardinality: 2
+        allowedEntityKinds: *a1
+    continuityImpact: preserve
+  abusive_stepfather:
+    typeId: abusive_stepfather
+    label: abusive stepfather
+    description: Narrative relationship type abusive_stepfather.
+    roles:
+      - roleId: member
+        label: Member
+        minCardinality: 2
+        maxCardinality: 2
+        allowedEntityKinds: *a1
+    continuityImpact: preserve
+  friendship:
+    typeId: friendship
+    label: friendship
+    description: Narrative relationship type friendship.
+    roles:
+      - roleId: member
+        label: Member
+        minCardinality: 2
+        maxCardinality: 2
+        allowedEntityKinds: *a1
+    continuityImpact: preserve
+  friendship_betrayed:
+    typeId: friendship_betrayed
+    label: friendship betrayed
+    description: Narrative relationship type friendship_betrayed.
+    roles:
+      - roleId: member
+        label: Member
+        minCardinality: 2
+        maxCardinality: 2
+        allowedEntityKinds: *a1
+    continuityImpact: preserve

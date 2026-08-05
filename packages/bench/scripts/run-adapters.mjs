@@ -42,6 +42,62 @@ function safeId(name) {
     .replace(/^_|_$/g, '')
     .toLowerCase();
 }
+function writeRequiredCatalogs(defsDir, { relationshipTypes = {} } = {}) {
+  const lifecycle = {
+    attributeId: 'lifecycle',
+    valueType: 'string',
+    requiredAt: 'introduction',
+    writePolicy: 'lifecycle_managed',
+    allowedLifecycleStates: ['active', 'inactive', 'retired'],
+    unsetAllowed: false,
+    semanticRole: 'lifecycle',
+  };
+  const traits = {
+    attributeId: 'traits',
+    valueType: 'string_list',
+    requiredAt: 'never',
+    writePolicy: 'immutable',
+    unsetAllowed: true,
+  };
+  const type = (typeId, kind) => ({
+    typeId,
+    kind,
+    attributes: { lifecycle: { ...lifecycle }, traits: { ...traits } },
+    lifecyclePolicy: {
+      allowedTransitions: [
+        ['active', 'inactive'],
+        ['active', 'retired'],
+        ['inactive', 'active'],
+        ['inactive', 'retired'],
+      ],
+    },
+    referenceCapabilities: { defaultEligibility: kind === 'character' ? 'live' : 'identity' },
+    typedInvariants: [],
+  });
+  writeYAML(path.join(defsDir, 'entity-types.yaml'), {
+    types: { character: type('character', 'character'), location: type('location', 'location') },
+  });
+  writeYAML(path.join(defsDir, 'thread-types.yaml'), {
+    types: {
+      primary: {
+        typeId: 'primary',
+        description: 'Primary narrative thread type',
+        allowedPhases: ['opening', 'development', 'resolution'],
+        lifecyclePolicy: { reopenPolicy: 'forbidden' },
+        timeDomain: 'story',
+        stableGoals: [],
+        stableMilestones: [],
+      },
+    },
+  });
+  writeYAML(path.join(defsDir, 'propositions.yaml'), {
+    version: 1,
+    propositions: {},
+    dependencyGraph: {},
+  });
+  writeYAML(path.join(defsDir, 'relationship-types.yaml'), { types: relationshipTypes });
+  writeYAML(path.join(defsDir, 'rule-types.yaml'), { types: {} });
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ChiNovelKE → Full Project
@@ -100,16 +156,53 @@ function buildChiNovelKEProject(raw) {
     });
   }
 
-  // Relationships
+  // Canonical relationship declarations and their catalog types.
+  const relationshipTypes = {};
   for (const r of raw.relations) {
-    writeYAML(path.join(relsDir, `${safeId(r.id)}.yaml`), {
-      id: r.id,
-      participants: [r.from_id, r.to_id],
-      type: r.type,
-      description: r.description || '',
-      initialState: { intensity: r.intensity || 50, direction: r.direction || 'bidirectional' },
+    const typeId = safeId(r.type || 'narrative_relationship') || 'narrative_relationship';
+    relationshipTypes[typeId] ||= {
+      typeId,
+      label: typeId.replace(/_/g, ' '),
+      description: `Relationship type imported from ChiNovelKE (${typeId}).`,
+      roles: [
+        {
+          roleId: 'member',
+          label: 'Member',
+          minCardinality: 2,
+          maxCardinality: 2,
+          allowedEntityKinds: [
+            'character',
+            'location',
+            'item',
+            'faction',
+            'narrator',
+            'assertion',
+            'concept',
+          ],
+        },
+      ],
+      continuityImpact: 'preserve',
+    };
+    const relationshipId = safeId(r.id);
+    writeYAML(path.join(relsDir, `${relationshipId}.yaml`), {
+      relationshipId,
+      typeId,
+      initialEpoch: {
+        epochId: `${relationshipId}:epoch-1`,
+        lifecycle: 'active',
+        memberships: [
+          { membershipId: `${relationshipId}:member:1`, entityId: r.from_id, role: 'member' },
+          { membershipId: `${relationshipId}:member:2`, entityId: r.to_id, role: 'member' },
+        ],
+        dimensions: [
+          { dimensionId: 'intensity', scope: 'global', value: r.intensity || 50 },
+          { dimensionId: 'direction', scope: 'global', value: r.direction || 'bidirectional' },
+        ],
+      },
     });
   }
+
+  writeRequiredCatalogs(defsDir, { relationshipTypes });
 
   // state_initial.yaml
   writeYAML(path.join(defsDir, 'state_initial.yaml'), {
@@ -118,6 +211,7 @@ function buildChiNovelKEProject(raw) {
     ],
     threads: [],
     worldFacts: [],
+    knowledge: { claims: [], commonGround: [] },
   });
 
   // chapter placeholder
@@ -159,10 +253,12 @@ function buildAgentSFTProject(chapters) {
   });
 
   const defsDir = mkdir(projDir, 'definitions');
+  writeRequiredCatalogs(defsDir);
   writeYAML(path.join(defsDir, 'state_initial.yaml'), {
     timeAnchors: [{ id: 'default_time', at: 'day_0' }],
     threads: [],
     worldFacts: [],
+    knowledge: { claims: [], commonGround: [] },
   });
 
   // Collect all unique character names
@@ -269,6 +365,7 @@ function buildIN3KProject(batchPath) {
   });
 
   const defsDir = mkdir(projDir, 'definitions');
+  writeRequiredCatalogs(defsDir);
   // Create time anchors for the first novel's chapters
   const firstNovel = batch[0];
   const timeAnchors = firstNovel.chapters.map((ch, i) => ({
@@ -280,6 +377,7 @@ function buildIN3KProject(batchPath) {
     timeAnchors,
     threads: [],
     worldFacts: [],
+    knowledge: { claims: [], commonGround: [] },
   });
 
   for (const novel of batch.slice(0, 3)) {

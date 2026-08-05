@@ -8,6 +8,7 @@ import { durationProfileSchema } from './duration.js';
 import { frequencyProfileSchema } from './frequency.js';
 import { gameDialogueChoicesSchema } from './game-dialogue.js';
 import { greyLineSchema } from './grey-line.js';
+import { knowledgeTransactionSchema } from './knowledge.js';
 import { narrativeChecklistSchema } from './narrative-checklist.js';
 import {
   absentApparatusSchema,
@@ -24,11 +25,11 @@ import {
   introduceEntrySchema,
   postconditionSchema,
   preconditionSchema,
-  relationshipChangeSchema,
-  ruleEffectSchema,
   styleGuidanceSchema,
   threadProgressEntrySchema,
 } from './primitives.js';
+import { relationshipEffectSchema } from './relationship.js';
+import { ruleTransactionSchema } from './rule.js';
 import { sourceContextSchema } from './source-context.js';
 import { authoredStoryTimeSchema } from './timestamp.js';
 export const eventFileSchema = z
@@ -72,10 +73,11 @@ export const eventFileSchema = z
     styleGuidance: styleGuidanceSchema.optional(),
     choices: gameDialogueChoicesSchema.optional(),
     threadProgress: z.array(threadProgressEntrySchema).optional(),
+    knowledgeTransactions: z.array(knowledgeTransactionSchema).optional(),
     greyLines: z.array(greyLineSchema).optional(),
     foreshadowing: z.array(foreshadowEntrySchema).optional(),
-    relationshipEffects: z.array(relationshipChangeSchema).optional(),
-    ruleEffects: z.array(ruleEffectSchema).optional(),
+    relationshipEffects: z.array(relationshipEffectSchema).optional(),
+    ruleEffects: z.array(ruleTransactionSchema).optional(),
     introduces: z.array(introduceEntrySchema).optional(),
     authorNotes: z.array(z.string()).optional(),
     targetAudience: z.string().optional(),

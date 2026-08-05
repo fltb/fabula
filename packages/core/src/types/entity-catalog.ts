@@ -10,6 +10,10 @@
 
 import type { z } from 'zod';
 import type { EntityId, EntityKind, EntityRuntimeState, EntityTypeRef } from './entity.js';
+import type { PropositionCatalog } from './knowledge.js';
+import type { RelationshipDeclaration, RelationshipTypeCatalog } from './relationship.js';
+import type { RuleDeclaration, RuleTypeCatalog } from './rule.js';
+import type { ThreadDeclaration, ThreadTypeCatalog } from './thread.js';
 
 // ——— Attribute Definition ———
 
@@ -97,6 +101,21 @@ export interface EntityDeclarationCatalog {
 export interface EntityCatalogContext {
   entityDeclarationCatalog: EntityDeclarationCatalog;
   entityTypeCatalog: RuntimeEntityTypeCatalog;
+}
+
+/**
+ * The complete immutable narrative semantic catalog set. Every replay, graph,
+ * render, and validation path receives this context; no domain derives a
+ * fallback catalog or declaration from event effects.
+ */
+export interface NarrativeCatalogContext extends EntityCatalogContext {
+  threadTypeCatalog: ThreadTypeCatalog;
+  threadDeclarations: readonly ThreadDeclaration[];
+  propositionCatalog: PropositionCatalog;
+  relationshipTypeCatalog: RelationshipTypeCatalog;
+  relationshipDeclarations: readonly RelationshipDeclaration[];
+  ruleTypeCatalog: RuleTypeCatalog;
+  ruleDeclarations: readonly RuleDeclaration[];
 }
 
 // ——— Author-facing Catalog Source (versionless) ———

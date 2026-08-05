@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { type LLMProvider, validateNovel } from '@novalistically/core';
@@ -143,6 +143,23 @@ describe('CLI source and MCP boundaries', () => {
       expect(existsSync(join(project, '.git'))).toBe(false);
       expect(existsSync(join(project, 'definitions', 'discourse-ledger.yaml'))).toBe(true);
       expect(existsSync(join(project, 'chapters', 'chapter_01', '_chapter.yaml'))).toBe(true);
+      for (const rootDoc of [
+        'state_initial.yaml',
+        'entity-types.yaml',
+        'thread-types.yaml',
+        'propositions.yaml',
+        'relationship-types.yaml',
+        'rule-types.yaml',
+      ]) {
+        expect(
+          existsSync(join(project, 'definitions', rootDoc)),
+          `missing canonical root ${rootDoc}`,
+        ).toBe(true);
+      }
+      const stateInitial = readFileSync(join(project, 'definitions', 'state_initial.yaml'), 'utf8');
+      expect(stateInitial).toContain('knowledge:');
+      expect(stateInitial).toContain('claims: []');
+      expect(stateInitial).toContain('commonGround: []');
       await expect(validateNovel(loader.load(project))).resolves.toMatchObject({ passed: true });
     } finally {
       rmSync(parent, { recursive: true, force: true });

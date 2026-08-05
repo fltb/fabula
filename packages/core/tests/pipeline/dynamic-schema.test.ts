@@ -525,9 +525,19 @@ describe('analysis contract', () => {
       {
         ruleId: 'rule_1',
         name: 'Magic Systems',
-        statement: 'Magic must have a cost',
-        category: 'world',
-        source: 'test',
+        typeId: 'world',
+        initialEpochId: 'rule_1:epoch-1',
+        initialSpecificationId: 'rule_1:spec-1',
+        initialActivation: 'enabled',
+        initialEffectiveness: 'full',
+        scopeBindings: {},
+        exceptions: [],
+        specifications: {
+          'rule_1:spec-1': {
+            statement: 'Magic must have a cost',
+            constraints: [],
+          },
+        },
       },
     ];
 

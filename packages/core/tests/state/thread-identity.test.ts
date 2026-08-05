@@ -84,27 +84,24 @@ describe('Thread Identity', () => {
     expect(decl.initialGoalStates?.[0].status).toBe('active');
   });
 
-  it('ThreadDeclarationCatalog indexes by threadId', () => {
-    const catalog: ThreadDeclarationCatalog = {
-      declarations: {
-        T1: {
-          threadId: 'T1',
-          name: 'Mystery Thread',
-          description: 'The central mystery',
-          typeId: 'mystery',
-        },
-        T2: {
-          threadId: 'T2',
-          name: 'Romance Thread',
-          description: 'The love story',
-          typeId: 'character_arc',
-        },
+  it('ThreadDeclarationCatalog is the canonical declaration list', () => {
+    const catalog: ThreadDeclarationCatalog = [
+      {
+        threadId: 'T1',
+        name: 'Mystery Thread',
+        description: 'The central mystery',
+        typeId: 'mystery',
       },
-    };
+      {
+        threadId: 'T2',
+        name: 'Romance Thread',
+        description: 'The love story',
+        typeId: 'character_arc',
+      },
+    ];
 
-    expect(catalog.declarations.T1).toBeDefined();
-    expect(catalog.declarations.T2).toBeDefined();
-    expect(catalog.declarations.T1.name).toBe('Mystery Thread');
+    expect(catalog.map((declaration) => declaration.threadId)).toEqual(['T1', 'T2']);
+    expect(catalog[0].name).toBe('Mystery Thread');
   });
 
   it('ThreadId is a branded string type', () => {

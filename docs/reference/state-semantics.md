@@ -33,7 +33,7 @@ This document defines the state semantics of the Novalistically narrative engine
 
 ## 1. Supported Scope
 
-Novalistically models story state as a **discrete, deterministic, replayable** system. Every state change is recorded as a `NarrativeEvent`. The world state is never mutated in place — it is always **derived by replaying events from an initial state**.
+Novalistically models story state as a **discrete, deterministic, replayable** system. A declaration-owned baseline is materialized before authored `NarrativeEvent`s replay; the world state is derived from that baseline plus the selected causal event order, never mutated in place.
 
 ### 1.1 Event Sourcing Architecture
 
@@ -43,9 +43,9 @@ The `WorldState` interface captures the core dimensions of narrative state:
 |-----------|-----|-------------|
 | `entities` | `EntityId → Record<string, unknown>` | Entity runtime state (lifecycle, attributes) |
 | `relationships` | `RelationshipId → RelationshipRuntimeState` | Multi-entity relationship state (dimensions, epochs, membership) |
-| `knowledge` | `EntityId → { knownFacts: FactId[] }` | Character/faction knowledge/belief |
-| `epistemicLedger?` | `EpistemicLedger` | STATE-4: character attitudes toward propositions (optional) |
-| `propositionCatalog?` | `PropositionCatalog` | STATE-4: immutable proposition catalog (optional) |
+| `epistemicLedger` | `EpistemicLedger` | Required claims/attitudes ledger. |
+| `propositionCatalog` | `PropositionCatalog` | Required immutable project proposition catalog. |
+| `commonGround` | `CommonGroundRecord[]` | Required common-ground records. |
 | `threads` | `string → ThreadRuntimeState` | Narrative thread state (`threadId`, `status`, `currentRunId`, `phase`, `bindings`, `goalStates`, `milestoneStates`, `semanticStateHash`) |
 | `rules` | `string → RuleRuntimeState` | World rule state (`activation`, `effectiveness`, `exceptions[]`) |
 | `facts` | `Fact[]` | Append-only fact log |
@@ -56,7 +56,7 @@ The `WorldState` interface captures the core dimensions of narrative state:
 
 The causal order is produced by a three-stage compilation pipeline (`buildCausalEdges()` / `topologicalSort()` no longer exist):
 
-1. **`compileStoryRuntimeGraph()`** (`graph-adapter.ts`) resolves the temporal context for ALL events *before* branch projection (`resolveTemporalContext()`), filters events by `includesPath(event.branchExistence, branchPath)`, merges deduplicated/conflict-checked `initialFacts` plus initial thread declarations into the `system:initial` root node (`INITIAL_STORY_ROOT_ID`) — there is NO genesis narrative event; initial writes are separate deterministic input and are never replayed as an ordinary event — and emits normalized `CompileNode[]` (effects, reads, branch scope, explicit edges).
+1. **`compileStoryRuntimeGraph()`** (`graph-adapter.ts`) resolves temporal context for all events before branch projection (`resolveTemporalContext()`), filters events by `includesPath(event.branchExistence, branchPath)`, and emits normalized `CompileNode[]`. Its `system:initial` root models initial entity facts plus current baseline thread-identity inputs (`thread:<threadId>`); the canonical `NarrativeStateBaseline` supplies the complete thread states and all knowledge, relationship, and rule state separately to replay and story-boundary compilation. Neither path creates a genesis `NarrativeEvent`.
 2. **`compileGraph()`** (`graph-compiler.ts`) runs the fixed 12-stage compiler: 1 normalize outputs → 2 extract reads → 3 filter branch → 4 resolve declarations → 5 validate coordinate/order → 6 derive temporal internal edges → 7 pre-provider StoryOrderIndex → 8 infer providers/absence → 9 rebuild final StoryOrderIndex → 10 commutativity → 11 branch/closure/cycle validation → 12 hash/replay. It produces a `StoryGraph` and/or `DiscourseGraph` with four edge classes: `author_origin` (explicit `causalPredecessors`), `provider` (read→write), `same_coordinate_order` (explicit ordering at equal coordinates), and `internal` (derived temporal edges).
 3. **`buildStoryOrderIndex()`** (`dag.ts`) runs Kahn's algorithm over the compiled adjacency to produce the deterministic linear extension plus a transitive-ancestor index. Story point coordinates on the same clock already generate bipartite `internal` temporal edges between adjacent scalar buckets (`causalGroupId: "temporal:<clock>:<from>:<to>"`), so the index itself only breaks ties among genuinely unrelated nodes — by event ID (`localeCompare`), with the initial root first. `narrativeOrder` is NEVER consulted for causal ordering — it remains used for catalog/selector sorting, scene metadata, EventStore ordering, and runtime/legacy assembly paths (e.g. `ProseConcatenator`); the verified invariant is only that it is never the causal replay order.
 
@@ -73,18 +73,18 @@ Canonical keys: deterministic facts use `factKey(fact) = "${entityId}.${attribut
 - `stateAfterByEventId: Map<string, WorldState>` — snapshot of state after each event
 - `finalState: WorldState` — state after all events
 
-Initial facts (`initialFacts`) are applied before the first event, providing the genesis state. These are NOT a synthetic `NarrativeEvent` — they are separate deterministic input.
+Initial entity facts (`initialFacts`) and the canonical `NarrativeStateBaseline` are applied before the first event. They are separate deterministic inputs, not synthetic `NarrativeEvent`s.
 
 **Test:** `story-boundaries.test.ts`, `genesis-root.test.ts`
 
 ### 1.4 ReplayEngine
 
-`ReplayEngine.replay()` (in `replay.ts`) first compiles `compileStoryRuntimeGraph()` and then replays the ordinary events in `order.topologicalOrder`, applying the baseline (`applyInitialFacts` + initial thread declarations) before the first event. Each event is applied through `applyNarrativeEvent()` (`event-application.ts`) in a fixed phase order:
+`ReplayEngine.replay()` (in `replay.ts`) first compiles `compileStoryRuntimeGraph()` and then replays ordinary events in `order.topologicalOrder`, applying the canonical baseline and initial facts before the first event. Each event is applied through `applyNarrativeEvent()` (`event-application.ts`) in a fixed phase order:
 
-1. **Phase 1: Validate all deterministic preconditions** — throws `PreconditionMismatchError` on failure
-2. **Phase 2: Apply postcondition effects** — set/unset writes with catalog-driven write constraints (`validateCatalogWrite()`: `immutable` / `write_once` / `mutable` / `lifecycle_managed` write policies, `unsetAllowed`, lifecycle-attribute unset rejection, invalid lifecycle state / disallowed transition, same-coordinate lifecycle conflicts, and writes to retired entities — all throw `ConfigError`; duplicate write to the same `(entityId, attribute)` within one event throws `ConfigError`)
-3. **Phase 3: Validate participants** — retired entities cannot participate
-4. **Phase 4: Apply transactions** — thread transactions, relationship transactions, rule transactions
+1. **Phase 1: Validate deterministic preconditions** — throws `PreconditionMismatchError` on failure.
+2. **Phase 2: Apply postcondition effects** — set/unset writes with catalog-driven write constraints.
+3. **Phase 3: Validate participants** — retired entities cannot participate.
+4. **Phase 4: Apply transactions** — normalized thread, relationship, rule, and knowledge transactions.
 
 `getStateAt(position)` replays only the first `position` causally ordered events (0 = baseline).
 

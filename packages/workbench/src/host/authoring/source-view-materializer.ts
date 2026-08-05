@@ -28,7 +28,7 @@ import { join, resolve } from 'node:path';
 import type { ProjectSourceSnapshotV1 } from '@novalistically/core';
 import { computeSourceDocumentHash } from '@novalistically/core/source';
 import { FileProjectSourceLoader } from '@novalistically/node-host';
-import { classifyAuthoringPath } from './manifest.js';
+import { classifyAuthoringPath, ROOT_AUTHORING_FILES } from './manifest.js';
 import type {
   AuthoringMaterializeOutcome,
   AuthoringPathHashEntry,
@@ -351,6 +351,14 @@ export function createFileSourceViewMaterializer(
             };
           }
           bundlePaths.add(entry.logicalPath);
+        }
+        for (const requiredPath of ROOT_AUTHORING_FILES) {
+          if (!bundlePaths.has(requiredPath)) {
+            return {
+              status: 'recovery-required',
+              reason: `Bundle is missing required root: ${requiredPath}`,
+            };
+          }
         }
 
         // Collect all approved paths currently on disk.

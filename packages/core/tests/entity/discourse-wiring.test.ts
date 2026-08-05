@@ -5,16 +5,9 @@ import type { ProjectSourceSnapshotV1, SourceDocumentV1 } from '../../src/contra
 import { EntityMapper } from '../../src/entity/mapper.ts';
 import { InMemoryEntityRegistry } from '../../src/entity/registry.ts';
 import { compileDiscourseBoundaries } from '../../src/state/discourse-context.ts';
-import type { WorldState } from '../../src/types/index.ts';
+import { emptyWorldState } from '../../src/state/story-boundaries.ts';
 
-const EMPTY_STATE: WorldState = {
-  entities: {},
-  relationships: {},
-  knowledge: {},
-  threads: {},
-  rules: {},
-  facts: [],
-};
+const EMPTY_STATE = emptyWorldState();
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 const source = (): ProjectSourceSnapshotV1 => {
   const entries: Record<string, string> = {
@@ -23,7 +16,12 @@ const source = (): ProjectSourceSnapshotV1 => {
     'definitions/entity-types.yaml':
       'types:\n  character:\n    typeId: character\n    kind: character\n    attributes:\n      lifecycle:\n        attributeId: lifecycle\n        valueType: string\n        requiredAt: introduction\n        writePolicy: lifecycle_managed\n        allowedLifecycleStates: [active, inactive, retired]\n        unsetAllowed: false\n        semanticRole: lifecycle\n      traits:\n        attributeId: traits\n        valueType: string_list\n        requiredAt: never\n        writePolicy: immutable\n        unsetAllowed: true\n    lifecyclePolicy:\n      allowedTransitions: [[active, inactive], [active, retired], [inactive, active], [inactive, retired]]\n    referenceCapabilities:\n      defaultEligibility: live\n    typedInvariants: []\n',
     'definitions/state_initial.yaml':
-      'info: { currentEra: contemporary, politicalSituation: stable }\ntimeAnchors: [{ id: day_1, at: day_1 }]\nthreads: []\nworldFacts: []\n',
+      'info: { currentEra: contemporary, politicalSituation: stable }\ntimeAnchors: [{ id: day_1, at: day_1 }]\nthreads: []\nworldFacts: []\nknowledge: { claims: [], commonGround: [] }\n',
+    'definitions/thread-types.yaml':
+      'types:\n  primary:\n    typeId: primary\n    description: Primary narrative thread type\n    allowedPhases: [opening, development, resolution]\n    lifecyclePolicy: { reopenPolicy: forbidden }\n    timeDomain: story\n    stableGoals: []\n    stableMilestones: []\n',
+    'definitions/propositions.yaml': 'version: 1\npropositions: {}\ndependencyGraph: {}\n',
+    'definitions/relationship-types.yaml': 'types: {}\n',
+    'definitions/rule-types.yaml': 'types: {}\n',
     'definitions/discourse-ledger.yaml':
       'id: ledger\nchapters: [{ branch: main, chapter: 1, sceneIds: [E0] }]\nentries:\n  - { id: entry_0, sceneId: E0, branch: main, discoursePosition: 0, action: { type: reveal, assertionId: a1, discoursePosition: 0 } }\n',
     'definitions/narrators/narrator_wo.yaml':

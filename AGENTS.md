@@ -6,17 +6,18 @@ Narrative engineering system: structured YAML source → immutable source snapsh
 
 ## Status
 
-Current source-verified baseline: `docs/current-state.md` (authoritative; current source wins over dated plans and design docs). Document index: `docs/INDEX.md`. `docs/README.md` is kept as a compatibility entry that points to both. This file is current working guidance, not a dated design record.
+Current source-verified baseline: `docs/current-state.md` (authoritative; current source wins over dated plans and design docs). Document index: `docs/INDEX.md`. `docs/README.md` is kept as a compatibility entry that points to both. This file is current working guidance, not a dated design record. Gate status is not all green: as of 2026-08-05 `node scripts/check-public-api.mjs` and `npm run test:e2e` are red (workbench-protocol not registered in the public-api manifest; workbench package has no `test:e2e` script) — see `docs/current-state.md`, never claim otherwise.
 
 ## Boundary
 
-Five workspace packages, not a derivable linear chain:
+Six workspace packages, not a derivable linear chain:
 
 - **`@novalistically/core`** — pure narrative semantics: immutable source-snapshot analysis, entity/graph/state computation, context, render orchestration, validation, assembly intent. Depends only on `yaml` and `zod`. It does not hold project directories, Git, SQLite, credentials, or browser transports, and it does not write `scenes/`, `.nova/`, or derived files.
 - **`@novalistically/node-host`** — Node adapters: filesystem source loader/writer, execution/state/cache/report repositories, AI SDK provider, plugin runtime. It is the filesystem boundary for CLI and Bench.
 - **`@novalistically/bench`** — regression, variant, and performance benchmarks running through Core and Node Host. Never a Core dependency.
 - **`@novalistically/cli`** — `commander` CLI and typed Workbench MCP client. Standalone mutation checks the Host authority lease; via-workbench operations are authenticated project-scoped Host calls and never load project files or credentials locally.
 - **`@novalistically/workbench`** — private native Host + browser client. Host owns local auth, Yjs, SQLite worker, credentials, ProjectSession, native immutable revision acceptance, and project-scoped reference storage; the browser consumes secret-free DTOs. Controlled Git is optional best-effort mirroring after native acceptance, never authoring authority.
+- **`@novalistically/workbench-protocol`** — shared protocol contracts: the MCP tool catalog (`nova_*` names and scopes), typed client contracts, configuration, authoring/host/reference DTOs, and device credential constants. Consumed by Workbench Host and the CLI client; only build/build:js/build:types scripts, no tests.
 
 Core input is `ProjectSourceSnapshotV1` plus injected semantic ports; source hashes represent content, not Git history. Node Host and Workbench Host own files. Workbench native revision content is the authoring acceptance model; bundles contain only explicit `AuthoringManifest` entries and never include `.nova/**`, caches, responses, journals, Yjs, SQLite, output, or derived artifacts.
 
@@ -53,7 +54,7 @@ The seven root catalog/state documents are required loader inputs; relationship/
 ```bash
 npm run build            # clean outputs + tsc -b types + esbuild JS bundles
 npm test                 # vitest run + Workbench Host/Client suites
-npm run typecheck        # tsc -b across all five packages
+npm run typecheck        # tsc -b across all six packages
 npm run typecheck:dead-code
 npm run bundle-check
 npm run lint             # biome check

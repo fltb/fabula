@@ -6,6 +6,7 @@ Novalistically 是一个叙事工程系统：结构化 YAML 定义 → 事件溯
 
 源码核验的现状基线见 **[当前系统状态](./current-state.md)**。current implementation checkpoints and their verification scope are stated there; current source wins over historical plans and design docs.
 - **[Dream of Red Chamber fixture manifest](../fixtures/dream-of-red-chamber/fixture-manifest.json)** — 当前 authored fixture 的可复现清单；执行 `npm run count:drc -- fixtures/dream-of-red-chamber --check` 核验四章 E01–E36。80 章 corpus source 是独立 acquisition artifact。
+- **[Agent-first 工作流审计 2026-08-05](./audits/original-requirements-agent-workflow-audit-2026-08-05.md)** — `docs/archive/PROJECT.md` 原始 Agent-first 要求的符合度源码核验（总体判定：部分满足）；外部 MCP authoring 可达，assembly/review/plugin/status guidance/working validate/内置 Agent 等接线缺口见审计与 current-state 边界表（撰写时点快照，不代表当前实现）。
 
 ## 我想...
 
@@ -46,6 +47,6 @@ Novalistically 是一个叙事工程系统：结构化 YAML 定义 → 事件溯
 
 ## 项目
 
-- **[包映射](./architecture.md#包结构)** — `packages/core`（纯引擎）、`packages/node-host`（Node 适配器）、`packages/bench`（基准）、`packages/cli`（CLI/MCP）和 `packages/workbench`（本机 Host + 浏览器客户端）
+- **[包映射](./architecture.md#包结构)** — `packages/core`（纯引擎）、`packages/node-host`（Node 适配器）、`packages/bench`（基准）、`packages/cli`（CLI/MCP）、`packages/workbench`（本机 Host + 浏览器客户端）和 `packages/workbench-protocol`（共享协议契约：MCP 工具目录、typed client contracts、configuration 与 DTO）
 - **[贡献指南](./guides/adding-a-validator.md)** — 如何贡献、测试约定、构建顺序
 - **[历史文档](./archive/README.md)** — 原始设计文档（保留供参考）

@@ -1,7 +1,7 @@
 # 当前系统状态（源码核验）
 
-**时间**：2026-08-04 CST
-**当前实现检查点**：`main` 当前工作树（native revisions、project-scoped MCP reference packet、optional Git mirror；全部工程门禁已重跑通过）
+**时间**：2026-08-05 CST
+**当前实现检查点**：`main` 当前工作树（native revisions、project-scoped MCP reference packet、optional Git mirror、`@novalistically/workbench-protocol` 共享协议；门禁结果见下表，非全绿）
 **权威顺序**：当前源码、package manifests、可复现门禁结果；本页优先于历史计划、阶段报告和归档设计。
 
 > 本页描述已经由源码或门禁证明的现状，不把设计目标、未接线类型或历史测量当作已交付能力。历史文档应保留其当时的证据与日期，并链接到本页，而不应改写历史。
@@ -10,18 +10,19 @@
 
 | 门禁 | 结果 |
 |---|---|
-| `npm test` | 通过：根 Vitest 2,902 tests、Workbench Host 521 tests、Workbench Client 93 tests |
+| `npm test` | 通过：根 Vitest 2,970 tests、Workbench Host 522 tests、Workbench Client 93 tests |
 | `npm run typecheck` | 通过 |
 | `npm run typecheck:dead-code` | 通过 |
 | `npm run build` | 通过 |
 | `npm run bundle-check` | 通过 |
-| `node scripts/check-public-api.mjs` | 通过 |
-| `npm run lint -- --max-diagnostics=2000` | 通过：Biome 检查 722 files，0 errors、0 warnings。 |
+| `node scripts/check-public-api.mjs` | **失败**：public-api manifest 与源码导出漂移，且 `@novalistically/workbench-protocol` 未登记（manifest `.packages` 不含该包） |
+| `npm run test:e2e` | **失败**：根脚本委托 `npm run -w @novalistically/workbench test:e2e`，但 workbench package 没有 `test:e2e` script |
+| `npm run lint -- --max-diagnostics=2000` | 通过：Biome 0 errors、0 warnings |
 
 
 ## 包与依赖边界
 
-工作区有五个包：
+工作区有六个包：
 
 | 包 | 已核验职责 |
 |---|---|
@@ -30,8 +31,9 @@
 | `@novalistically/bench` | 通过 Core 与 Node Host 运行回归、变体和性能基准；不是 Core 依赖。 |
 | `@novalistically/cli` | `commander` CLI 与 typed Workbench MCP client；standalone 写入受 Host authority lease 保护，via-workbench 操作只走项目 scoped 的 authenticated Host route。 |
 | `@novalistically/workbench` | 私有 native Host + browser client。Host 持有本地认证、Yjs、SQLite worker、ProjectSession、native immutable revisions 和 project-scoped reference library；浏览器只消费 secret-free DTO。可选 Git 仅镜像已接受 revision，不参与 authoring acceptance。 |
+| `@novalistically/workbench-protocol` | 共享协议契约包：MCP 工具目录（`nova_*` 名与 scopes）、typed client contracts、configuration、authoring/host/reference DTO 与 device credential 常量。被 Workbench Host 与 CLI client 消费；仅 build/build:js/build:types 三个 script，无测试。 |
 
-包关系不是一个可推导的线性链。Core 不依赖工作区包；Node Host 提供适配器；Bench、CLI 和 Workbench 按各自 manifest 直接选择 Core/Node Host 能力。
+包关系不是一个可推导的线性链。Core 不依赖工作区包；Node Host 提供适配器；Bench、CLI 和 Workbench 按各自 manifest 直接选择 Core/Node Host 能力；`@novalistically/workbench-protocol` 是共享协议契约，被 Workbench Host 与 CLI client 消费，不依赖其他工作区包。
 
 ## Source、状态与渲染边界
 
@@ -75,10 +77,25 @@ chapters/chapter_NN/E*.yaml
 - `fixtures/zhu-fu/reference/` 是确定性的 mock/generated regression reference；live-provider 候选只能由凭据驱动的 `npm run smoke:stage1:live` 生成到独立 candidate 目录，并且仍需人工审阅后才可作为 live evidence。mock 参考不能被描述为人工或 live-LLM 证据。
 - Dream of Red Chamber 当前 authored fixture 的可复现数量由 [`fixture-manifest.json`](../fixtures/dream-of-red-chamber/fixture-manifest.json) 定义。执行 `npm run count:drc -- fixtures/dream-of-red-chamber --check` 会核验四章、E01–E36（每章九个事件）和 source hash；80 章 corpus source 是独立 acquisition artifact，不能与该 fixture 混用。
 
+## 当前产品接线边界（Agent-first 工作流）
+
+2026-08-05 的[原始要求 / Agent-first 工作流符合度审计](./audits/original-requirements-agent-workflow-audit-2026-08-05.md)对 `docs/archive/PROJECT.md`（历史要求，不改写）做了源码核验，总体判定为**部分满足**：外部 MCP Agent 驱动的场景生产（render+accept）是真实可达的第一路径，但以下接线边界已核验成立（一句话证据；细节与行号见审计报告）：
+
+| 边界 | 状态 | 一句话证据 |
+|---|---|---|
+| 外部 MCP Agent authoring | **可达** | `/mcp/projects/:projectId` Streamable-HTTP 端点 + 59 工具目录注册 56；edit→submit→render 闭环可达；产能来自 agent 自带文本，Host 不为 MCP 通道运行 provider |
+| `nova_graph` / `nova_revise` / `nova_render_tree` Host handler | **缺失** | 三个名字只在工具目录、CLI client 与 CLI 命令中，`packages/workbench/src` 下 0 命中 → 每次调用返回 TOOL_NOT_FOUND |
+| `nova_status` guidance / nextActions / ISS | **未暴露** | 仅返回 `{projection, status}`；workbench host/contracts 无 `guidance` 命中，无 next_actions 排序，ISS 无修复循环 |
+| working-layer 验证 | **缺失** | `nova_validate` 只验证 accepted source；不存在“提交前验证未提交提案”的工具 |
+| assembly 生产 caller | **无** | `canonicalAssemble`/`customAssemble`/`buildNovelDocument` 的全部调用点只在测试；生产 `buildPublication()` 返回 `outputPath:''`、`novelHash:null` |
+| review producer | **无** | `addReviewComment` 等从 core barrel 导出但 workbench/cli/node-host 零调用；无 `nova_review_*` 工具，CLI 无 review 命令 |
+| plugin Host activation | **未激活** | `PluginHooksManager`/`PluginLoader` 仅测试构造；生产运行中 `plugins/` 目录永不发现、永不激活 |
+| 内置 Agent project-wide presence pause | **自锁** | `HUMAN_PRESENCE_SURFACES=['browser','mcp','yjs']`，AgentDrawer 要求的已连接文档使请求者自身 presence → generate/apply 返回 paused |
+
 ## 文档解释规则
 
 - **current reference**：本页、`docs/architecture.md` 与 `docs/reference/` 中被标为当前的页面；必须与当前源码同步。
 - **historical record**：`docs/archive/`、有日期的 audits/reports、阶段测量与竞品快照；保留原结论和日期，增加到本页的指针并显式标记不代表当前实现。
 - **design-only / unverified**：未来协议、未接线 schema 或未经 live LLM 复核的宣称；必须明确为设计或未验证，不能写成运行时保证。
 
-相关入口：[`架构`](./architecture.md)、[`完整接线图`](./reference/wiring.md)、[`API`](./reference/api.md)、[`YAML 合同`](./reference/yaml-contract/README.md)、[`历史归档`](./archive/README.md)。
+相关入口：[`架构`](./architecture.md)、[`完整接线图`](./reference/wiring.md)、[`API`](./reference/api.md)、[`YAML 合同`](./reference/yaml-contract/README.md)、[`历史归档`](./archive/README.md)、[`Agent-first 工作流审计 2026-08-05`](./audits/original-requirements-agent-workflow-audit-2026-08-05.md)。

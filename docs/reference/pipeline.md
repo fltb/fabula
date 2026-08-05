@@ -1,6 +1,6 @@
 # 渲染管线
 
-> **时间**: 2026-08-02 19:17 CST
+> **时间**: 2026-08-05（2026-08-05 原始要求 / Agent-first 审计结论复核更新，见[原始要求 / Agent-first 工作流符合度审计](../audits/original-requirements-agent-workflow-audit-2026-08-05.md)；原基线 2026-08-02）
 >
 > **当前基线**: 以 [当前系统状态](../current-state.md) 为准（源码核验）；本页描述当前源码中的渲染管线。
 
@@ -30,6 +30,8 @@
 | `aggregator` | `ResultAggregator` | 可选 | 渲染后验证聚合器；提供时还会启用缓存命中后的重新校验 |
 | `doubleRunVerification` | `boolean` | `false` | 仅开发模式：Pass 2 运行两次，比较分析块 |
 | 其它 | — | — | `signal`、`entities`、`validatorOverrides`、`analysisContract`、`logger`、`traceCollector`、`eventBus`、`targetLengthWords`（默认 400）、`language`（默认 `'en'`）、`pluginHooksManager`、`styleProfile`、`retryJitter`（默认确定性 `DEFAULT_RETRY_JITTER`）、`providerProfile` |
+
+> **`pluginHooksManager` 注入点现状（2026-08-05 复核）**：这是可选注入点（`PluginHooksManager` 的注册 / 装饰逻辑存在），但当前**没有 production Host 构造它**——Node Host 的 `NodePluginCatalog`、core 的 `PluginLoader` 均无生产调用方，`nova.yaml` 的 `plugins.enabled` 不会自动发现 / 激活项目插件；编辑渲染路径也不注入（`render-service` 的插件身份恒为 `[]`）。插件验证器 / prompt 装饰只有在调用方显式构造并传入时才生效（详见 `wiring.md` §4；审计 §9.3）。
 
 ## 管线流程
 
@@ -87,7 +89,9 @@
 
 - **空散文、缺失分析、重试耗尽（`needsReview: true`）、缺失验证**：一律 `blocked`，输出错误诊断。
 - **错误级问题（`severity: 'error'`）**：必须修复，不可豁免。门控阻塞。
-- **仅警告问题（`severity: 'warning'`）**：需要豁免。`evaluateReleaseDecision()` 的第四个参数 `interactionManager` 是可选的（`InteractionManager` 本身提供 `needsApproval()` / `recordWaiver()` / `getPendingGates()` / `hasWaiver()` / `getWaiver()`，生命周期由调用方管理），但当前编辑管线无法消费它——`executeEditorialRender()` 的两处调用（render / tree render）都不传第四参，`EditorialRuntime` 也没有 interaction-manager 字段。`EditorialRenderRequestV1.waivers`（`WaiverRecordV1[]`）只作为 waiver hashes 参与 planHash 计算，不参与发布评估。因此当前编辑管线中：警告候选一律 → `pending_waiver`（候选以 blocked 信封经 execution repository 存档），即使请求携带匹配豁免也不会放行；请求级豁免的消费需要另行布线。
+- **仅警告问题（`severity: 'warning'`）**：需要豁免。`evaluateReleaseDecision()` 的第四个参数 `interactionManager` 是可选的（`InteractionManager` 本身提供 `needsApproval()` / `recordWaiver()` / `getPendingGates()` / `hasWaiver()` / `getWaiver()`，生命周期由调用方管理），但当前编辑管线无法消费它——`executeEditorialRender()` 的两处调用（render / tree render）都不传第四参，`EditorialRuntime` 也没有 interaction-manager 字段。`EditorialRenderRequestV1.waivers`（`WaiverRecordV1[]`）只作为 waiver hashes 参与 planHash 计算，不参与发布评估。因此当前编辑管线中：警告候选一律 → `pending_waiver`（候选以 blocked 信封经 execution repository 存档），即使请求携带匹配豁免也不会放行；请求级豁免的消费需要另行布线（审计 §9.8 G2）。
+
+**生产接线现状（2026-08-05 复核，强化为当前生产事实）**：这是已知缺口而非最终设计——waiver 的算法与类型全部保留（`WaiverRecord`、`InteractionManager`、`InteractionGate` 均存在），但请求级 waivers **只进 `planHash`**，`InteractionManager` 没有 editorial production wiring，因此 warning-only candidate 会**永久停在 `pending_waiver`**（已渲染、已以 blocked 信封存档、永不 promotion / assembly），直到豁免消费方另行接线（审计 §9.8 G2：`evaluateReleaseDecision` 不传 `InteractionManager`，`request.waivers` 只进 planHash）。
 - **仅信息级问题（`severity: 'info'`）**：无需审批，直接 `accepted`。
 
 相关类型和类：
@@ -96,7 +100,7 @@
 |------|------|------|
 | `InteractionGate` | `pipeline/interaction-gate.ts` | 门控描述（条件、期望输入、超时） |
 | `WaiverRecord` | `pipeline/interaction-gate.ts` | 豁免记录（签署人、时间、原因） |
-| `InteractionManager` | `pipeline/interaction-gate.ts` | 门控管理器：`needsApproval()`/`recordWaiver()`/`getPendingGates()`/`hasWaiver()`/`getWaiver()`；默认使用确定性 epoch clock |
+| `InteractionManager` | `pipeline/interaction-gate.ts` | 门控管理器：`needsApproval()`/`recordWaiver()`/`getPendingGates()`/`hasWaiver()`/`getWaiver()`；默认使用确定性 epoch clock；编辑渲染路径未接线（见上） |
 
 ## 输出
 
@@ -105,3 +109,5 @@ Core 的渲染输出是**语义 intents/records**，不是文件写入：
 - `RenderSceneResult`（pipeline/render.ts）携带 prose、analysis、usage、`cacheHit`、`errors`、`validation`、`providerCalls`、`requestRecords`（实际请求消息与响应内容；cache 命中时为空数组——刻意不伪造旧请求）、`attempts`、`needsReview`、`pass2Rejection?`。
 - `pipeline/output.ts` 的 `buildAndWriteOutputs()` 现在构建**纯 JSON-safe output intents**（`RenderOutputs`：`OutputEntry` + `DerivedData`，threads / foreshadowing / relationships / rules），文件写入由 Host 负责；`appendPlayerChoicesBlock()` 给游戏对话场景追加 `<!-- FABULA:PLAYER_CHOICES:v1 -->` 标记与围栏 YAML `playerChoices` 块。
 - 已接受场景、场景修订信封、operation、publication、review、trace 记录经 `CoreExecutionRepository`（注入端口）以 CAS 语义持久化；Node Host 的 `FileExecutionRepository` 默认落在 `.nova/execution/` 下，键只用于派生文件名，从不解释为路径。渲染结果排序仍是 chapter + `narrativeOrder`（catalog/selector 排序），但不进入因果 replay 顺序。
+- **发布摘要与 assembly 接线现状（2026-08-05 复核）**：render-service 的 `buildPublication()` 只计算 `status`（`current` / `stale` / `unchanged`）+ `reasons`——`outputPath` 恒为 `''`、`novelHash` 恒为 `null`。`canonicalAssemble` / `customAssemble` / `buildNovelDocument` 算法存在并有测试，但当前**没有** CLI / MCP / Workbench / production caller；渲染管线不会把结果装配成小说文档，Host 也没有接上的物化路径。**不要把 Host 画成已会 materialize 小说**（审计 §9.1：assembly 仅测试调用，`buildPublication` 返回空）。
+- **review 接线现状（2026-08-05 复核）**：revision prompt 经 `ReviewManager` 消费 review ledger（`composeRevisionDirective`，确定性排序）；但 `addReviewComment` / `replaceReviewComment` / `updateReviewComment` **没有产品 producer**（CLI / MCP / Workbench 均未调用），`persistInlineInstructionReview` / `applySceneLineReviews` / `applyChapterNovelReviews` 三个 inline/chapter review hook 是 **no-op**（无 caller；审计 §9.2）。

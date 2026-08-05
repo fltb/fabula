@@ -2,17 +2,17 @@
 
 **入口：** `packages/core` 的七个发布入口：根 `.`（通用叙事引擎语义合同）+ `source`/`schema`/`extensions`/`editorial`/`tooling`/`testing` 六个 subpath
 **类型定义：** `packages/core/src/types/`（39 个文件，通过 `types/index.ts` 桶文件重新导出）
-**权威清单：** 根目录 `public-api.manifest.json`（由 `scripts/check-public-api.mjs` 校验，见下文）
+**权威清单：** 根目录 `public-api.manifest.json`（由 `scripts/check-public-api.mjs` 校验，见下文）。**注意（2026-08-05）**：校验器当前为红——source 导出表面与 manifest 存在漂移，且 `@novalistically/workbench-protocol` 尚未登记；gate 修复前，manifest 不应被视为已验证权威。
 
 ## 包导出
 
-`@novalistically/core` 有 **7 个发布入口**：根入口是通用叙事引擎语义合同，**恰好 10 个值导出** 与 **121 个声明类型**；另有六个 scoped subpath（`/source`、`/schema`、`/extensions`、`/editorial`、`/tooling`、`/testing`）。以下表格是主要公共 API 的摘要；完整清单以 `public-api.manifest.json` 为准。
+`@novalistically/core` 有 **7 个发布入口**：根入口是通用叙事引擎语义合同，另有六个 scoped subpath（`/source`、`/schema`、`/extensions`、`/editorial`、`/tooling`、`/testing`）。以下表格是主要公共 API 的摘要；**精确导出数量不再作为保证**——当前 source 表面与 `public-api.manifest.json` 漂移，2026-08-05 校验器为红（见「公开 API 清单与死代码检测」），完整清单以 gate 修复后的 manifest 为准。
 
 ### 入口一览
 
 | 入口 | stability | 内容 |
 |------|-----------|------|
-| `@novalistically/core` | `core` | 通用叙事引擎语义合同：10 个值 + 121 个类型（见下文核心函数/核心类型） |
+| `@novalistically/core` | `core` | 通用叙事引擎语义合同：根入口值/类型计数见 manifest（2026-08-05 起漂移未验证，见「公开 API 清单」） |
 | `@novalistically/core/source` | `scoped` | 不可变 source identity 工具：`buildSourceSnapshot`、`compareLogicalPaths`、`computeSourceDocumentHash`、`computeSourceHash` |
 | `@novalistically/core/schema` | `scoped` | Zod schema 33 个：`projectConfigSchema`、`eventFileSchema`、`entityTypeCatalogSourceSchema`、`analysisResultSchema`、`buildAnalysisResultSchema`、`projectSourceSnapshotV1Schema` 与 state/record schema |
 | `@novalistically/core/extensions` | `scoped` | 插件扩展类型（仅类型，无运行时值）：`PluginHooks`、`PluginContext`、`PluginLogger`、`PromptDecoration`、`BuildPromptInput`、`ProviderRegistry`、`ValidatorRegistrar`、`PluginManifest` |
@@ -34,11 +34,11 @@
 | `ContextAssembler` | `packages/core/src/context/assembler.ts` | 组装 `ContextPackage` 的各层内容 | 不公开 |
 | `RelevanceEngine` | `packages/core/src/context/relevance.ts` | 相关性评分（`RelevanceScore`） | 不公开 |
 | `ResultAggregator` | `packages/core/src/validator/aggregator.ts` | 运行验证器集合：未提供自定义数组时用 `createBuiltInValidators()`，提供时该数组**替换**默认集（不自动合并）；需要内置 + 插件的调用方必须显式组合 `[...createBuiltInValidators(), ...plugins]`，收集 `ValidationIssue[]` | `tooling` |
-| `ReportWriter` | `packages/core/src/report/writer.ts` | 统一报告输出格式：Markdown（`toMarkdown()`）、机器可读 JSON（`toJSON()`）、`StatusReport`（`toStatusReport()`，含面向 LLM 代理的 `guidance`）、bench 报告 | `tooling` |
-| `InteractionManager` | `packages/core/src/pipeline/interaction-gate.ts` | 渲染交互门控（interaction gate） | 不公开 |
+| `ReportWriter` | `packages/core/src/report/writer.ts` | 统一报告输出格式：Markdown（`toMarkdown()`）、机器可读 JSON（`toJSON()`）、`StatusReport`（`toStatusReport()`，含面向 LLM 代理的 `guidance`）、bench 报告。**接线现状（2026-08-05）**：`toStatusReport()` 的 guidance 存在，但 MCP `nova_status` **未调用**（CLI 与 Workbench 的 `nova_status` 都直接走 `getProjectStatus` / `validateNovel`），status-guidance 尚未接线 | `tooling` |
+| `InteractionManager` | `packages/core/src/pipeline/interaction-gate.ts` | 渲染交互门控（interaction gate）；编辑渲染路径未接线（waivers 只进 planHash，见 `reference/pipeline.md` §7） | 不公开 |
 | `TypedEventBus` | `packages/core/src/event-bus.ts` | 类型化事件总线（如 `pipeline:render:after`） | `editorial` |
 | `AgentRegistry` | `packages/core/src/agent/registry.ts` | Agent 系统注册表 | 不公开 |
-| `PluginHooksManager` | `packages/core/src/plugin/hooks-manager.ts` | 插件钩子管理（外部验证器插件） | 不公开 |
+| `PluginHooksManager` | `packages/core/src/plugin/hooks-manager.ts` | 插件钩子管理（外部验证器插件）；无 production Host 构造，项目插件不会自动发现 / 激活 | 不公开 |
 | `MockProvider` | `packages/core/src/ai/providers/mock.ts` | 简单测试提供者，支持固定响应 | `testing` |
 | `MockPass2Provider` | `packages/core/src/ai/providers/mock-pass2.ts` | 测试用提供者，按 `entries`（eventId → 散文 + AnalysisResult）返回预写响应 | `testing` |
 | `MemoryExecutionRepository` / `MemoryRenderCacheRepository` / `MemoryStateLogRepository` / `MemoryStateSnapshotRepository` | `packages/core/src/testing/memory-repositories.ts` | `CoreRuntimeServices` 四个持久化端口的内存实现 | `testing` |
@@ -151,13 +151,13 @@ const status = getProjectStatus(snapshot, validationResults);
 
 ## 公开 API 清单与死代码检测
 
-Monorepo 使用两层防御来防止意外公开内部代码和检测死代码：
+Monorepo 使用两层防御来防止意外公开内部代码和检测死代码。2026-08-05 门禁实测：`npm test`（根 2,970 / Host 522 / Client 93）、`typecheck`、`typecheck:dead-code`、`build`、`bundle-check`、`lint` 通过；`node scripts/check-public-api.mjs` 为红（manifest/导出漂移 + workbench-protocol 未登记），`test:e2e` 因 `packages/workbench` 缺 `test:e2e` script 为红（证据见[原始要求 / Agent-first 工作流符合度审计](../audits/original-requirements-agent-workflow-audit-2026-08-05.md) §11.1）：
 
 ### `public-api.manifest.json`
 
-根目录下的 `public-api.manifest.json` 是每个工作区包的权威公开 API 表面。
-它按入口枚举：每个包有 `entries` 对象，键为入口路径（`.` 根入口与各 subpath），每个条目声明源路径、dist 路径、`stability`（`core`/`scoped`/`non-contract`）、值导出与类型导出。
-manifest 是**完整当前导出表面**——不是"仅稳定子集"的声明；任何未在此清单中声明的导出都被视为内部实现细节，不应被外部依赖。`stability` 是语义元数据而非版本策略：`core` 标识通用叙事引擎语义合同，`scoped`/`non-contract` 是可导入的当前表面但不提供兼容性保证。
+根目录下的 `public-api.manifest.json` 声明每个工作区包的公开 API 表面——这是**规范意图**（每个包应公开的导出集合），不是当前已验证的导出清单。它按入口枚举：每个包有 `entries` 对象，键为入口路径（`.` 根入口与各 subpath），每个条目声明源路径、dist 路径、`stability`（`core`/`scoped`/`non-contract`）、值导出与类型导出。manifest 声明完整表面（不是"仅稳定子集"）；任何未在此清单中声明的导出都被视为内部实现细节，不应被外部依赖。`stability` 是语义元数据而非版本策略：`core` 标识通用叙事引擎语义合同，`scoped`/`non-contract` 是可导入的当前表面但不提供兼容性保证。
+
+**2026-08-05 起校验器为红（未验证）**：当前 source 导出表面与 manifest 存在漂移，且第六个工作区包 `@novalistically/workbench-protocol` **尚未登记**到 manifest（`.packages` 目前只有 bench/cli/core/node-host/workbench）。gate 修复前，manifest **不代表当前已验证的导出表面**，具体导出以源码为准；漂移修复、校验复绿后，manifest 才恢复为权威清单。
 
 ```jsonc
 // 结构示例
@@ -213,5 +213,5 @@ manifest 是**完整当前导出表面**——不是"仅稳定子集"的声明�
 npm run dead-code:knip
 ```
 
-该脚本运行 `node scripts/check-public-api.mjs`（如果清单与导出不符则失败）。
-knip 本身通过 `npx knip` 按 `knip.json` 配置运行（如检测到死代码则失败），但不再串联进该 npm 脚本。
+该脚本**只**运行 public API checker：`node scripts/check-public-api.mjs`（清单与导出不符则非零退出）。
+它**不运行 knip CLI**——`knip.json` 只是死代码检测的配置，当前仓库没有任何 npm script 执行 knip（`npx knip` 只能手动运行）。2026-08-05 实测该脚本为红（manifest/导出漂移 + workbench-protocol 未登记，见[审计报告](../audits/original-requirements-agent-workflow-audit-2026-08-05.md) §11.1）。

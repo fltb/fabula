@@ -46,9 +46,10 @@ Core 的渲染路径仍为：snapshot → `EntityMapper` → 因果图与事件�
 
 ## 包结构
 
-Monorepo 有五个包；包关系是 manifest 层面的直接选择，不是一个可推导的线性链。
+Monorepo 有六个包；包关系是 manifest 层面的直接选择，不是一个可推导的线性链。
 `core` 不依赖任何 workspace 包；Node Host 提供适配器；`bench`、`cli` 与 Workbench Host
-按各自 manifest 直接选用 Core 与 Node Host 的能力。Workbench 浏览器客户端只依赖
+按各自 manifest 直接选用 Core 与 Node Host 的能力；`workbench-protocol` 是共享协议契约，
+被 Workbench Host 与 CLI client 消费。Workbench 浏览器客户端只依赖
 自身的 browser-safe contracts 类型，不导入 Core/Node/Host 实现。
 
 ### `@novalistically/core`（`packages/core/`）
@@ -74,7 +75,11 @@ Core 的依赖。
 
 ### `@novalistically/workbench`（`packages/workbench/`）
 
-浏览器优先的本机多项目 Host 与 Solid client。Host 在一个共享 `ProjectSession` registry 中为每个已配置项目组合 Core runtime、Yjs working documents、filesystem observer、`AuthoringCoordinator`、controlled Git 与可选 Agent；浏览器、MCP 与 Agent 只在该 bundle 就绪后取得无秘密 DTO。Host 持有本地认证、SQLite worker 和 provider credential boundary。客户端保持布局偏好，读取认证后的 Host projection；Yjs working layer 和已接受 source 必须明确区分。项目/提供商/listener/default-MCP 配置在进程启动时捕获，变更写入 YAML 后必须受控重启，不能半热切换。Host 与 client 分别类型检查、构建和测试；浏览器 E2E 单独运行。
+浏览器优先的本机多项目 Host 与 Solid client。Host 在一个共享 `ProjectSession` registry 中为每个已配置项目组合 Core runtime、Yjs working documents、filesystem observer、`AuthoringCoordinator`、controlled Git 与可选 Agent；浏览器、MCP 与 Agent 只在该 bundle 就绪后取得无秘密 DTO。Host 持有本地认证、SQLite worker 和 provider credential boundary。客户端保持布局偏好，读取认证后的 Host projection；Yjs working layer 和已接受 source 必须明确区分。项目/提供商/listener/default-MCP 配置在进程启动时捕获，变更写入 YAML 后必须受控重启，不能半热切换。Host 与 client 分别类型检查、构建和测试。
+
+### `@novalistically/workbench-protocol`（`packages/workbench-protocol/`）
+
+共享协议契约包：MCP 工具目录（`nova_*` 名与 scopes）、typed client contracts、configuration、authoring/host/reference DTO 与 device credential 常量。被 Workbench Host（registry/transport 接线）与 CLI typed client 共同消费；自身仅 build/build:js/build:types 三个 script，无测试、无运行时依赖。
 
 ## 核心模块映射
 
@@ -156,7 +161,7 @@ Core 的依赖。
 - **`compileDiscourseSceneSequence()`**（`state/discourse-sequence.ts`）— canonical release assembly 的场景顺序唯一来源：由 discourse-ledger 的 `chapters[].sceneIds` 编译出 reader-order 场景序列（`NarrativeSorter` 已移除；runtime/legacy 路径仍可能按 `narrativeOrder` 排序，不属于 canonical 顺序）。
 - **`ProseConcatenator`** — 将场景拼接成一部完整小说（legacy 路径）。
 - **`buildNovelDocument()`**（`assembler/publication-model.ts`）— 将 verified scene heads 与 discourse scene sequence 组织成可验证的小说文档数据；Core 不直接写 `output/novel.md`。
-- **`assembleCanonicalNovel()` / `assembleCustomNovel()`**（`editorial/facade.ts` → `assembler/release-assembly.ts`）— canonical / custom 组装计算通过 semantic execution port 读取已接受的 scene revision；产物持久化由 Host adapter 决定。
+- **`canonicalAssemble()` / `customAssemble()`**（`assembler/release-assembly.ts`）— canonical / custom 组装计算通过 semantic execution port 读取已接受的 scene revision；产物持久化由 Host adapter 决定。**无生产 caller/tool**：全部调用点只在测试（`packages/core/tests/editorial/release-assembly.test.ts`），无 assemble/publish MCP 工具与 CLI 命令；生产 `buildPublication()` 只返回状态摘要（`outputPath: ''`、`novelHash: null`）。旧的 `assembleCanonicalNovel()` / `assembleCustomNovel()` 名称不存在（`editorial/facade.ts` 无任何 assemble 符号，`editorial/index.ts` 也未导出）。
 - **`assembleNovel()`** — legacy 组装流水线（SceneCollector → compileDiscourseSceneSequence → ProseConcatenator）；**无生产调用方**，仅测试使用。
 - **`countNarrativeText()`** — 版本化文本计数器；`countWords()` 别名已移除。
 

@@ -1,6 +1,6 @@
 # 完整接线图：从 YAML 到发布工件
 
-> **时间**: 2026-08-02 19:17 CST
+> **时间**: 2026-08-05（2026-08-05 原始要求 / Agent-first 审计结论复核更新，见[原始要求 / Agent-first 工作流符合度审计](../audits/original-requirements-agent-workflow-audit-2026-08-05.md)；原基线 2026-08-02）
 >
 > **当前基线**: 本文是 current reference，以 [当前系统状态](../current-state.md)（源码核验）为权威；源码优先于历史计划与阶段报告。
 >
@@ -9,7 +9,7 @@
 > **阅读目标**: 确认一个字段、一个场景、一次渲染结果在哪个边界被读取、编译、校验、缓存、发布或拒绝。
 > **现状边界**: 本文以当前 `api.ts`、`editorial/render-service.ts`、`pipeline/render.ts`、scheduler、release decision 与 cache 源码为准。Core 只消费不可变 `ProjectSourceSnapshotV1` 与注入的语义端口；文件物化是 Node Host / Workbench Host 的职责。
 >
-> **验证记录**: [接线修复验证与完整性报告](../report/wiring-remediation-verification-2026-07-27.md)（2026-07-27 的历史快照，不代表当前实现）
+> **验证记录**: [接线修复验证与完整性报告](../report/wiring-remediation-verification-2026-07-27.md)（2026-07-27 的历史快照，不代表当前实现）；2026-08-05 的 Agent-first 符合度审计见[原始要求 / Agent-first 工作流符合度审计](../audits/original-requirements-agent-workflow-audit-2026-08-05.md)（§9 生产接线缺口、§11.1 门禁实测）
 
 ---
 
@@ -24,7 +24,7 @@
 | 发布判定 | `evaluateReleaseDecision(candidate, scopeHash, validationIdentity, interactionManager?)` | output、cache 或 plugin 各自判断 `released` |
 | 已接受场景 / 修订记录 | `CoreExecutionRepository`（Node Host `FileExecutionRepository` 的 CAS 提交；`compareAndSwapAcceptedScene` / `compareAndSwapSceneRevision` / `compareAndSwapPublication`） | `pipeline/output.ts` 或任何其他模块自行写 scene/response 文件 |
 | surface prose | 仅 `AcceptedSceneArtifact` 经 `SurfaceReferenceExtractor` | 未接受 prose、scene `.md` 文件名、ellipsis 或 Pass 2 observation 充当 source |
-| 最终小说 | Core `buildNovelDocument()` / `canonicalAssemble()` / `customAssemble()` 计算纯文档值；文件物化由 Host adapter 决定 | Core 直接写 `output/novel.md` 或 partial accepted set 仍装配完整小说 |
+| 最终小说 | Core `buildNovelDocument()` / `canonicalAssemble()` / `customAssemble()` 计算纯文档值（算法存在并有测试）；**但当前无 production caller**——CLI / MCP / Workbench 均未调用 assembly，render-service 的 `buildPublication()` 只返回 `status`（`outputPath` 恒空、`novelHash` null），Host 尚未接上小说物化 | Core 直接写 `output/novel.md` 或 partial accepted set 仍装配完整小说 |
 
 `narrativeOrder` 既不是组装顺序，也不是 replay/discourse/surface 的时间依据：reader 顺序由 discourse ledger（`ProjectData.discourseLedger`，恒非空）的 `chapters[].sceneIds` 经 `compileDiscourseSceneSequence()` 编译，`buildNovelDocument()` 按该序列拼接；`narrativeOrder` 只用于 catalog/selector 排序与 scene metadata。Surface packet 永远是 **non-authoritative**：YAML、scene contract 与 compiled context 优先。
 
@@ -344,6 +344,7 @@ flowchart TD
 3. Surface scheduler 只在前驱 scene 的 current-run release `accepted` 后推进同一 serial lane；其它 lane 与 parallel group 不等待它。
 4. cache 命中并不绕过分析契约或 validator：cached analysis 按当前 protocol 重新 parse、重新 `validatePost()`，随后仍由 release gate 判定。
 5. `pending_waiver` 是已渲染、已存档但未发布的 candidate；不是 accepted 的弱别名。
+6. **assembly 未接线**：`buildPublication()` 只产出 `status` / `reasons`（`outputPath` 恒空、`novelHash` null）；`canonicalAssemble` / `customAssemble` / `buildNovelDocument` 有测试但没有任何 CLI / MCP / Workbench / production caller。`status: 'current'` 只表示所选场景全部 released，**不代表**小说文档已被装配或物化。
 
 ---
 
@@ -387,7 +388,7 @@ flowchart LR
 - Plugin 可注册 provider、validator，或返回受长度/ID 校验的 non-authoritative prompt decorations。
 - `onBuildPass1Prompt` / `onBuildPass2Prompt` 的 transform 异常是 hard scene failure。
 - Plugin 不能改写 story state、discourse state、logical summary、validator policy、release decision 或 accepted prose。
-- plugin identity 进入 cache identity（`pluginIdentityHash`）；nova.yaml 的 `plugins` 只有 `enabled` 开关，插件在初始化时经 plugin registry/catalog（Node Host 提供 `NodePluginCatalog`）注册，`RenderPipelineOptions.pluginHooksManager` 只持有初始化时实际注册的 provider/validator。
+- plugin identity 进入 cache identity（`pluginIdentityHash`）；nova.yaml 的 `plugins` 只有 `enabled` 开关。**接线缺口（2026-08-05 复核）**：`NodePluginCatalog`（Node Host）/ `PluginLoader` / `PluginHooksManager`（core）的算法与类型存在，但当前**没有 production Host 构造**——CLI 与 Workbench Host 都不实例化 plugin catalog / hooks manager，编辑渲染路径插件身份恒为 `[]` 且不注入 `pluginHooksManager`，项目插件**不会自动发现 / 激活**。`RenderPipelineOptions.pluginHooksManager` 只是可选注入点，只有调用方显式构造并传入时才生效（当前仅测试 / 未来 Host 使用）。
 ---
 
 ## 5. Preview（previewEditorialRun）与 subset render 分支
@@ -444,8 +445,8 @@ flowchart LR
   Complete -- no --> Stale[buildPublication → stale]
   Unchanged[空选择] --> Stale
 
-  NovelData[verified scene heads + discourse scene sequence] --> Assembly[canonicalAssemble / customAssemble<br/>buildNovelDocument 纯文档值]
-  Assembly --> Materialize[Host 决定文件物化；Core 不写 output/novel.md]
+  NovelData[verified scene heads + discourse scene sequence] --> Assembly[canonicalAssemble / customAssemble<br/>buildNovelDocument 纯文档值（算法有测试）]
+  Assembly -. design-only：无 production caller .-> Materialize[Host 文件物化（未接线）<br/>当前无 Host 接上 assembly；Core 不写 output/novel.md]
 
   ReportInput[L1/L2 ValidationReport] --> Reporter[Core formatValidationReport 纯格式化<br/>Node Host writeFileValidationReport]
   Reporter --> Validation[output/validation.md（Node Host 写入）]
@@ -474,21 +475,21 @@ flowchart LR
 | `packages/core/src/state/discourse-sequence.ts` | `compileDiscourseSceneSequence()`（ledger 章节块 → 场景序列，strict preflight）与 `resolveDiscourseBranch()`（唯一场景覆盖匹配） |
 | `packages/core/src/editorial/compiler.ts` | `compileEditorialRun()` 纯编译：selector/revision preflight、每场景 identity、branch contracts、planHash、intents |
 | `packages/core/src/editorial/identity.ts` | `computeSceneSourceHash` / `computeScopeHash` / `computeEditorialBasisHash` / `computeValidationIdentity` / `computePlanHash` / `computeSelectorHash` |
-| `packages/core/src/editorial/render-service.ts` | `executeEditorialRender` / `executeEditorialTreeRender` / `previewEditorialRun`（编译 → plan → surface → 执行 → promote → 发布摘要 + operation 记录） |
+| `packages/core/src/editorial/render-service.ts` | `executeEditorialRender` / `executeEditorialTreeRender` / `previewEditorialRun`（编译 → plan → surface → 执行 → promote → 发布摘要 + operation 记录）；`buildPublication` 只返回 status（`outputPath` 恒空、`novelHash` null）；`persistInlineInstructionReview` / `applySceneLineReviews` / `applyChapterNovelReviews` 三个 inline/chapter review hook 是 no-op（无 caller） |
 | `packages/core/src/editorial/selector.ts` | `preflightSelector()` 纯校验：去重、narrativeOrder 排序、errors 累积不抛 |
 | `packages/core/src/editorial/facade.ts` | `listSourceDocuments` / `getSourceDocument` / `previewSourceChange` / `getSceneRevision` / `getEditorialOperation` / `reviewServices` |
-| `packages/core/src/editorial/review-facade.ts` | `listReviewComments` / `addReviewComment` / `replaceReviewComment` / `updateReviewComment`（经 execution 端口） |
+| `packages/core/src/editorial/review-facade.ts` | `listReviewComments` / `addReviewComment` / `replaceReviewComment` / `updateReviewComment`（经 execution 端口）；revision prompt 消费 ledger（render-service 经 `ReviewManager` 读），但 add/replace/update **无产品 producer**（CLI / MCP / Workbench 均未调用；审计 §9.2） |
 | `packages/core/src/pipeline/render.ts` | cache lookup/revalidation（当前 protocol 重 parse + `validatePost`）、Pass 1/Pass 2、断路器重试、validator 调用、request ledger |
 | `packages/core/src/pipeline/surface-scheduler.ts` | deterministic dependency-ready wave planning、persisted accepted artifact resolution |
 | `packages/core/src/pipeline/release-decision.ts` | `accepted` / `pending_waiver` / `blocked` 的唯一判定（第 4 参 `interactionManager` 可选，编辑管线不传） |
 | `packages/core/src/pipeline/output.ts` | 纯 JSON-safe output intents（`RenderOutputs` + `DerivedData` + `appendPlayerChoicesBlock`）；不写文件 |
 | `packages/core/src/cache/render-cache.ts` | logical/surface 键材料、`computeSourceContentHash`（= `snapshot.sourceHash`）、`getCachedRender` / `setCachedRender`、cache diagnostics；validation/attempt 材料与 `computeFlatCacheKey` 仅 tooling 导出 |
 | `packages/core/src/validator/aggregator.ts` | active validator identity（28 内置）、analysis contract、`validatePre` / `validatePost`（uncertainty preflight + observationRef/pointer 校验） |
-| `packages/core/src/plugin/hooks-manager.ts` | plugin lifecycle、provider/validator registration、safe prompt decoration |
+| `packages/core/src/plugin/hooks-manager.ts` | plugin lifecycle、provider/validator registration、safe prompt decoration；无 production Host 构造（见 §4；审计 §9.3） |
 | `packages/core/src/reporter/validation-reporter.ts` | `formatValidationReport()` 纯 Markdown 格式化；`@novalistically/core/tooling` 导出 |
-| `packages/core/src/assembler/release-assembly.ts` + `publication-model.ts` | `validateManifestHeads` / `canonicalAssemble` / `customAssemble` / `buildNovelDocument`（verified heads + discourse scene sequence → 纯文档值）；`buildPublication` 摘要 |
+| `packages/core/src/assembler/release-assembly.ts` + `publication-model.ts` | `validateManifestHeads` / `canonicalAssemble` / `customAssemble` / `buildNovelDocument`（verified heads + discourse scene sequence → 纯文档值）；**算法有测试但无 production caller**（CLI / MCP / Workbench 均未调用；render-service 的 `buildPublication` 与 assembler 无关，只返回 status；审计 §9.1） |
 | `packages/core/src/ports/` | `CoreRuntimeServices` 与 `CoreExecutionRepository` / `RenderCacheRepository` / `StateLogRepository` / `StateSnapshotRepository` 语义端口 |
-| `packages/node-host/src/` | `FileProjectSourceLoader` / `FileProjectSourceWriter`、`FileExecutionRepository`（`.nova/execution`）、`FileRenderCacheRepository`（`.nova/render-cache`）、`FileStateLogRepository` / `FileStateSnapshotRepository`（`.nova/state-log` / `.nova/state-snapshots`）、`writeFileValidationReport`（`output/validation.md`）、`AiSdkProvider` / `FileMockPass2Provider`、`createFileCoreRuntimeServices` |
+| `packages/node-host/src/` | `FileProjectSourceLoader` / `FileProjectSourceWriter`、`FileExecutionRepository`（`.nova/execution`）、`FileRenderCacheRepository`（`.nova/render-cache`）、`FileStateLogRepository` / `FileStateSnapshotRepository`（`.nova/state-log` / `.nova/state-snapshots`）、`writeFileValidationReport`（`output/validation.md`）、`AiSdkProvider` / `FileMockPass2Provider`、`createFileCoreRuntimeServices`；`NodePluginCatalog` 导出但无 production 构造（见 §4） |
 
 ## 8. 运行时排障顺序
 
@@ -496,4 +497,4 @@ flowchart LR
 2. `blocked` 且 reason 含 `MISSING_SURFACE_SOURCE`：检查 surface group/lane、predecessor 的 accepted 状态和 `scopeHash`（matching-scope 的 persisted `AcceptedSceneArtifact` 才可用）。
 3. `pending_waiver`：说明没有 error-severity issue，但 warning 尚未有对应 waiver（当前编辑管线不消费请求级 waivers）；candidate 不会进入 promotion 或 assembly。
 4. `cacheHit: true`：确认结果中 `requestRecords: []`，这是刻意不伪造旧请求的行为。
-5. 小说未生成或过时：`buildPublication()` 的 `status`（`current` / `stale` / `unchanged`）与 `reasons` 说明原因；小说文档值由 `canonicalAssemble` / `customAssemble`（`buildNovelDocument`）计算，文件物化由 Host 决定。不要以文件是否存在判断发布状态。
+5. 小说未生成或过时：`buildPublication()` 的 `status`（`current` / `stale` / `unchanged`）与 `reasons` 说明原因，但**只返回状态**——`outputPath` 恒空、`novelHash` null。`canonicalAssemble` / `customAssemble`（`buildNovelDocument`）算法存在且有测试，但当前没有 production caller，Host 未接上小说物化；`status: 'current'` 只表示所选场景全部 released，**不**表示小说文档已装配或落盘。不要以文件是否存在判断发布状态。

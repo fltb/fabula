@@ -287,7 +287,7 @@ export class WorkbenchClient {
   render(input: WorkbenchRenderInputV1): Promise<unknown> {
     return this.call('nova_render', input);
   }
-  revise(input: WorkbenchRenderInputV1): Promise<unknown> {
+  revise(input: WorkbenchReviseInputV1): Promise<unknown> {
     return this.call('nova_revise', input);
   }
   renderTree(input: WorkbenchRenderInputV1): Promise<unknown> {
@@ -304,6 +304,74 @@ export class WorkbenchClient {
   }
   authoringDocumentEdit(input: WorkbenchAuthoringDocumentEditInputV1): Promise<unknown> {
     return this.call('nova_authoring_document_edit', input);
+  }
+  authoringValidate(input: WorkbenchAuthoringValidateInputV1): Promise<unknown> {
+    return this.call('nova_authoring_validate', input);
+  }
+  authoringSubmit(input: WorkbenchAuthoringSubmitInputV1): Promise<unknown> {
+    return this.call('nova_authoring_submit', input);
+  }
+  operationGet(input: WorkbenchOperationGetInputV1): Promise<unknown> {
+    return this.call('nova_operation_get', input);
+  }
+  authoringConflictRead(): Promise<unknown> {
+    return this.call('nova_authoring_conflict_read', { version: 2 });
+  }
+  conflictResolve(input: WorkbenchConflictResolveInputV1): Promise<unknown> {
+    return this.call('nova_conflict_resolve', input);
+  }
+  revisionList(input: WorkbenchRevisionListInputV1 = { version: 2 }): Promise<unknown> {
+    return this.call('nova_revision_list', input);
+  }
+  revisionGet(input: WorkbenchRevisionGetInputV1): Promise<unknown> {
+    return this.call('nova_revision_get', input);
+  }
+  revisionDiff(input: WorkbenchRevisionDiffInputV1): Promise<unknown> {
+    return this.call('nova_revision_diff', input);
+  }
+  revisionRestore(input: WorkbenchRevisionRestoreInputV1): Promise<unknown> {
+    return this.call('nova_revision_restore', input);
+  }
+  eventStateDiff(input: WorkbenchEventStateDiffInputV1): Promise<unknown> {
+    return this.call('nova_event_state_diff', input);
+  }
+  /** List review comments; the projected comment stream is the CLI-visible history. */
+  reviewList(input: WorkbenchReviewListInputV1 = { version: 1 }): Promise<unknown> {
+    return this.call('nova_review_list', input);
+  }
+  reviewGet(input: WorkbenchReviewGetInputV1): Promise<unknown> {
+    return this.call('nova_review_get', input);
+  }
+  reviewAdd(input: WorkbenchReviewAddInputV1): Promise<unknown> {
+    return this.call('nova_review_add', input);
+  }
+  reviewUpdate(input: WorkbenchReviewUpdateInputV1): Promise<unknown> {
+    return this.call('nova_review_update', input);
+  }
+  /**
+   * Comment history is the projected stream: there is no separate history
+   * MCP tool, so this reads `nova_review_list` and never invents one.
+   */
+  reviewHistory(input: WorkbenchReviewListInputV1 = { version: 1 }): Promise<unknown> {
+    return this.call('nova_review_list', input);
+  }
+  gateList(input: WorkbenchReleaseGateListInputV1 = { version: 1 }): Promise<unknown> {
+    return this.call('nova_release_gate_list', input);
+  }
+  gateDecide(input: WorkbenchReleaseGateDecideInputV1): Promise<unknown> {
+    return this.call('nova_release_gate_decide', input);
+  }
+  /** Publish the canonical novel or a custom branch artifact (durable operation). */
+  publicationPublish(input: WorkbenchPublicationPublishInputV1): Promise<unknown> {
+    return this.call('nova_publish', input);
+  }
+  /** Read one publication record; `publicationId` is required. */
+  publicationGet(input: WorkbenchPublicationGetInputV1): Promise<unknown> {
+    return this.call('nova_publication_get', input);
+  }
+  /** Read one bounded markdown slice of a publication artifact. */
+  publicationRead(input: WorkbenchPublicationReadInputV1): Promise<unknown> {
+    return this.call('nova_publication_read', input);
   }
 }
 
@@ -355,6 +423,183 @@ export interface WorkbenchAuthoringDocumentEditInputV1 extends WorkbenchJsonObje
     readonly end: number;
     readonly replacementText: string;
   }[];
+}
+/** `nova_revise` input: the render schema plus bounded instruction and review ids. */
+export interface WorkbenchReviseInputV1 extends WorkbenchRenderInputV1 {
+  readonly instruction?: string;
+  readonly reviewIds?: readonly string[];
+}
+/** `nova_authoring_validate` input; the working-layer CAS is required. */
+export interface WorkbenchAuthoringValidateInputV1 extends WorkbenchJsonObject {
+  readonly version: 2;
+  readonly expectedWorkspaceDigest: string;
+  readonly expectedAcceptedSourceHash: string | null;
+}
+/** `nova_authoring_submit` input; the working-layer CAS is required. */
+export interface WorkbenchAuthoringSubmitInputV1 extends WorkbenchJsonObject {
+  readonly version: 2;
+  readonly expectedWorkspaceDigest: string;
+  readonly message?: string;
+}
+/** `nova_operation_get` input; the operation handle is Host-allocated. */
+export interface WorkbenchOperationGetInputV1 extends WorkbenchJsonObject {
+  readonly version: 2;
+  readonly operationHandle: string;
+}
+/** `nova_conflict_resolve` input; the same predefined choices as the browser surface. */
+export interface WorkbenchConflictResolveInputV1 extends WorkbenchJsonObject {
+  readonly version: 2;
+  readonly choice: 'keep-working' | 'accept-external' | 'apply-proposed-disjoint-merge';
+  readonly candidateHash: string | null;
+}
+/** `nova_revision_list` input; `cursor` is opaque to the caller. */
+export interface WorkbenchRevisionListInputV1 extends WorkbenchJsonObject {
+  readonly version: 2;
+  readonly cursor?: string;
+}
+/** `nova_revision_get` input. */
+export interface WorkbenchRevisionGetInputV1 extends WorkbenchJsonObject {
+  readonly version: 2;
+  readonly revisionId: string;
+}
+/** `nova_revision_diff` input; hash-only native revision path diff. */
+export interface WorkbenchRevisionDiffInputV1 extends WorkbenchJsonObject {
+  readonly version: 2;
+  readonly fromRevisionId: string;
+  readonly toRevisionId: string;
+}
+/** `nova_revision_restore` input; both expected identities are optional CAS fields. */
+export interface WorkbenchRevisionRestoreInputV1 extends WorkbenchJsonObject {
+  readonly version: 2;
+  readonly revisionId: string;
+  readonly expectedAcceptedRevisionId?: string | null;
+  readonly expectedSourceHash?: string | null;
+}
+/** `nova_event_state_diff` input; pure read against the accepted source. */
+export interface WorkbenchEventStateDiffInputV1 extends WorkbenchJsonObject {
+  readonly eventId: string;
+}
+
+/** Comment statuses projected from the append-only review event stream. */
+export type WorkbenchReviewStatusV1 = 'open' | 'addressed' | 'resolved' | 'wontfix' | 'superseded';
+/** Comment severities accepted by the review tools. */
+export type WorkbenchReviewSeverityV1 = 'nit' | 'suggestion' | 'blocking';
+/** Comment categories accepted by the review tools. */
+export type WorkbenchReviewCategoryV1 =
+  | 'style'
+  | 'pacing'
+  | 'character_voice'
+  | 'plot_logic'
+  | 'world_consistency'
+  | 'reader_experience';
+/** Target kinds a review comment can be attached to. */
+export type WorkbenchReviewTargetTypeV1 =
+  | 'novel'
+  | 'chapter'
+  | 'scene'
+  | 'line'
+  | 'character'
+  | 'worldrule';
+/** The review target of one comment; line targets require a line basis. */
+export interface WorkbenchReviewTargetV1 extends WorkbenchJsonObject {
+  readonly type: WorkbenchReviewTargetTypeV1;
+  readonly id: string;
+  readonly lineRange?: readonly [number, number];
+  readonly lineBasis?: { readonly revisionId: string; readonly proseHash: string };
+}
+/** `nova_review_list` input; `eventId` filters comments targeting one scene event. */
+export interface WorkbenchReviewListInputV1 extends WorkbenchJsonObject {
+  readonly version: 1;
+  readonly status?: WorkbenchReviewStatusV1;
+  readonly severity?: WorkbenchReviewSeverityV1;
+  readonly targetType?: WorkbenchReviewTargetTypeV1;
+  readonly targetId?: string;
+  readonly eventId?: string;
+}
+/** `nova_review_get` input; the comment id is Host-allocated. */
+export interface WorkbenchReviewGetInputV1 extends WorkbenchJsonObject {
+  readonly version: 1;
+  readonly commentId: string;
+}
+/** `nova_review_add` input; the Host derives the actor from the caller grant. */
+export interface WorkbenchReviewAddInputV1 extends WorkbenchJsonObject {
+  readonly version: 1;
+  readonly target: WorkbenchReviewTargetV1;
+  readonly severity: WorkbenchReviewSeverityV1;
+  readonly category: WorkbenchReviewCategoryV1;
+  readonly content: string;
+}
+/**
+ * `nova_review_update` input. `replace` requires target/severity/category/
+ * content (the Host validates the combination); the status actions carry no
+ * extra fields. `addressed` is not an action — it is written only by
+ * `comment_applied` events after a revision addresses the comment.
+ */
+export interface WorkbenchReviewUpdateInputV1 extends WorkbenchJsonObject {
+  readonly version: 1;
+  readonly commentId: string;
+  readonly action: 'replace' | 'resolve' | 'wontfix' | 'reopen' | 'escalate';
+  readonly target?: WorkbenchReviewTargetV1;
+  readonly severity?: WorkbenchReviewSeverityV1;
+  readonly category?: WorkbenchReviewCategoryV1;
+  readonly content?: string;
+}
+/** `nova_release_gate_list` input; `eventId` narrows to one scene's gates. */
+export interface WorkbenchReleaseGateListInputV1 extends WorkbenchJsonObject {
+  readonly version: 1;
+  readonly eventId?: string;
+}
+/** `nova_release_gate_decide` input; the Host fills source identity from the session. */
+export interface WorkbenchReleaseGateDecideInputV1 extends WorkbenchJsonObject {
+  readonly version: 1;
+  readonly eventId: string;
+  readonly candidateRevisionId: string;
+  readonly decision: 'accept' | 'reject';
+  readonly reason: string;
+}
+
+/** One custom-branch decision inside a publish route selector. */
+export interface WorkbenchPublicationBranchDecisionV1 extends WorkbenchJsonObject {
+  readonly atEventId: string;
+  readonly choiceId: string;
+  readonly narrativeOrder: number;
+}
+
+/**
+ * Strict custom-branch identity accepted by `nova_publish`: the wire mirror
+ * of the canonical graph route selector (exactly version + branchPath).
+ */
+export interface WorkbenchPublicationBranchPathV1 extends WorkbenchJsonObject {
+  readonly version: 1;
+  readonly branchPath: {
+    readonly decisions: readonly WorkbenchPublicationBranchDecisionV1[];
+  };
+}
+
+/**
+ * `nova_publish` input. Omitting every branch field publishes the canonical
+ * novel; supplying `branchPath` (plus optional `discourseBranch`/`title`)
+ * publishes a custom branch artifact. Assembly is a durable operation.
+ */
+export interface WorkbenchPublicationPublishInputV1 extends WorkbenchJsonObject {
+  readonly version: 1;
+  readonly branchPath?: WorkbenchPublicationBranchPathV1;
+  readonly discourseBranch?: string;
+  readonly title?: string;
+}
+
+/** `nova_publication_get` input; the Host resolves the record by id. */
+export interface WorkbenchPublicationGetInputV1 extends WorkbenchJsonObject {
+  readonly version: 1;
+  readonly publicationId: string;
+}
+
+/** `nova_publication_read` input; a bounded, integrity-checked markdown slice. */
+export interface WorkbenchPublicationReadInputV1 extends WorkbenchJsonObject {
+  readonly version: 1;
+  readonly publicationId: string;
+  readonly offset?: number;
+  readonly limit?: number;
 }
 
 /** Resolve the explicit CLI mode without putting credentials into the mode DTO. */

@@ -3,14 +3,16 @@
  *
  * These values are configuration-source DTOs, not runtime objects. In
  * particular, normalizing a legacy configuration only creates an in-memory
- * V2 value; it never reads or writes the configuration file.
+ * V3 value; it never reads or writes the configuration file.
  */
 
 export const WORKBENCH_CONFIGURATION_VERSION_V1 = 1 as const;
 export const WORKBENCH_CONFIGURATION_VERSION_V2 = 2 as const;
+export const WORKBENCH_CONFIGURATION_VERSION_V3 = 3 as const;
 export type WorkbenchConfigurationVersion =
   | typeof WORKBENCH_CONFIGURATION_VERSION_V1
-  | typeof WORKBENCH_CONFIGURATION_VERSION_V2;
+  | typeof WORKBENCH_CONFIGURATION_VERSION_V2
+  | typeof WORKBENCH_CONFIGURATION_VERSION_V3;
 
 export interface WorkbenchProjectConfigurationV1 {
   readonly projectId: string;
@@ -27,6 +29,38 @@ export interface WorkbenchProjectConfigurationV2 {
   readonly displayName: string;
   readonly root: string;
   readonly revisionMirror: WorkbenchRevisionMirrorConfigurationV2;
+}
+
+/**
+ * Owner-trusted local plugin pinned by exact identity. `required` plugins
+ * must load or the project render surface reports a blocking diagnostic;
+ * optional plugins that fail to load are disabled and recorded.
+ */
+export interface WorkbenchTrustedPluginConfigurationV3 {
+  readonly name: string;
+  readonly version: string;
+  readonly moduleHash: string;
+  readonly required: boolean;
+}
+
+/** Canonical V3 project: every project binds an explicit provider profile. */
+export interface WorkbenchProjectConfigurationV3 extends WorkbenchProjectConfigurationV2 {
+  readonly providerProfile: string;
+  readonly trustedPlugins: readonly WorkbenchTrustedPluginConfigurationV3[];
+}
+
+/** Host-wide operation scheduling limits introduced by the V3 source contract. */
+export interface WorkbenchOperationLimitsV3 {
+  readonly maxQueuedPerProject: number;
+  readonly maxConcurrentRendersPerProject: 1;
+  readonly maxConcurrentRendersPerHost: number;
+}
+
+/** Built-in Agent limits introduced by the V3 source contract. */
+export interface WorkbenchAgentConfigurationV3 {
+  readonly enabled: boolean;
+  readonly maxTurns: number;
+  readonly maxToolCalls: number;
 }
 
 export interface WorkbenchProviderConfigurationV1 {
@@ -75,6 +109,20 @@ export const DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2 = {
   mcpImportChunkBytes: 1_048_576,
 } as const satisfies WorkbenchReferenceLimitsV2;
 
+/** Fixed defaults used when a V1/V2 configuration is normalized in memory. */
+export const DEFAULT_WORKBENCH_OPERATION_LIMITS_V3 = {
+  maxQueuedPerProject: 64,
+  maxConcurrentRendersPerProject: 1,
+  maxConcurrentRendersPerHost: 2,
+} as const satisfies WorkbenchOperationLimitsV3;
+
+/** Fixed defaults used when a V1/V2 configuration is normalized in memory. */
+export const DEFAULT_WORKBENCH_AGENT_CONFIGURATION_V3 = {
+  enabled: false,
+  maxTurns: 16,
+  maxToolCalls: 64,
+} as const satisfies WorkbenchAgentConfigurationV3;
+
 /**
  * Legacy source shape. V1 had no per-project mirror policy or reference
  * limits; both are supplied by normalizeWorkbenchConfiguration().
@@ -100,7 +148,30 @@ export interface WorkbenchConfigurationV2 {
   readonly referenceLimits: WorkbenchReferenceLimitsV2;
 }
 
-export type WorkbenchConfigurationInput = WorkbenchConfigurationV1 | WorkbenchConfigurationV2;
+/**
+ * Canonical V3 source shape. Property declaration order is the canonical JSON
+ * order and must be retained by owners when serializing this value.
+ *
+ * V3 replaces the single `provider` with a per-profile `providers` map;
+ * every project binds exactly one `providerProfile` and an explicit
+ * `trustedPlugins` list. V1/V2 remain readable migration inputs and are
+ * normalized to V3 by {@link normalizeWorkbenchConfiguration}.
+ */
+export interface WorkbenchConfigurationV3 {
+  readonly version: 3;
+  readonly projects: readonly WorkbenchProjectConfigurationV3[];
+  readonly defaultProjectId: string | null;
+  readonly providers: Readonly<Record<string, WorkbenchProviderConfigurationV2>>;
+  readonly network: WorkbenchNetworkConfigurationV2;
+  readonly referenceLimits: WorkbenchReferenceLimitsV2;
+  readonly operationLimits: WorkbenchOperationLimitsV3;
+  readonly agent: WorkbenchAgentConfigurationV3;
+}
+
+export type WorkbenchConfigurationInput =
+  | WorkbenchConfigurationV1
+  | WorkbenchConfigurationV2
+  | WorkbenchConfigurationV3;
 
 function copyProvider(
   provider: WorkbenchProviderConfigurationV1 | null,
@@ -120,14 +191,52 @@ function copyNetwork(network: WorkbenchNetworkConfigurationV1): WorkbenchNetwork
   };
 }
 
+function copyRevisionMirror(
+  mirror: WorkbenchRevisionMirrorConfigurationV2,
+): WorkbenchRevisionMirrorConfigurationV2 {
+  return mirror.mode === 'git-best-effort'
+    ? { mode: 'git-best-effort', ref: mirror.ref }
+    : { mode: 'disabled' };
+}
+
 /**
- * Normalize either persisted configuration version to canonical V2.
+ * Normalize any persisted configuration version to canonical V3.
  * This function is pure: it performs no validation, I/O, CAS, or persistence.
+ *
+ * Migration rules:
+ * - The single V1/V2 `provider` becomes `providers.default` (absent when null).
+ * - Every legacy project is bound to `providerProfile: 'default'` with no
+ *   trusted plugins.
+ * - `operationLimits` and `agent` are filled with fixed defaults.
  */
 export function normalizeWorkbenchConfiguration(
   configuration: WorkbenchConfigurationInput,
-): WorkbenchConfigurationV2 {
-  const projects =
+): WorkbenchConfigurationV3 {
+  if (configuration.version === 3) {
+    return {
+      version: 3,
+      projects: configuration.projects.map((project) => ({
+        projectId: project.projectId,
+        displayName: project.displayName,
+        root: project.root,
+        revisionMirror: copyRevisionMirror(project.revisionMirror),
+        providerProfile: project.providerProfile,
+        trustedPlugins: project.trustedPlugins.map((plugin) => ({ ...plugin })),
+      })),
+      defaultProjectId: configuration.defaultProjectId,
+      providers: Object.fromEntries(
+        Object.entries(configuration.providers).map(([profileId, provider]) => [
+          profileId,
+          { kind: provider.kind, baseUrl: provider.baseUrl, model: provider.model },
+        ]),
+      ),
+      network: copyNetwork(configuration.network),
+      referenceLimits: { ...configuration.referenceLimits },
+      operationLimits: { ...configuration.operationLimits },
+      agent: { ...configuration.agent },
+    };
+  }
+  const projects = (
     configuration.version === 1
       ? configuration.projects.map((project) => ({
           projectId: project.projectId,
@@ -139,22 +248,26 @@ export function normalizeWorkbenchConfiguration(
           projectId: project.projectId,
           displayName: project.displayName,
           root: project.root,
-          revisionMirror:
-            project.revisionMirror.mode === 'git-best-effort'
-              ? { mode: 'git-best-effort' as const, ref: project.revisionMirror.ref }
-              : ({ mode: 'disabled' } as const),
-        }));
-
+          revisionMirror: copyRevisionMirror(project.revisionMirror),
+        }))
+  ).map((project) => ({
+    ...project,
+    providerProfile: 'default' as const,
+    trustedPlugins: [],
+  }));
+  const provider = copyProvider(configuration.provider);
   return {
-    version: 2,
+    version: 3,
     projects,
     defaultProjectId: configuration.defaultProjectId,
-    provider: copyProvider(configuration.provider),
+    providers: provider === null ? {} : { default: provider },
     network: copyNetwork(configuration.network),
     referenceLimits:
       configuration.version === 1
         ? { ...DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2 }
         : { ...configuration.referenceLimits },
+    operationLimits: { ...DEFAULT_WORKBENCH_OPERATION_LIMITS_V3 },
+    agent: { ...DEFAULT_WORKBENCH_AGENT_CONFIGURATION_V3 },
   };
 }
 

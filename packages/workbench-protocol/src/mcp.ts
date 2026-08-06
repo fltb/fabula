@@ -73,6 +73,8 @@ const RESULT_SCHEMA: McpJsonSchemaV1 = {
 const string = { type: 'string', minLength: 1 };
 const nullableString = { type: ['string', 'null'] };
 const authoringVersion = { type: 'number', const: 2 };
+/** Wire version of the canonical graph route selector (WorkbenchGraphViewVersion). */
+const graphViewVersion = { type: 'number', const: 1 };
 
 /**
  * Bounds are part of the wire contract, rather than implementation hints.
@@ -427,6 +429,337 @@ const adminConfigurationProperty = objectProperty(
   ['version', 'projects', 'defaultProjectId', 'provider', 'network'],
 );
 
+/**
+ * Strict scene selector shared by the three render-surface tools. The
+ * discriminated union rejects keys that belong to the other variants, so
+ * clients cannot smuggle cross-variant fields.
+ */
+const sceneSelectorProperty: McpJsonSchemaProperty = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    type: { type: 'string', enum: ['all', 'chapter', 'events'] },
+    chapter: { type: 'integer', minimum: 1, multipleOf: 1 },
+    eventIds: {
+      type: 'array',
+      minItems: 1,
+      uniqueItems: true,
+      items: { type: 'string', minLength: 1 },
+    },
+  },
+  required: ['type'],
+};
+
+/**
+ * Strict canonical graph route selector (wire mirror of
+ * `WorkbenchRouteSelectorV1`): exactly version + branchPath, with optional
+ * discourseBranch. Unknown keys or wrong types are rejected by the schema and
+ * again by the registry handler.
+ */
+const graphRouteSelectorProperty: McpJsonSchemaProperty = objectProperty(
+  {
+    version: graphViewVersion,
+    branchPath: objectProperty(
+      {
+        decisions: {
+          type: 'array',
+          items: objectProperty(
+            {
+              atEventId: string,
+              choiceId: string,
+              narrativeOrder: { type: 'integer', minimum: 0 },
+            },
+            ['atEventId', 'choiceId', 'narrativeOrder'],
+          ),
+        },
+      },
+      ['decisions'],
+    ),
+    discourseBranch: string,
+  },
+  ['version', 'branchPath'],
+);
+
+/**
+ * ISS snapshot carried by a working-layer validation (wire mirror of Core `ISSSnapshot`).
+ */
+// ─── Review & release-gate wire DTOs (plan Step 5) ───────────────────────────
+
+/** Wire version shared by the six review/release-gate tools. */
+const reviewVersion = { type: 'number', const: 1 };
+const reviewCommentId = { type: 'string', minLength: 1, maxLength: 128 };
+const reviewTargetType = {
+  type: 'string',
+  enum: ['novel', 'chapter', 'scene', 'line', 'character', 'worldrule'],
+};
+const reviewSeverity = { type: 'string', enum: ['nit', 'suggestion', 'blocking'] };
+const reviewCategory = {
+  type: 'string',
+  enum: [
+    'style',
+    'pacing',
+    'character_voice',
+    'plot_logic',
+    'world_consistency',
+    'reader_experience',
+  ],
+};
+const reviewCommentStatus = {
+  type: 'string',
+  enum: ['open', 'addressed', 'resolved', 'wontfix', 'superseded'],
+};
+const reviewCommentContent = { type: 'string', minLength: 1, maxLength: 65536 };
+const reviewReason = { type: 'string', minLength: 1, maxLength: 4096 };
+/** Strict review target selector (wire mirror of Core `NewReviewComment.target`). */
+const reviewTargetProperty = objectProperty(
+  {
+    type: reviewTargetType,
+    id: string,
+    lineRange: arrayProperty({ type: 'integer', minimum: 1 }, 2, 2),
+    lineBasis: objectProperty({ revisionId: string, proseHash: hash }, ['revisionId', 'proseHash']),
+  },
+  ['type', 'id'],
+);
+const reviewApplicationProperty = objectProperty(
+  { eventId: string, revisionId: string, operationId: string, appliedAt: string },
+  ['eventId', 'revisionId', 'operationId', 'appliedAt'],
+);
+/** Full projected comment (wire mirror of Core `ReviewComment`). */
+const reviewCommentProperty = objectProperty(
+  {
+    id: reviewCommentId,
+    author: { type: 'string', enum: ['human', 'llm'] },
+    actorId: string,
+    target: reviewTargetProperty,
+    severity: reviewSeverity,
+    category: reviewCategory,
+    content: reviewCommentContent,
+    status: reviewCommentStatus,
+    applications: arrayProperty(reviewApplicationProperty, 0),
+    supersedesId: nullableString,
+    resolvedBy: nullableString,
+    createdAt: string,
+    resolvedAt: nullableString,
+  },
+  [
+    'id',
+    'author',
+    'actorId',
+    'target',
+    'severity',
+    'category',
+    'content',
+    'status',
+    'applications',
+    'supersedesId',
+    'resolvedBy',
+    'createdAt',
+    'resolvedAt',
+  ],
+);
+/** A recorded gate decision (wire mirror of Core `ReviewGateDecisionV1`). */
+const reviewGateDecisionProperty = objectProperty(
+  {
+    gateId: string,
+    decision: { type: 'string', enum: ['waived', 'rejected', 'accepted'] },
+    revisionId: string,
+    capabilityVersion: { type: 'integer', minimum: 1 },
+    reason: reviewReason,
+    actorId: string,
+    createdAt: string,
+  },
+  ['gateId', 'decision', 'revisionId', 'capabilityVersion', 'reason', 'actorId', 'createdAt'],
+);
+/** Current gate state (wire mirror of Core `ReviewGateV1`). */
+const reviewGateProperty = objectProperty(
+  {
+    gateId: string,
+    sourceHash: hash,
+    eventId: string,
+    proseHash: hash,
+    scopeHash: hash,
+    validationIdentity: string,
+    warningFingerprints: arrayProperty(string, 0),
+    revisionId: string,
+    openedAt: string,
+    openedBy: string,
+    status: { type: 'string', enum: ['open', 'decided', 'superseded'] },
+    decision: { ...reviewGateDecisionProperty, type: ['object', 'null'] },
+    supersededAt: nullableString,
+    supersededBy: nullableString,
+    supersedeReason: nullableString,
+  },
+  [
+    'gateId',
+    'sourceHash',
+    'eventId',
+    'proseHash',
+    'scopeHash',
+    'validationIdentity',
+    'warningFingerprints',
+    'revisionId',
+    'openedAt',
+    'openedBy',
+    'status',
+    'decision',
+    'supersededAt',
+    'supersededBy',
+    'supersedeReason',
+  ],
+);
+/** Re-evaluated release decision (wire mirror of Core `ReleaseDecision`). */
+const releaseDecisionProperty = objectProperty(
+  {
+    status: { type: 'string', enum: ['accepted', 'pending_waiver', 'blocked'] },
+    scopeHash: hash,
+    validationIdentity: string,
+    reasons: arrayProperty(string, 0),
+    waiverId: nullableString,
+    gateId: nullableString,
+  },
+  ['status', 'scopeHash', 'validationIdentity', 'reasons', 'waiverId', 'gateId'],
+);
+/** Gate resolution outcome (wire mirror of Core `ReleaseGateResolutionV1`). */
+const releaseGateResolutionProperty = objectProperty(
+  {
+    version: reviewVersion,
+    projectId: string,
+    gateId: string,
+    eventId: string,
+    candidateRevisionId: string,
+    outcome: { type: 'string', enum: ['accepted', 'rejected', 'stale', 'superseded'] },
+    acceptedRevisionId: nullableString,
+    decision: releaseDecisionProperty,
+    reason: reviewReason,
+    actorId: string,
+    capabilityVersion: { type: 'integer', minimum: 1 },
+    decidedAt: string,
+  },
+  [
+    'version',
+    'projectId',
+    'gateId',
+    'eventId',
+    'candidateRevisionId',
+    'outcome',
+    'acceptedRevisionId',
+    'decision',
+    'reason',
+    'actorId',
+    'capabilityVersion',
+    'decidedAt',
+  ],
+);
+
+// ─── Publication wire DTOs (plan Step 6.6) ───────────────────────────────────
+
+/**
+ * Bounds of the publication MCP surface. `maxPublicationReadBytes` caps a
+ * single `nova_publication_read` slice (a reader pages with offset/limit);
+ * `maxPublicationIdLength`/`maxPublicationTitleLength` bound the identity and
+ * title fields of `nova_publish` / `nova_publication_get`.
+ */
+export const PUBLICATION_MCP_LIMITS_V1 = {
+  maxPublicationIdLength: 128,
+  maxPublicationTitleLength: 256,
+  maxPublicationReadBytes: 256 * 1024,
+} as const;
+
+/** Wire version shared by the three publication tools. */
+const publicationVersion = { type: 'number', const: 1 };
+const publicationId = {
+  type: 'string',
+  minLength: 1,
+  maxLength: PUBLICATION_MCP_LIMITS_V1.maxPublicationIdLength,
+};
+const publicationTitle = {
+  type: 'string',
+  minLength: 1,
+  maxLength: PUBLICATION_MCP_LIMITS_V1.maxPublicationTitleLength,
+};
+const publicationReadOffset = { type: 'integer', minimum: 0, maximum: 2_147_483_647 };
+const publicationReadLimit = {
+  type: 'integer',
+  minimum: 1,
+  maximum: PUBLICATION_MCP_LIMITS_V1.maxPublicationReadBytes,
+};
+/** Stored publication record value (project-relative paths only). */
+const publicationValueProperty = objectProperty(
+  {
+    sourceHash: hash,
+    scopeHash: hash,
+    revisionIds: arrayProperty({ type: 'string', minLength: 1 }, 0),
+    novelHash: hash,
+    relativeOutputPath: string,
+    byteLength: { type: 'integer', minimum: 0 },
+    actorId: string,
+    operationId: string,
+    createdAt: string,
+    status: { type: 'string', enum: ['current', 'stale'] },
+  },
+  [
+    'sourceHash',
+    'scopeHash',
+    'revisionIds',
+    'novelHash',
+    'relativeOutputPath',
+    'byteLength',
+    'actorId',
+    'operationId',
+    'createdAt',
+    'status',
+  ],
+);
+/** One durable publication row (identity + value, never an absolute Host path). */
+const publicationRecordProperty = objectProperty(
+  {
+    publicationId,
+    kind: { type: 'string', enum: ['canonical', 'custom'] },
+    value: publicationValueProperty,
+    updatedAt: string,
+  },
+  ['publicationId', 'kind', 'value', 'updatedAt'],
+);
+
+const workingValidationIssProperty: McpJsonSchemaProperty = objectProperty(
+  {
+    overall: { type: 'number' },
+    target: { type: 'number' },
+    dimensions: arrayProperty(
+      objectProperty(
+        {
+          name: string,
+          score: { type: 'number' },
+          max: { type: 'number' },
+          threshold: { type: 'number' },
+          status: { type: 'string', enum: ['green', 'yellow', 'red'] },
+          gaps: arrayProperty(
+            objectProperty(
+              {
+                entity: string,
+                id: string,
+                file: string,
+                suggestion: string,
+                fixAction: {
+                  type: 'string',
+                  enum: ['create_file', 'edit_file', 'add_field', 'change_value'],
+                },
+                fixTarget: string,
+                template: string,
+              },
+              ['suggestion', 'fixAction', 'fixTarget'],
+            ),
+            0,
+          ),
+        },
+        ['name', 'score', 'max', 'threshold', 'status', 'gaps'],
+      ),
+      0,
+    ),
+  },
+  ['overall', 'target', 'dimensions'],
+);
+
 function inputFor(name: string): McpJsonSchemaV1 {
   if (name === 'nova_source_get') {
     return schema(
@@ -566,6 +899,12 @@ function inputFor(name: string): McpJsonSchemaV1 {
       'operationHandle',
     ]);
   }
+  if (name === 'nova_operation_cancel') {
+    return schema({ version: authoringVersion, operationHandle: string }, [
+      'version',
+      'operationHandle',
+    ]);
+  }
   if (name === 'nova_authoring_conflict_read') {
     return schema({ version: authoringVersion }, ['version']);
   }
@@ -587,24 +926,16 @@ function inputFor(name: string): McpJsonSchemaV1 {
   if (name === 'nova_source_preview') {
     return schema({ changes: { type: 'array', minItems: 1 } }, ['changes']);
   }
-  if (name === 'nova_render' || name === 'nova_revise' || name === 'nova_render_tree') {
+  if (name === 'nova_graph') {
+    return schema(
+      { ...graphRouteSelectorProperty.properties },
+      graphRouteSelectorProperty.required ?? [],
+    );
+  }
+  if (name === 'nova_render' || name === 'nova_render_tree') {
     return schema(
       {
-        sceneSelector: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            type: { type: 'string', enum: ['all', 'chapter', 'events'] },
-            chapter: { type: 'integer', minimum: 1, multipleOf: 1 },
-            eventIds: {
-              type: 'array',
-              minItems: 1,
-              uniqueItems: true,
-              items: { type: 'string', minLength: 1 },
-            },
-          },
-          required: ['type'],
-        },
+        sceneSelector: sceneSelectorProperty,
         model: string,
         referenceChunks: {
           type: 'array',
@@ -613,6 +944,125 @@ function inputFor(name: string): McpJsonSchemaV1 {
         },
       },
       ['sceneSelector'],
+    );
+  }
+  if (name === 'nova_revise') {
+    return schema(
+      {
+        sceneSelector: sceneSelectorProperty,
+        model: string,
+        referenceChunks: {
+          type: 'array',
+          maxItems: REFERENCE_MCP_LIMITS_V1.maxCitations,
+          items: objectProperty({ referenceId, chunkId: referenceId }, ['referenceId', 'chunkId']),
+        },
+        instruction: { type: 'string', maxLength: 4096 },
+        reviewIds: {
+          type: 'array',
+          maxItems: 256,
+          uniqueItems: true,
+          items: { type: 'string', minLength: 1 },
+        },
+      },
+      ['sceneSelector'],
+    );
+  }
+  if (name === 'nova_event_state_diff') {
+    return schema({ eventId: string }, ['eventId']);
+  }
+  if (name === 'nova_review_list') {
+    return schema(
+      {
+        version: reviewVersion,
+        status: reviewCommentStatus,
+        severity: reviewSeverity,
+        targetType: reviewTargetType,
+        targetId: string,
+        eventId: string,
+      },
+      ['version'],
+    );
+  }
+  if (name === 'nova_review_get') {
+    return schema({ version: reviewVersion, commentId: reviewCommentId }, ['version', 'commentId']);
+  }
+  if (name === 'nova_review_add') {
+    return schema(
+      {
+        version: reviewVersion,
+        target: reviewTargetProperty,
+        severity: reviewSeverity,
+        category: reviewCategory,
+        content: reviewCommentContent,
+      },
+      ['version', 'target', 'severity', 'category', 'content'],
+    );
+  }
+  if (name === 'nova_review_update') {
+    return schema(
+      {
+        version: reviewVersion,
+        commentId: reviewCommentId,
+        action: {
+          type: 'string',
+          enum: ['replace', 'resolve', 'wontfix', 'reopen', 'escalate'],
+        },
+        target: reviewTargetProperty,
+        severity: reviewSeverity,
+        category: reviewCategory,
+        content: reviewCommentContent,
+      },
+      ['version', 'commentId', 'action'],
+    );
+  }
+  if (name === 'nova_release_gate_list') {
+    return schema({ version: reviewVersion, eventId: string }, ['version']);
+  }
+  if (name === 'nova_release_gate_decide') {
+    return schema(
+      {
+        version: reviewVersion,
+        eventId: string,
+        candidateRevisionId: string,
+        decision: { type: 'string', enum: ['accept', 'reject'] },
+        reason: reviewReason,
+      },
+      ['version', 'eventId', 'candidateRevisionId', 'decision', 'reason'],
+    );
+  }
+  if (name === 'nova_publish') {
+    return schema(
+      {
+        version: publicationVersion,
+        branchPath: graphRouteSelectorProperty,
+        discourseBranch: string,
+        title: publicationTitle,
+      },
+      ['version'],
+    );
+  }
+  if (name === 'nova_publication_get') {
+    return schema({ version: publicationVersion, publicationId }, ['version', 'publicationId']);
+  }
+  if (name === 'nova_publication_read') {
+    return schema(
+      {
+        version: publicationVersion,
+        publicationId,
+        offset: publicationReadOffset,
+        limit: publicationReadLimit,
+      },
+      ['version', 'publicationId', 'offset', 'limit'],
+    );
+  }
+  if (name === 'nova_authoring_validate') {
+    return schema(
+      {
+        version: authoringVersion,
+        expectedWorkspaceDigest: string,
+        expectedAcceptedSourceHash: nullableString,
+      },
+      ['version', 'expectedWorkspaceDigest', 'expectedAcceptedSourceHash'],
     );
   }
   if (name === 'nova_revision_list') {
@@ -844,6 +1294,9 @@ function inputFor(name: string): McpJsonSchemaV1 {
       'operationHandle',
     ]);
   }
+  if (name === 'nova_admin_plugins_discovered') {
+    return schema({ version: adminVersion, projectId: adminProjectId }, ['version', 'projectId']);
+  }
   return EMPTY_SCHEMA;
 }
 
@@ -887,6 +1340,130 @@ function outputFor(name: string): McpJsonSchemaV1 {
       ['job', 'deletedReferenceId'],
     );
   }
+  if (name === 'nova_review_list' || name === 'nova_release_gate_list') {
+    return schema(
+      {
+        result: objectProperty(
+          {
+            version: reviewVersion,
+            items: arrayProperty(
+              name === 'nova_review_list' ? reviewCommentProperty : reviewGateProperty,
+              0,
+            ),
+          },
+          ['version', 'items'],
+        ),
+      },
+      ['result'],
+    );
+  }
+  if (name === 'nova_review_get') {
+    return schema(
+      {
+        result: objectProperty(
+          {
+            version: reviewVersion,
+            comment: { ...reviewCommentProperty, type: ['object', 'null'] },
+          },
+          ['version', 'comment'],
+        ),
+      },
+      ['result'],
+    );
+  }
+  if (name === 'nova_review_add' || name === 'nova_review_update') {
+    return schema(
+      {
+        result: objectProperty({ version: reviewVersion, comment: reviewCommentProperty }, [
+          'version',
+          'comment',
+        ]),
+      },
+      ['result'],
+    );
+  }
+  if (name === 'nova_release_gate_decide') {
+    return schema(
+      {
+        result: objectProperty(
+          { version: reviewVersion, resolution: releaseGateResolutionProperty },
+          ['version', 'resolution'],
+        ),
+      },
+      ['result'],
+    );
+  }
+  if (name === 'nova_publication_get') {
+    return schema(
+      {
+        version: publicationVersion,
+        publication: { ...publicationRecordProperty, type: ['object', 'null'] },
+      },
+      ['version', 'publication'],
+    );
+  }
+  if (name === 'nova_publication_read') {
+    return schema(
+      {
+        version: publicationVersion,
+        publicationId,
+        offset: publicationReadOffset,
+        limit: publicationReadLimit,
+        content: string,
+        byteLength: { type: 'integer', minimum: 0 },
+        totalByteLength: { type: 'integer', minimum: 0 },
+      },
+      ['version', 'publicationId', 'offset', 'limit', 'content', 'byteLength', 'totalByteLength'],
+    );
+  }
+  if (name === 'nova_publish') {
+    return schema(
+      {
+        status: { type: 'string', enum: ['queued'] },
+        operationHandle: string,
+      },
+      ['status', 'operationHandle'],
+    );
+  }
+  if (name === 'nova_authoring_validate') {
+    return schema(
+      {
+        version: authoringVersion,
+        layer: { type: 'string', const: 'working' },
+        projectId: string,
+        workspaceDigest: string,
+        acceptedSourceHash: nullableString,
+        candidateSourceHash: string,
+        passed: { type: 'boolean' },
+        diagnostics: arrayProperty(
+          objectProperty(
+            {
+              code: string,
+              severity: { type: 'string', enum: ['error', 'warning', 'info'] },
+              message: string,
+              logicalPath: nullableString,
+            },
+            ['code', 'severity', 'message', 'logicalPath'],
+          ),
+          0,
+        ),
+        iss: workingValidationIssProperty,
+        results: objectProperty({}, []),
+      },
+      [
+        'version',
+        'layer',
+        'projectId',
+        'workspaceDigest',
+        'acceptedSourceHash',
+        'candidateSourceHash',
+        'passed',
+        'diagnostics',
+        'iss',
+        'results',
+      ],
+    );
+  }
   return RESULT_SCHEMA;
 }
 
@@ -916,6 +1493,7 @@ const project = [
   'nova_revision_list',
   'nova_revision_get',
   'nova_revision_diff',
+  'nova_event_state_diff',
 ].map((name) =>
   descriptor(
     name,
@@ -924,6 +1502,12 @@ const project = [
       : ['mcp:read'],
   ),
 );
+const publicationTools = [
+  { name: 'nova_publish', scopes: ['mcp:submit'] as const },
+  { name: 'nova_publication_get', scopes: ['mcp:read'] as const },
+  { name: 'nova_publication_read', scopes: ['mcp:read'] as const },
+];
+const publication = publicationTools.map((entry) => descriptor(entry.name, entry.scopes));
 const authoringNames = [
   'nova_authoring_document_list',
   'nova_authoring_document_read',
@@ -932,8 +1516,10 @@ const authoringNames = [
   'nova_authoring_document_move',
   'nova_authoring_document_delete',
   'nova_authoring_status',
+  'nova_authoring_validate',
   'nova_authoring_submit',
   'nova_operation_get',
+  'nova_operation_cancel',
   'nova_authoring_conflict_read',
   'nova_conflict_resolve',
   'nova_revision_restore',
@@ -941,6 +1527,7 @@ const authoringNames = [
 const submitToolNames = new Set<string>([
   'nova_authoring_submit',
   'nova_operation_get',
+  'nova_operation_cancel',
   'nova_authoring_conflict_read',
   'nova_conflict_resolve',
   'nova_revision_restore',
@@ -948,6 +1535,15 @@ const submitToolNames = new Set<string>([
 const authoring = authoringNames.map((name) =>
   descriptor(name, submitToolNames.has(name) ? ['mcp:submit'] : ['mcp:author']),
 );
+const reviewTools = [
+  { name: 'nova_review_list', scopes: ['mcp:read'] as const },
+  { name: 'nova_review_get', scopes: ['mcp:read'] as const },
+  { name: 'nova_review_add', scopes: ['mcp:author'] as const },
+  { name: 'nova_review_update', scopes: ['mcp:author'] as const },
+  { name: 'nova_release_gate_list', scopes: ['mcp:read'] as const },
+  { name: 'nova_release_gate_decide', scopes: ['mcp:submit'] as const },
+];
+const review = reviewTools.map((entry) => descriptor(entry.name, entry.scopes));
 const references = [
   'nova_reference_list',
   'nova_reference_get',
@@ -991,11 +1587,14 @@ const admin = [
   'nova_admin_device_revoke',
   'nova_admin_operation_list',
   'nova_admin_operation_get',
+  'nova_admin_plugins_discovered',
 ].map((name) => descriptor(name, ['mcp:admin']));
 
 export const MCP_TOOL_CATALOG_V1: readonly McpToolDescriptorV1[] = [
   ...project,
   ...authoring,
+  ...review,
+  ...publication,
   ...references,
   ...admin,
 ];

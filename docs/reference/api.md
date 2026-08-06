@@ -2,17 +2,17 @@
 
 **入口：** `packages/core` 的七个发布入口：根 `.`（通用叙事引擎语义合同）+ `source`/`schema`/`extensions`/`editorial`/`tooling`/`testing` 六个 subpath
 **类型定义：** `packages/core/src/types/`（39 个文件，通过 `types/index.ts` 桶文件重新导出）
-**权威清单：** 根目录 `public-api.manifest.json`（由 `scripts/check-public-api.mjs` 校验，见下文）。**注意（2026-08-05）**：校验器当前为红——source 导出表面与 manifest 存在漂移，且 `@novalistically/workbench-protocol` 尚未登记；gate 修复前，manifest 不应被视为已验证权威。
+**权威清单：** 根目录 `public-api.manifest.json`（由 `npm run check:public-api` 校验，2026-08-06 全绿）。六个工作区包全部登记（含 `@novalistically/workbench-protocol`），manifest 即当前已验证的导出权威。
 
 ## 包导出
 
-`@novalistically/core` 有 **7 个发布入口**：根入口是通用叙事引擎语义合同，另有六个 scoped subpath（`/source`、`/schema`、`/extensions`、`/editorial`、`/tooling`、`/testing`）。以下表格是主要公共 API 的摘要；**精确导出数量不再作为保证**——当前 source 表面与 `public-api.manifest.json` 漂移，2026-08-05 校验器为红（见「公开 API 清单与死代码检测」），完整清单以 gate 修复后的 manifest 为准。
+`@novalistically/core` 有 **7 个发布入口**：根入口是通用叙事引擎语义合同，另有六个 scoped subpath（`/source`、`/schema`、`/extensions`、`/editorial`、`/tooling`、`/testing`）。以下表格是主要公共 API 的摘要；**精确导出数量以 `public-api.manifest.json` 为准**（2026-08-06 `check:public-api` 全绿，manifest 与源码导出表面逐符号一致）。
 
 ### 入口一览
 
 | 入口 | stability | 内容 |
 |------|-----------|------|
-| `@novalistically/core` | `core` | 通用叙事引擎语义合同：根入口值/类型计数见 manifest（2026-08-05 起漂移未验证，见「公开 API 清单」） |
+| `@novalistically/core` | `core` | 通用叙事引擎语义合同：根入口值/类型计数见 manifest（2026-08-06 `check:public-api` 全绿，manifest 即权威） |
 | `@novalistically/core/source` | `scoped` | 不可变 source identity 工具：`buildSourceSnapshot`、`compareLogicalPaths`、`computeSourceDocumentHash`、`computeSourceHash` |
 | `@novalistically/core/schema` | `scoped` | Zod schema 33 个：`projectConfigSchema`、`eventFileSchema`、`entityTypeCatalogSourceSchema`、`analysisResultSchema`、`buildAnalysisResultSchema`、`projectSourceSnapshotV1Schema` 与 state/record schema |
 | `@novalistically/core/extensions` | `scoped` | 插件扩展类型（仅类型，无运行时值）：`PluginHooks`、`PluginContext`、`PluginLogger`、`PromptDecoration`、`BuildPromptInput`、`ProviderRegistry`、`ValidatorRegistrar`、`PluginManifest` |
@@ -34,11 +34,11 @@
 | `ContextAssembler` | `packages/core/src/context/assembler.ts` | 组装 `ContextPackage` 的各层内容 | 不公开 |
 | `RelevanceEngine` | `packages/core/src/context/relevance.ts` | 相关性评分（`RelevanceScore`） | 不公开 |
 | `ResultAggregator` | `packages/core/src/validator/aggregator.ts` | 运行验证器集合：未提供自定义数组时用 `createBuiltInValidators()`，提供时该数组**替换**默认集（不自动合并）；需要内置 + 插件的调用方必须显式组合 `[...createBuiltInValidators(), ...plugins]`，收集 `ValidationIssue[]` | `tooling` |
-| `ReportWriter` | `packages/core/src/report/writer.ts` | 统一报告输出格式：Markdown（`toMarkdown()`）、机器可读 JSON（`toJSON()`）、`StatusReport`（`toStatusReport()`，含面向 LLM 代理的 `guidance`）、bench 报告。**接线现状（2026-08-05）**：`toStatusReport()` 的 guidance 存在，但 MCP `nova_status` **未调用**（CLI 与 Workbench 的 `nova_status` 都直接走 `getProjectStatus` / `validateNovel`），status-guidance 尚未接线 | `tooling` |
-| `InteractionManager` | `packages/core/src/pipeline/interaction-gate.ts` | 渲染交互门控（interaction gate）；编辑渲染路径未接线（waivers 只进 planHash，见 `reference/pipeline.md` §7） | 不公开 |
+| `ReportWriter` | `packages/core/src/report/writer.ts` | 统一报告输出格式：Markdown（`toMarkdown()`）、机器可读 JSON（`toJSON()`）、`StatusReport`（`toStatusReport()`，含面向 LLM 代理的 `guidance`）、bench 报告。**接线现状（2026-08-06）**：MCP `nova_status` 经 `buildWorkflowStatus()` 返回完整 `WorkflowStatusV1`（guidance/nextActions/ISS 在内），Node Host `FileProjectStatusReporter` 派生 `PROJECT_STATUS.md`；report writer 的 `toStatusReport()` 仍属 tooling，不被 nova_status 调用 | `tooling` |
+| `InteractionManager` | `packages/core/src/pipeline/interaction-gate.ts` | 交互门控管理器：`needsApproval()` / `recordWaiver()` / `getPendingGates()`；**release 策略路径已接线**：`executeEditorialRender` 把预授 waivers 种入 `waiverManager` 并作为第四参传入 `evaluateReleaseDecision`（`require-waiver` 策略下 warning 候选保持 `pending_waiver` 直到 gate 决议），`resolveReleaseGate` 同样用它记录豁免 | 不公开 |
 | `TypedEventBus` | `packages/core/src/event-bus.ts` | 类型化事件总线（如 `pipeline:render:after`） | `editorial` |
 | `AgentRegistry` | `packages/core/src/agent/registry.ts` | Agent 系统注册表 | 不公开 |
-| `PluginHooksManager` | `packages/core/src/plugin/hooks-manager.ts` | 插件钩子管理（外部验证器插件）；无 production Host 构造，项目插件不会自动发现 / 激活 | 不公开 |
+| `PluginHooksManager` | `packages/core/src/plugin/hooks-manager.ts` | 插件钩子管理（外部验证器插件）；production 由 Node Host `activateNodePlugins` 构造（受信任本机插件，manifest/index.js hash 身份）并注入渲染管线与验证路径，插件身份（manifest/module hash）进入 validationIdentity 与 cache key | 不公开（`@novalistically/node-host` 的 `activateNodePlugins` 是其唯一 production 构造方） |
 | `MockProvider` | `packages/core/src/ai/providers/mock.ts` | 简单测试提供者，支持固定响应 | `testing` |
 | `MockPass2Provider` | `packages/core/src/ai/providers/mock-pass2.ts` | 测试用提供者，按 `entries`（eventId → 散文 + AnalysisResult）返回预写响应 | `testing` |
 | `MemoryExecutionRepository` / `MemoryRenderCacheRepository` / `MemoryStateLogRepository` / `MemoryStateSnapshotRepository` | `packages/core/src/testing/memory-repositories.ts` | `CoreRuntimeServices` 四个持久化端口的内存实现 | `testing` |
@@ -47,6 +47,14 @@
 | `FileExecutionRepository` / `FileRenderCacheRepository` / `FileStateLogRepository` / `FileStateSnapshotRepository` | `packages/node-host/src/` | Core 语义端口在项目目录上的文件实现 | `@novalistically/node-host` |
 | `FileMockPass2Provider` | `packages/node-host/src/providers/file-mock-pass2.ts` | 磁盘版 mock provider：`loadReferenceEntries(referenceDir)` 读 `<eventId>.json` 构造 `MockPass2Entry` | `@novalistically/node-host` |
 | `createFileCoreRuntimeServices` | `packages/node-host/src/runtime.ts` | 组装项目私有 `CoreRuntimeServices`（文件仓库 + provider + clock/ids）；不读凭据或环境变量 | `@novalistically/node-host` |
+| `buildWorkflowStatus` | `packages/core/src/status/workflow-status.ts` | 从 accepted 层派生单一 `WorkflowStatusV1` 合同（`nova_status` 与 `PROJECT_STATUS.md` 共用），含 guidance/nextActions/ISS | `.`（根） |
+| `FileProjectStatusReporter` / `writeFileProjectStatus` / `formatProjectStatus` | `packages/node-host/src/reports/` | 项目根写派生 `PROJECT_STATUS.md`（`WorkflowStatusV1` 的降级容错物化）；`degradedFlag` 保证不因 reporter 故障阻塞 status | `@novalistically/node-host` |
+| `FilePublicationWriter` | `packages/node-host/src/publication/` | 写 `output/novel.md`（`PUBLICATION_OUTPUT_DIRECTORY`）与 `hashPublicationMarkdown`；publication 字节的单一物化方 | `@novalistically/node-host` |
+| `activateNodePlugins` / `shutdownNodePlugins` | `packages/node-host/src/plugins/activate.ts` | 受信任本机插件激活：manifest + index.js 的 SHA-256 身份校验（不匹配即 `PluginIdentityMismatchError`），构造 hooks manager 并注入 Core runtime | `@novalistically/node-host` |
+| `createDeterministicMockProvider` | `packages/node-host/src/providers/deterministic-mock.ts` | Pass-2-aware 确定性 mock provider（无网络、可复现）；launch 与 parity/e2e 证据均用它 | `@novalistically/node-host` |
+| `createWorkbenchAgentModelAdapter` | `packages/node-host/src/agent/workbench-agent-model.ts` | 内置 Agent 的 AI SDK tool-calling 模型缝（`WorkbenchAgentModelPort`，含 `supportsToolCalls` 能力门字段） | `@novalistically/node-host` |
+| `PluginExtensionSchemaRegistrar` | `packages/core/src/plugin/extension-registrar.ts` | EventFile `extensions` 命名空间的启用门：未知/禁用插件 namespace = source error，声明 schema 时校验 payload | `.`（根） |
+| `assembleRelease` / `resolveReleaseGate` | `packages/core/src/assembler/release-assembly.ts` / `editorial/release-gate.ts` | `assembleRelease` 是唯一 production assembly caller（Workbench `ProjectPublicationService`）；`resolveReleaseGate` 重跑唯一 release evaluator 决议 gate（零 provider 调用）；`computeReleaseGateId` 是 gate 身份的 sha256 | `@novalistically/core/editorial` |
 
 **内部实现（未从任何发布入口导出，外部不应 import）：** `RenderPipeline`（`pipeline/render.ts`）、`PluginLoader`（`plugin/loader.ts`）、`buildAndWriteOutputs`（`pipeline/output.ts`）、`buildAnalysisPrompt`（`ai/prompts/render-analysis.ts`）、`parseAnalysisJSONWithErrors`（`schemas/analysis.ts`）、`AnalysisContent` 类型（`validator/index.ts`，内置 Pass 2 分析块 schema 的 `z.infer`）、`CompiledGameDialogueTree` 类型（`branch/game-dialogue-tree.ts`，`compileGameDialogueTree` 的返回类型，未从发布入口重新导出）。渲染入口请使用 `renderNovel()` / `renderGameDialogueTree()` 等 editorial facade 函数。
 
@@ -91,7 +99,7 @@
 | `resolveTemporalContext(events, timeAnchors)` | `entity/timestamp.ts` | 解析时间锚点与事件时间戳，构造 `TemporalContext` | `.`（根） |
 | `exportDAGtoDOT(...)` / `exportDAGtoMermaid(...)` | `state/dag-export.ts` | 因果边 DAG 可视化导出（dot / mermaid） | `tooling` |
 | `getCachedRender` / `setCachedRender` / `clearRenderCache` / `clearEventCache` / `computeEvidenceHash` / `verifyEvidenceChain` / `computeFlatCacheKey` / `buildLogicalKeyMaterial` 等 | `cache/render-cache.ts` | 分层缓存键、证据链校验与缓存读写 | `tooling` |
-图/话语运行时函数（`compileStoryRuntimeGraph`、`inspectProjectGraph`、`inspectCanonicalGraphRuntime`）属 `tooling`；编辑化 facade（`getSourceDocument`、`listSourceDocuments`、`previewSourceChange`、`getEditorialOperation`、`getSceneRevision`、`addReviewComment`、`listReviewComments`、`replaceReviewComment`、`updateReviewComment`）属 `editorial`。以下符号已从当前实现移除，不得出现在任何使用指南中：`assembleGameDialogueTree`、`adoptSceneProse`、`applySourceChange`、`assembleCanonicalNovel`、`inspectScenes`、`setSceneLock`、`rollbackSceneRevision`、`migrateProjectFile`、core 侧 `writeValidationReport`。完整清单见 `public-api.manifest.json`。
+图/话语运行时函数（`compileStoryRuntimeGraph`、`inspectProjectGraph`、`inspectCanonicalGraphRuntime`）属 `tooling`；编辑化 facade（`getSourceDocument`、`listSourceDocuments`、`previewSourceChange`、`getEditorialOperation`、`getSceneRevision`、`addReviewComment`、`listReviewComments`、`replaceReviewComment`、`updateReviewComment`、`assembleRelease`、`resolveReleaseGate`）属 `editorial`。`assembleRelease` 的生产 caller 是 Workbench `ProjectPublicationService`（输出经 Node Host `FilePublicationWriter` 物化为 `output/novel.md`）；`resolveReleaseGate` 由 Workbench review service 在 `nova_release_gate_decide` 时调用。以下符号已从当前实现移除，不得出现在任何使用指南中：`assembleGameDialogueTree`、`adoptSceneProse`、`applySourceChange`、`assembleCanonicalNovel`、`inspectScenes`、`setSceneLock`、`rollbackSceneRevision`、`migrateProjectFile`、core 侧 `writeValidationReport`。完整清单见 `public-api.manifest.json`。
 
 ### 持久化与运行时服务边界
 
@@ -151,13 +159,13 @@ const status = getProjectStatus(snapshot, validationResults);
 
 ## 公开 API 清单与死代码检测
 
-Monorepo 使用两层防御来防止意外公开内部代码和检测死代码。2026-08-05 门禁实测：`npm test`（根 2,970 / Host 522 / Client 93）、`typecheck`、`typecheck:dead-code`、`build`、`bundle-check`、`lint` 通过；`node scripts/check-public-api.mjs` 为红（manifest/导出漂移 + workbench-protocol 未登记），`test:e2e` 因 `packages/workbench` 缺 `test:e2e` script 为红（证据见[原始要求 / Agent-first 工作流符合度审计](../audits/original-requirements-agent-workflow-audit-2026-08-05.md) §11.1）：
+Monorepo 使用两层防御来防止意外公开内部代码和检测死代码。2026-08-06 门禁实测：`npm test`（根 3,197 / Host 716 / Client 156）、`typecheck`、`typecheck:dead-code`、`typecheck:e2e`、`build`、`bundle-check`、`lint`、`check:public-api` 全绿；`npm run test:e2e` 23/23（workbench Playwright：harness self-test 1、host-http 5、mcp-chain 3、browser 3、concurrency-recovery 5、plugin-snapshot 6）。
 
 ### `public-api.manifest.json`
 
 根目录下的 `public-api.manifest.json` 声明每个工作区包的公开 API 表面——这是**规范意图**（每个包应公开的导出集合），不是当前已验证的导出清单。它按入口枚举：每个包有 `entries` 对象，键为入口路径（`.` 根入口与各 subpath），每个条目声明源路径、dist 路径、`stability`（`core`/`scoped`/`non-contract`）、值导出与类型导出。manifest 声明完整表面（不是"仅稳定子集"）；任何未在此清单中声明的导出都被视为内部实现细节，不应被外部依赖。`stability` 是语义元数据而非版本策略：`core` 标识通用叙事引擎语义合同，`scoped`/`non-contract` 是可导入的当前表面但不提供兼容性保证。
 
-**2026-08-05 起校验器为红（未验证）**：当前 source 导出表面与 manifest 存在漂移，且第六个工作区包 `@novalistically/workbench-protocol` **尚未登记**到 manifest（`.packages` 目前只有 bench/cli/core/node-host/workbench）。gate 修复前，manifest **不代表当前已验证的导出表面**，具体导出以源码为准；漂移修复、校验复绿后，manifest 才恢复为权威清单。
+**2026-08-06 起校验器全绿（已验证）**：六个工作区包全部登记（`.packages` 含 bench/cli/core/node-host/workbench/workbench-protocol），manifest 与源码导出表面逐符号一致，是当前权威清单。漂移会在 `check:public-api` 以非零退出码暴露。
 
 ```jsonc
 // 结构示例
@@ -207,11 +215,32 @@ Monorepo 使用两层防御来防止意外公开内部代码和检测死代码�
 并保留少量针对性豁免（`ignoreIssues`：`packages/bench/src/consistency.ts` 的类型导出；`ignoreDependencies`：`tinybench`）。
 对生产代码没有广泛排除。
 
-### `dead-code:knip` 脚本
+### `check:public-api` 脚本
 
 ```bash
-npm run dead-code:knip
+npm run check:public-api
 ```
 
 该脚本**只**运行 public API checker：`node scripts/check-public-api.mjs`（清单与导出不符则非零退出）。
-它**不运行 knip CLI**——`knip.json` 只是死代码检测的配置，当前仓库没有任何 npm script 执行 knip（`npx knip` 只能手动运行）。2026-08-05 实测该脚本为红（manifest/导出漂移 + workbench-protocol 未登记，见[审计报告](../audits/original-requirements-agent-workflow-audit-2026-08-05.md) §11.1）。
+它**不运行 knip CLI**——`knip.json` 只是死代码检测的配置，当前仓库没有任何 npm script 执行 knip（`npx knip` 只能手动运行）。2026-08-06 实测该脚本为绿：六个包全部登记，manifest 与导出表面一致。
+
+## MCP 工具目录与 CLI 命令（Workbench / CLI 表面）
+
+MCP 工具目录的权威是 `@novalistically/workbench-protocol` 的 `MCP_TOOL_CATALOG_V1`（`packages/workbench-protocol/src/mcp.ts`），当前 **72 个工具**；Workbench Host 的 `createProjectSessionMcpRegistry` / `createAdminMcpRegistry` 与目录双向一致（`mcp-catalog-parity.test.ts`，`KNOWN_ORPHAN_TOOLS = []`）。本交付补齐/新增的工具（名 + scope）：
+
+| 工具 | scope | 说明 |
+|---|---|---|
+| `nova_graph` / `nova_event_state_diff` | `mcp:read` | 严格路由 selector 的图投影 / 事件前后状态 diff（`nova_event_state_diff` 经 `CanonicalStateProjectionService` 派生流读取，含全量重放 fallback） |
+| `nova_revise` / `nova_render_tree` | `mcp:render` | 与 `nova_render` 共享 render 输入解析，走两阶段 detached lane（queued → operationHandle） |
+| `nova_authoring_validate` | `mcp:author` | working-layer 验证（与 accepted 层的 `nova_validate` 语义分离） |
+| `nova_operation_get` / `nova_operation_cancel` | `mcp:submit` | 持久 operation 队列的查询/取消 |
+| `nova_review_list` / `nova_review_get` | `mcp:read` | append-only review stream 投影 |
+| `nova_review_add` / `nova_review_update` | `mcp:author` | review 写入 |
+| `nova_release_gate_list` | `mcp:read` | gate 列表 |
+| `nova_release_gate_decide` | `mcp:submit` | 决议 gate（Core `resolveReleaseGate`，零 provider 调用） |
+| `nova_publish` | `mcp:submit` | 入队 publish operation（kind `publish`） |
+| `nova_publication_get` / `nova_publication_read` | `mcp:read` | 按 id 读 publication 记录 / 有界完整性校验的 markdown 分片读取 |
+
+CLI（`@novalistically/cli`，typed Workbench MCP client）命令组：`source validate --working` / `source submit`、`operation get|wait|cancel`、`authoring conflict|resolve`、`event-diff`、`review list|add|update|history|revise`、`gate list|decide`、`publish`、`publication status|read`。via-workbench 操作只走项目 scoped 的 authenticated Host route；standalone 写入受 Host authority lease 保护。
+
+相关文档：详细命令与 MCP server 见 [`reference/cli.md`](./cli.md)。

@@ -1,6 +1,6 @@
 # YAML Contract Reference
 
-**Status:** Current — synchronized with the source-verified baseline at [`docs/current-state.md`](../../current-state.md) (commit `0e46174`); the prior "Wave 4+5 frozen" framing is historical. Statements in this directory describe current runtime behavior; future-policy or design-only material is explicitly marked as such.
+**Status:** Current — synchronized with the source-verified baseline at [`docs/current-state.md`](../../current-state.md) (2026-08-06, commit `6c174a2`); the prior "Wave 4+5 frozen" framing is historical. Statements in this directory describe current runtime behavior; future-policy or design-only material is explicitly marked as such.
 **Policy:** This directory contains the YAML wire contracts of the Novalistically compiler, divided into two groups: author-facing contracts (`initial-state`, `relationship`, `knowledge`, `thread`, `rule`, `causal-deps`, `discourse`, `ellipsis-bridge`) describe YAML files authors write under `definitions/`; internal reference documents (`entity`) describe compiler-produced serialization shapes that are **not** accepted project YAML — the one authored exception is `definitions/entity-types.yaml`, a required loader input (see [entity.md](./entity.md)). The compiler reads the author-facing YAML files and produces normalized IR (internal representation). Changes are classified by compatibility; the structured-timestamp extension adds no new YAML version discriminator.
 
 ## Version Policy
@@ -8,6 +8,31 @@
 - Structured authored timestamps are a minor-compatible accepted-form extension: existing compact strings remain valid.
 - This extension does not require a new `schemaVersion` field or a migration file. **No authored definition file in this directory exposes a `schemaVersion` field** — the only YAML carrying one is the project config `nova.yaml` (`projectConfigSchema`), where it defaults to `1` and is auto-migrated by `loadProjectConfig()`.
 - A breaking validation change requires a documented compatibility decision and migration guidance when applicable.
+
+## Project Config (`nova.yaml`) — 2026-08-06 additions
+
+`nova.yaml` is `projectConfigSchema` (strict, `packages/core/src/schemas/project.ts`). This delivery adds/confirms these top-level keys:
+
+- `releasePolicy?: { warnings, openBlockingReviews }` — strict object (`releasePolicySchema`): `warnings` is `'accept-and-record' | 'require-waiver'`, **default `'accept-and-record'`** when the key is absent (a warning-only candidate is ACCEPTED and its reasons + warning fingerprints are recorded on the decision); under `require-waiver` a warning-only candidate stays `pending_waiver` until a maintainer decision resolves the gate (`nova_release_gate_decide` → Core `resolveReleaseGate`, which re-runs the SOLE release evaluator with zero provider calls). Legacy projects without the key get the canonical default — the policy is NEVER inferred from historical `pending_waiver` records. `openBlockingReviews` is a fixed literal `'block'` for now.
+- `snapshotInterval?: number` — default 10 (`DEFAULT_CONFIG`): how many events between canonical-world snapshots (consumed by the Workbench `CanonicalStateProjectionService`).
+- `plugins?: { enabled: boolean }` — plugin master switch (still only `enabled`).
+
+### EventFile `extensions` block (plugin namespace)
+
+`eventFileSchema` structurally accepts `extensions` (a JSON-safe object keyed by plugin name; read-only source data that NEVER enters WorldState). The second, identity-aware gate is `PluginExtensionSchemaRegistrar` (`@novalistically/core` root export):
+
+- an `extensions` key whose plugin is not enabled (unknown or disabled) is a **SOURCE ERROR** (`SOURCE_EXTENSION_NAMESPACE_UNKNOWN`) — it flips `passed` and never reaches render or state;
+- when the enabled plugin declares an extension schema, the payload must satisfy it; absent a declared schema, structural JSON is accepted;
+- accepted-layer and working-layer validation paths (`analyzeSource` / `extensionDiagnosticsForSnapshot`) share identical namespace semantics.
+
+## Host Configuration (`workbench.yaml`, V3) — 2026-08-06
+
+`workbench.yaml` is the Host's single secret-free configuration source of truth (revision-CAS configuration service). The V3 contract (`WorkbenchConfigurationV3`, `packages/workbench-protocol/src/configuration.ts`) adds:
+
+- per-project `providerProfile: string` (V3 replaces the single `provider` with a per-profile `providers` map) plus an explicit `trustedPlugins: WorkbenchTrustedPluginConfigurationV3[]` — each entry carries `name` / `version` / `moduleHash` / `required`; `moduleHash` is the SHA-256 identity `activateNodePlugins` verifies against the plugin's `index.js`;
+- host-wide `operationLimits: WorkbenchOperationLimitsV3` — `maxQueuedPerProject` (default 64), `maxConcurrentRendersPerProject` (fixed `1`), `maxConcurrentRendersPerHost` (default 2);
+- `agent: WorkbenchAgentConfigurationV3` — `enabled` (default `false`), `maxTurns` (default 16), `maxToolCalls` (default 64); the `agent-chat` capability additionally requires the model port's `supportsToolCalls` and the parity flag;
+- V1/V2 remain readable migration inputs and are normalized to V3 by `normalizeWorkbenchConfiguration` (legacy projects bind `providerProfile: 'default'`, no trusted plugins, fixed operation/agent defaults).
 
 ## Contract Index
 
@@ -66,7 +91,7 @@ my-story/
   chapters/
     chapter_NN/
       _chapter.yaml         → ChapterMetadata (optional)
-      E*.yaml       → Event files (contain preconditions, postconditions, threadProgress, ruleEffects, etc.)
+      E*.yaml       → Event files (contain preconditions, postconditions, threadProgress, ruleEffects, extensions — see above)
   scenes/                   → rendered scene prose + metadata — Host repository output, never written by Core
     chapter-NN/
       E*.md

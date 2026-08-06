@@ -1,7 +1,7 @@
 # 当前系统状态（源码核验）
 
-**时间**：2026-08-05 CST
-**当前实现检查点**：`main` 当前工作树（native revisions、project-scoped MCP reference packet、optional Git mirror、`@novalistically/workbench-protocol` 共享协议；门禁结果见下表，非全绿）
+**时间**：2026-08-06 CST
+**当前实现检查点**：`main` 当前工作树（Agent-first 工作流完整交付：plan 已全部执行完毕、接线缺口全部关闭；门禁结果见下表，全绿）
 **权威顺序**：当前源码、package manifests、可复现门禁结果；本页优先于历史计划、阶段报告和归档设计。
 
 > 本页描述已经由源码或门禁证明的现状，不把设计目标、未接线类型或历史测量当作已交付能力。历史文档应保留其当时的证据与日期，并链接到本页，而不应改写历史。
@@ -10,14 +10,15 @@
 
 | 门禁 | 结果 |
 |---|---|
-| `npm test` | 通过：根 Vitest 2,970 tests、Workbench Host 522 tests、Workbench Client 93 tests |
-| `npm run typecheck` | 通过 |
+| `npm test` | 通过：根 Vitest 3,197 tests、Workbench Host 716 tests、Workbench Client 156 tests |
+| `npm run typecheck` | 通过（六个包逐包 tsc） |
 | `npm run typecheck:dead-code` | 通过 |
+| `npm run typecheck:e2e` | 通过（workbench Playwright 测试的 tsc 校验） |
 | `npm run build` | 通过 |
 | `npm run bundle-check` | 通过 |
-| `node scripts/check-public-api.mjs` | **失败**：public-api manifest 与源码导出漂移，且 `@novalistically/workbench-protocol` 未登记（manifest `.packages` 不含该包） |
-| `npm run test:e2e` | **失败**：根脚本委托 `npm run -w @novalistically/workbench test:e2e`，但 workbench package 没有 `test:e2e` script |
-| `npm run lint -- --max-diagnostics=2000` | 通过：Biome 0 errors、0 warnings |
+| `npm run check:public-api` | 通过：六个包全部登记（含 `@novalistically/workbench-protocol`），manifest 与源码导出表面一致 |
+| `npm run test:e2e` | 通过：23/23（Playwright：harness self-test 1、host-http 5、mcp-chain 3、browser 3、concurrency-recovery 5、plugin-snapshot 6） |
+| `npm run lint` | 通过：Biome 0 errors、0 warnings |
 
 
 ## 包与依赖边界
@@ -31,7 +32,7 @@
 | `@novalistically/bench` | 通过 Core 与 Node Host 运行回归、变体和性能基准；不是 Core 依赖。 |
 | `@novalistically/cli` | `commander` CLI 与 typed Workbench MCP client；standalone 写入受 Host authority lease 保护，via-workbench 操作只走项目 scoped 的 authenticated Host route。 |
 | `@novalistically/workbench` | 私有 native Host + browser client。Host 持有本地认证、Yjs、SQLite worker、ProjectSession、native immutable revisions 和 project-scoped reference library；浏览器只消费 secret-free DTO。可选 Git 仅镜像已接受 revision，不参与 authoring acceptance。 |
-| `@novalistically/workbench-protocol` | 共享协议契约包：MCP 工具目录（`nova_*` 名与 scopes）、typed client contracts、configuration、authoring/host/reference DTO 与 device credential 常量。被 Workbench Host 与 CLI client 消费；仅 build/build:js/build:types 三个 script，无测试。 |
+| `@novalistically/workbench-protocol` | 共享协议契约包：MCP 工具目录（`nova_*` 名与 scopes，当前 72 个）、typed client contracts、configuration、authoring/host/reference DTO 与 device credential 常量。被 Workbench Host 与 CLI client 消费；仅 build/build:js/build:types 三个 script，无测试。已登记进 `public-api.manifest.json`（六个包全部登记）。 |
 
 包关系不是一个可推导的线性链。Core 不依赖工作区包；Node Host 提供适配器；Bench、CLI 和 Workbench 按各自 manifest 直接选择 Core/Node Host 能力；`@novalistically/workbench-protocol` 是共享协议契约，被 Workbench Host 与 CLI client 消费，不依赖其他工作区包。
 
@@ -39,7 +40,7 @@
 
 - Core 输入是 `ProjectSourceSnapshotV1` 和注入的语义端口；source hash 表示内容，不是 Git 历史。
 - Node Host 与 Workbench Host 才拥有文件与持久化；Workbench Host 的 native immutable revisions 是 authoring acceptance model，可选 Git 仅镜像已接受 revision。Workbench 只接受显式 `AuthoringManifest`，不得把 `.nova/**`、缓存、responses、journals、Yjs、SQLite、output 或 derived 工件纳入 authoring bundle。
-- canonical render runtime 先编译 story/discourse 边界，再生成场景契约。`StateManager` 的内存快照是 recovery primitive；当前 `getCurrentState()` / `getStateAt()` 仍通过 `ReplayEngine` 重放，不能宣传为已接入的快照恢复加速。
+- canonical render runtime 先编译 story/discourse 边界，再生成场景契约。`StateManager` 的内存快照是 recovery primitive；当前 `getCurrentState()` / `getStateAt()` 仍通过 `ReplayEngine` 重放，不能宣传为已接入的快照恢复加速。Workbench 的 `CanonicalStateProjectionService` 是另一条派生快照流（按 source/route 缓存已验证快照，只作为读取加速，永不是第二权威），两者不互相替代。
 - canonical release assembly 以 discourse scene sequence 为主；仍存在按 `narrativeOrder` 排序的 runtime/legacy 路径。因此“`narrativeOrder` 从不使用”是不准确的；它不能作为因果 replay 顺序才是已核验不变量。
 - Pass 1 是散文生成，Pass 2 是结构化分析。当前 AnalysisResult envelope 包含 `eventId`、`protocol`、`observations` 与 `analysis`；解析会校验协议、active fields、observations/payload 配对和证据。Pass 2 无 regex fallback；反馈尝试耗尽时场景会记录错误并进入 review/release 决策路径，不能泛化为所有外层处理立即终止。
 - 28 个 built-in validators 注册在默认集合中。`GreyLineValidator` 是已导出的**显式 opt-in** validator：调用方用 `[...createBuiltInValidators(), new GreyLineValidator()]` 选择启用；它不改变默认 28 项或 Pass 2 的 20 字段 static schema。
@@ -67,8 +68,8 @@ chapters/chapter_NN/E*.yaml
 
 ## 当前用户与运行时入口
 
-- 生产 `AiSdkProvider` 在 `@novalistically/node-host`，默认 OpenAI-compatible base URL 为 `https://opencode.ai/zen/v1`，模型可由运行时配置或环境覆盖；CLI 不自动读取 `.env`。
-- CLI 当前提供 validate/status/entity/graph/source/render/revise/render-tree/project-init 这一组 Host-bound 命令。不存在的历史命令或选项不能出现在使用指南中。
+- 生产 `AiSdkProvider` 在 `@novalistically/node-host`，默认 OpenAI-compatible base URL 为 `https://opencode.ai/zen/v1`，模型可由运行时配置或环境覆盖；CLI 不自动读取 `.env`。Workbench 内置 Agent 复用同一模型 client（`createWorkbenchAgentModelAdapter`）。
+- CLI 当前提供 validate/status/entity/graph/source/render/revise/render-tree/event-diff/operation/authoring/review/gate/publish/publication/project-init 这一组命令。本交付新增：`source validate --working`（校验 working authoring 层）、`source submit`、`operation get|wait|cancel`、`authoring conflict|resolve`、`event-diff`、`review list|add|update|history|revise`、`gate list|decide`、`publish`、`publication status|read`。不存在的历史命令或选项不能出现在使用指南中。
 - Core 输出的是结构化 intents/records；文件写入由 Host repositories 负责。不要承诺 Core 直接写 `scenes/`、`.nova/responses/` 或 `.nova/derived/` 目录。
 
 ## 明确的产品与证据边界
@@ -76,21 +77,49 @@ chapters/chapter_NN/E*.yaml
 - `SurfacePlanner` 只为已写场景规划 render groups / serial lanes；不会生成或写入 `NarrativeEvent`。这是 Core 不拥有 authoring 写入权的设计边界，不是移除后遗留的运行时承诺。
 - `fixtures/zhu-fu/reference/` 是确定性的 mock/generated regression reference；live-provider 候选只能由凭据驱动的 `npm run smoke:stage1:live` 生成到独立 candidate 目录，并且仍需人工审阅后才可作为 live evidence。mock 参考不能被描述为人工或 live-LLM 证据。
 - Dream of Red Chamber 当前 authored fixture 的可复现数量由 [`fixture-manifest.json`](../fixtures/dream-of-red-chamber/fixture-manifest.json) 定义。执行 `npm run count:drc -- fixtures/dream-of-red-chamber --check` 会核验四章、E01–E36（每章九个事件）和 source hash；80 章 corpus source 是独立 acquisition artifact，不能与该 fixture 混用。
+- `npm run smoke:workbench-agent:live` 是内置 Agent 的真实模型端到端冒烟（需 `NOVALISTICALLY_AI_API_KEY`），需单独人工确认，**不作为确定性 CI 证据**。live LLM 的产出从不写入 reference 目录，也不被任何门禁引用。
+- 内置 Agent（`agent-chat`）在 production Host **默认隐藏**：`agentReady=false`（parity matrix 是确定性测试产物，production 不硬编码 true），且 capability 门要求 V3 `agent.enabled` 与模型端口 `supportsToolCalls` 同时为真；live conformance 未跑。
+- EPUB/DOCX/marketplace 未交付（plan 只承诺 Markdown 成书）；不要把这三者描述为已存在的能力。
 
 ## 当前产品接线边界（Agent-first 工作流）
 
-2026-08-05 的[原始要求 / Agent-first 工作流符合度审计](./audits/original-requirements-agent-workflow-audit-2026-08-05.md)对 `docs/archive/PROJECT.md`（历史要求，不改写）做了源码核验，总体判定为**部分满足**：外部 MCP Agent 驱动的场景生产（render+accept）是真实可达的第一路径，但以下接线边界已核验成立（一句话证据；细节与行号见审计报告）：
+2026-08-05 的[原始要求 / Agent-first 工作流符合度审计](./audits/original-requirements-agent-workflow-audit-2026-08-05.md)对 `docs/archive/PROJECT.md`（历史要求，不改写）做了源码核验，总体判定为**部分满足**并列出接线缺口（撰写时点快照）。2026-08-06 的 Agent-first 完整交付关闭了全部缺口，以下接线边界已核验成立（一句话证据；细节与行号见审计报告与源码）：
 
 | 边界 | 状态 | 一句话证据 |
 |---|---|---|
-| 外部 MCP Agent authoring | **可达** | `/mcp/projects/:projectId` Streamable-HTTP 端点 + 59 工具目录注册 56；edit→submit→render 闭环可达；产能来自 agent 自带文本，Host 不为 MCP 通道运行 provider |
-| `nova_graph` / `nova_revise` / `nova_render_tree` Host handler | **缺失** | 三个名字只在工具目录、CLI client 与 CLI 命令中，`packages/workbench/src` 下 0 命中 → 每次调用返回 TOOL_NOT_FOUND |
-| `nova_status` guidance / nextActions / ISS | **未暴露** | 仅返回 `{projection, status}`；workbench host/contracts 无 `guidance` 命中，无 next_actions 排序，ISS 无修复循环 |
-| working-layer 验证 | **缺失** | `nova_validate` 只验证 accepted source；不存在“提交前验证未提交提案”的工具 |
-| assembly 生产 caller | **无** | `canonicalAssemble`/`customAssemble`/`buildNovelDocument` 的全部调用点只在测试；生产 `buildPublication()` 返回 `outputPath:''`、`novelHash:null` |
-| review producer | **无** | `addReviewComment` 等从 core barrel 导出但 workbench/cli/node-host 零调用；无 `nova_review_*` 工具，CLI 无 review 命令 |
-| plugin Host activation | **未激活** | `PluginHooksManager`/`PluginLoader` 仅测试构造；生产运行中 `plugins/` 目录永不发现、永不激活 |
-| 内置 Agent project-wide presence pause | **自锁** | `HUMAN_PRESENCE_SURFACES=['browser','mcp','yjs']`，AgentDrawer 要求的已连接文档使请求者自身 presence → generate/apply 返回 paused |
+| 外部 MCP Agent authoring | **可达** | `/mcp/projects/:projectId` Streamable-HTTP 端点 + `MCP_TOOL_CATALOG_V1` 72 个工具；edit→submit→render 闭环可达；产能来自 agent 自带文本，Host 不为 MCP 通道运行 provider |
+| `nova_graph` / `nova_revise` / `nova_render_tree` Host handler | **已实现** | `packages/workbench/src/host/mcp/registry.ts` 三个 handler + 共享 render 输入解析与两阶段 lane；`mcp-catalog-parity.test.ts` 断言 registry 与目录双向一致、`KNOWN_ORPHAN_TOOLS = []` |
+| `nova_status` guidance / nextActions / ISS | **已实现** | Core `buildWorkflowStatus()` 产出完整 `WorkflowStatusV1`；Host `buildWorkflowStatusForSession()` 组合 review（append-only stream）与 publication（durable store）的 live projections；Node Host `FileProjectStatusReporter` 写派生 `PROJECT_STATUS.md` |
+| working-layer 验证 | **已实现** | `nova_authoring_validate`（`mcp:author`）验证未提交的 working layer；CLI `source validate --working`；`nova_validate` 仍只验证 accepted 层，两套语义不混 |
+| assembly 生产 caller | **已存在** | Workbench `ProjectPublicationService` 经 Core `assembleRelease`（`@novalistically/core/editorial`）装配；Node Host `FilePublicationWriter` 写 `output/novel.md`；`refreshCanonical()` 在 accepted commit / release-gate 决议 / review-driven revise 后自动刷新 |
+| review producer | **已存在** | Host `review-service.ts` 的 append-only review stream；`nova_review_list/get/add/update`、`nova_release_gate_list/decide`（`resolveReleaseGate` 零 provider 调用）+ CLI `review`/`gate` 命令；gate identity 是 `computeReleaseGateId` 的 sha256（自 envelope 捕获，多 gate 不漂移） |
+| plugin Host activation | **已激活** | launch 经 `activateNodePlugins` 激活受信任本机插件（`trustedPlugins` manifest/index.js hash 身份）；`PluginExtensionSchemaRegistrar` 接入 accepted/working 验证路径（未知/禁用 namespace = source error）；`plugin-snapshot.spec.ts` e2e 6 tests 为证据 |
+| 内置 Agent project-wide presence pause | **已解除** | 内置 Agent 与外部 device 共享 `ProjectToolExecutor` + `WorkbenchAgentModel`（AI SDK tool-calling）；`agent-chat` capability 门 = V3 `agent.enabled` && `supportsToolCalls` && parity matrix 4/4（确定性测试）；production 默认 `agentReady=false` → 隐藏 |
+| 持久化 operation 队列 | **已实现** | `project_operations` 表 + `ProjectOperationService`：两阶段 detached render（lane 内 prepare/commit、lane 外 execute）、cancel、重启 interrupted sweep 不自动重放；Operation Center 统一 SSE |
+| canonical-world 快照 | **已实现** | `CanonicalStateProjectionService` 按 source/route 派生快照流；等价门禁 `state-projection-equivalence.test.ts`（14 fixtures / 19 tests）断言逐事件 stateBefore/stateAfter hash 与 `compileProject().boundaries` 一致 |
+
+## 本交付新增的能力（Workbench / Core / Node Host）
+
+以下能力均由源码 + handler + 确定性测试证明（live LLM 不作为证据）：
+
+- **两阶段 detached render**：`ProjectOperationService` + `project_operations` 持久表；prepare/commit 在序列化 lane 内、候选计算在 lane 外（可中断），cancel 经 AbortController 贯穿，重启把 queued/running 扫为 `interrupted` 且**不自动重放**（显式 retry 才重放）。
+- **Operation Center 统一 SSE**：浏览器事件流统一广播 authoring / review / gate / operation / publication 事件（此前只广播 authoring 操作）。
+- **review stream + release gate**：append-only review 事件流（comment 与 gate 记录同一流）；gate identity 为 `computeReleaseGateId` 的 sha256（projectId/sourceHash/eventId/proseHash/scopeHash/validationIdentity/warnings），自归档 envelope 捕获 → 多 gate 独立决策、identity 漂移即 supersede；`resolveReleaseGate` 重跑唯一 release evaluator 且零 provider 调用。
+- **publication 自动刷新**：`FilePublicationWriter`（Node Host）写 `output/novel.md`（`PUBLICATION_OUTPUT_DIRECTORY`）；`refreshCanonical()` 在 accepted commit / gate 决议 / review-driven revise 后 best-effort 刷新，全集未就绪时只降级为 `stale`、绝不写部分小说。
+- **受信任本机插件**：`activateNodePlugins` 以 `trustedPlugins` 的 manifest + index.js 的 SHA-256 身份校验后激活；`PluginExtensionSchemaRegistrar` 把 EventFile `extensions` 命名空间接入 accepted/working 验证（未知/禁用 namespace = source error）；plugin identity（manifest/module hash）进入 validationIdentity 与渲染 cache key。
+- **canonical-world 快照投影**：`CanonicalStateProjectionService`（workbench host）按不可变 source/route 派生快照流；等价门禁 14 fixtures / 19 tests 与完整 canonical compile 逐事件一致。
+- **内置 Agent**：`ProjectToolExecutor`（workbench host）把内置 principal 接到与外部 device 相同的 MCP 工具表面；`createWorkbenchAgentModelAdapter`（Node Host）是 AI SDK tool-calling 模型缝；`agent-chat` capability 门 = V3 `agent.enabled` && `supportsToolCalls` && parity matrix 4/4；production 默认隐藏（`agentReady=false`）。
+- **确定性 mock provider**：`createDeterministicMockProvider`（Node Host）按项目配置构造 Pass-2-aware 确定性 mock，launch 与 parity/e2e 均用它，保证无网络、可复现。
+
+## 已修复的产品 bug（均有回归测试）
+
+- browser submit 400：submit CAS 字段 allowlist 收紧，浏览器只提交 secret-free 白名单字段。
+- device-mode render DENIED：device grant 现在持久化到 durable capability 行，重启后不再丢。
+- mock provider Pass 2 非 JSON：launch 改用 per-project Pass-2-aware 确定性 mock，不再依赖旧的非 JSON mock 响应。
+- multi-gate supersede 漂移：gate identity 从已归档 envelope 捕获而非现场重算，source/candidate/validator identity 变化才 supersede。
+- review-hub capability 无浏览器路由：补齐 `browser-review-api` 路由（`createBrowserReviewApi`）。
+- extensions registrar 未接入验证路径：`PluginExtensionSchemaRegistrar` 已接入 accepted/working 两套验证。
+- Operation Center 只广播 authoring 操作：事件流统一为全操作类型（见上）。
 
 ## 文档解释规则
 
@@ -98,4 +127,4 @@ chapters/chapter_NN/E*.yaml
 - **historical record**：`docs/archive/`、有日期的 audits/reports、阶段测量与竞品快照；保留原结论和日期，增加到本页的指针并显式标记不代表当前实现。
 - **design-only / unverified**：未来协议、未接线 schema 或未经 live LLM 复核的宣称；必须明确为设计或未验证，不能写成运行时保证。
 
-相关入口：[`架构`](./architecture.md)、[`完整接线图`](./reference/wiring.md)、[`API`](./reference/api.md)、[`YAML 合同`](./reference/yaml-contract/README.md)、[`历史归档`](./archive/README.md)、[`Agent-first 工作流审计 2026-08-05`](./audits/original-requirements-agent-workflow-audit-2026-08-05.md)。
+相关入口：[`架构`](./architecture.md)、[`完整接线图`](./reference/wiring.md)、[`API`](./reference/api.md)、[`YAML 合同`](./reference/yaml-contract/README.md)、[`历史归档`](./archive/README.md)、[`Agent-first 工作流审计 2026-08-05`](./audits/original-requirements-agent-workflow-audit-2026-08-05.md)（撰写时点快照，其中的接线缺口已在本交付关闭，见上表）。

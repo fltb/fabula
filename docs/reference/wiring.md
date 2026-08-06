@@ -1,15 +1,15 @@
 # 完整接线图：从 YAML 到发布工件
 
-> **时间**: 2026-08-05（2026-08-05 原始要求 / Agent-first 审计结论复核更新，见[原始要求 / Agent-first 工作流符合度审计](../audits/original-requirements-agent-workflow-audit-2026-08-05.md)；原基线 2026-08-02）
+> **时间**: 2026-08-06（Agent-first 完整交付复核更新：plan 已全部执行完毕、接线缺口关闭，见[当前系统状态](../current-state.md)；2026-08-05 原始要求 / Agent-first 审计为撰写时点快照，不代表当前实现）
 >
 > **当前基线**: 本文是 current reference，以 [当前系统状态](../current-state.md)（源码核验）为权威；源码优先于历史计划与阶段报告。
 >
-> **适用代码**: `packages/core/src/api.ts`、`entity/`（mapper、project-runtime、yaml-loader、source-analysis、timestamp）、`state/`（narrative-runtime、graph-adapter、graph-compiler、dag、story-boundaries、discourse-*、event-store、manager、snapshot）、`editorial/`（compiler、render-service、identity、facade、selector、workspace、query-service、source-workspace、review-facade）、`pipeline/`（render、output、surface-scheduler、circuit-breaker、release-decision、reverse-validate、interaction-gate）、`cache/`、`validator/`、`assembler/`（release-assembly、publication-model、novel）、`ports/`、`reporter/`
+> **适用代码**: `packages/core/src/api.ts`、`entity/`（mapper、project-runtime、yaml-loader、source-analysis、timestamp）、`state/`（narrative-runtime、graph-adapter、graph-compiler、dag、story-boundaries、discourse-*、event-store、manager、snapshot）、`editorial/`（compiler、render-service、identity、facade、selector、workspace、query-service、source-workspace、review-facade、release-gate）、`pipeline/`（render、output、surface-scheduler、circuit-breaker、release-decision、reverse-validate、interaction-gate）、`cache/`、`validator/`、`assembler/`（release-assembly、publication-model、novel）、`ports/`、`reporter/`、`status/`（workflow-status）、`plugin/`（hooks-manager、extension-registrar）
 >
 > **阅读目标**: 确认一个字段、一个场景、一次渲染结果在哪个边界被读取、编译、校验、缓存、发布或拒绝。
 > **现状边界**: 本文以当前 `api.ts`、`editorial/render-service.ts`、`pipeline/render.ts`、scheduler、release decision 与 cache 源码为准。Core 只消费不可变 `ProjectSourceSnapshotV1` 与注入的语义端口；文件物化是 Node Host / Workbench Host 的职责。
 >
-> **验证记录**: [接线修复验证与完整性报告](../report/wiring-remediation-verification-2026-07-27.md)（2026-07-27 的历史快照，不代表当前实现）；2026-08-05 的 Agent-first 符合度审计见[原始要求 / Agent-first 工作流符合度审计](../audits/original-requirements-agent-workflow-audit-2026-08-05.md)（§9 生产接线缺口、§11.1 门禁实测）
+> **验证记录**: [接线修复验证与完整性报告](../report/wiring-remediation-verification-2026-07-27.md)（2026-07-27 的历史快照，不代表当前实现）；2026-08-05 的 Agent-first 符合度审计见[原始要求 / Agent-first 工作流符合度审计](../audits/original-requirements-agent-workflow-audit-2026-08-05.md)（§9 生产接线缺口、§11.1 门禁实测；撰写时点快照，缺口已在本交付关闭）。**接线证据口径**：本交付新增链路（review/gate/publication/plugin/agent/operation）的测试证据全部来自确定性 mock / 无网络 harness（`createDeterministicMockProvider`、parity matrix、Playwright e2e）；live LLM 不作为接线证据
 
 ---
 
@@ -24,7 +24,7 @@
 | 发布判定 | `evaluateReleaseDecision(candidate, scopeHash, validationIdentity, interactionManager?)` | output、cache 或 plugin 各自判断 `released` |
 | 已接受场景 / 修订记录 | `CoreExecutionRepository`（Node Host `FileExecutionRepository` 的 CAS 提交；`compareAndSwapAcceptedScene` / `compareAndSwapSceneRevision` / `compareAndSwapPublication`） | `pipeline/output.ts` 或任何其他模块自行写 scene/response 文件 |
 | surface prose | 仅 `AcceptedSceneArtifact` 经 `SurfaceReferenceExtractor` | 未接受 prose、scene `.md` 文件名、ellipsis 或 Pass 2 observation 充当 source |
-| 最终小说 | Core `buildNovelDocument()` / `canonicalAssemble()` / `customAssemble()` 计算纯文档值（算法存在并有测试）；**但当前无 production caller**——CLI / MCP / Workbench 均未调用 assembly，render-service 的 `buildPublication()` 只返回 `status`（`outputPath` 恒空、`novelHash` null），Host 尚未接上小说物化 | Core 直接写 `output/novel.md` 或 partial accepted set 仍装配完整小说 |
+| 最终小说 | Core `buildNovelDocument()` / `canonicalAssemble()` / `customAssemble()` 计算纯文档值，`assembleRelease` 是 production assembly 入口；Workbench `ProjectPublicationService` 经 `assembleRelease` 装配并物化（Node Host `FilePublicationWriter` 写 `output/novel.md`，`refreshCanonical()` 在 accepted commit / gate 决议 / review-driven revise 后自动刷新，全集未就绪只降级 `stale` 不写部分小说） | Core 直接写 `output/novel.md` 或 partial accepted set 仍装配完整小说 |
 
 `narrativeOrder` 既不是组装顺序，也不是 replay/discourse/surface 的时间依据：reader 顺序由 discourse ledger（`ProjectData.discourseLedger`，恒非空）的 `chapters[].sceneIds` 经 `compileDiscourseSceneSequence()` 编译，`buildNovelDocument()` 按该序列拼接；`narrativeOrder` 只用于 catalog/selector 排序与 scene metadata。Surface packet 永远是 **non-authoritative**：YAML、scene contract 与 compiled context 优先。
 
@@ -321,7 +321,11 @@ flowchart TD
   Blocked --> Gate
   Gate -- accepted + fresh --> Promote[promoteAccepted：execution repository CAS<br/>candidate_promoted + 场景修订信封]
   Gate -- accepted + cache hit --> Reused[head_reused：复用既有 accepted head]
-  Gate -- pending_waiver --> Pending[blocked 信封经 compareAndSwapSceneRevision 存档<br/>无 promotion / assembly]
+  Gate -- pending_waiver --> Pending[blocked 信封经 compareAndSwapSceneRevision 存档<br/>review stream 开 release gate（require-waiver）]
+  Pending --> GateDecide[resolveReleaseGate：nova_release_gate_decide<br/>重跑唯一 evaluator + 零 provider 调用]
+  GateDecide -- accept --> Promote
+  GateDecide -- reject --> Rejected
+  GateDecide -- identity 漂移 --> Superseded[gate 被 supersede<br/>waiver 不跨 identity]
   Gate -- blocked --> Rejected[同上：blocked 信封存档]
   Promote -- CAS 冲突 --> Conflict[STORAGE_CONFLICT / candidate_stale<br/>decision 改判 blocked]
   Promote --> Accepted[AcceptedSceneArtifact]
@@ -330,10 +334,15 @@ flowchart TD
   NextWave --> Scheduler
 
   subgraph Publish[发布摘要 + operation 记录]
-    Accepted --> Summary[buildPublication：status current / stale / unchanged<br/>outputPath 恒空、novelHash null]
+    Accepted --> Summary[buildPublication：渲染级 status current / stale / unchanged<br/>outputPath 恒空、novelHash null（不装配成书）]
     Rejected --> Summary
     Summary --> OpRecord[compareAndSwapOperation：operation 记录<br/>status succeeded / failed + results]
     OpRecord --> Trace[persistTrace via execution repository]
+    Accepted -. Workbench publication service .-> PublishOp[publish operation：kind 'publish' 入队 ProjectOperationService]
+    PublishOp --> Assemble[Core assembleRelease 装配<br/>missing/blocked/old-source/mixed-scope → manifest_invalid]
+    Assemble --> NovelFile[FilePublicationWriter 写 output/novel.md]
+    NovelFile --> PubRecord[durable publication 行 CAS 更新<br/>expectedStatus 守卫]
+    PubRecord -. refreshCanonical（accepted commit / gate 决议 / revise 后） .-> NovelFile
   end
 ```
 
@@ -343,8 +352,8 @@ flowchart TD
 2. 每个 job 在 prose 前固定 `stateBefore`、scene contract、logical disclosure summary、source/scope/basis hash 和 surface dependency。
 3. Surface scheduler 只在前驱 scene 的 current-run release `accepted` 后推进同一 serial lane；其它 lane 与 parallel group 不等待它。
 4. cache 命中并不绕过分析契约或 validator：cached analysis 按当前 protocol 重新 parse、重新 `validatePost()`，随后仍由 release gate 判定。
-5. `pending_waiver` 是已渲染、已存档但未发布的 candidate；不是 accepted 的弱别名。
-6. **assembly 未接线**：`buildPublication()` 只产出 `status` / `reasons`（`outputPath` 恒空、`novelHash` null）；`canonicalAssemble` / `customAssemble` / `buildNovelDocument` 有测试但没有任何 CLI / MCP / Workbench / production caller。`status: 'current'` 只表示所选场景全部 released，**不代表**小说文档已被装配或物化。
+5. `pending_waiver` 是已渲染、已存档但未发布的 candidate（`require-waiver` 策略下的 warning-only 候选）；gate 决议（`nova_release_gate_decide` → `resolveReleaseGate`）accept 后经单头 CAS promotion；`accept-and-record`（默认）下 warning-only 候选直接 accepted，不产生 pending_waiver。
+6. **assembly 已接线**：render-service 的 `buildPublication()` 仍只产出渲染级 `status` / `reasons`（`outputPath` 恒空、`novelHash` null），但成书装配不再依赖它——Workbench `ProjectPublicationService` 经 Core `assembleRelease` 装配（missing/blocked/old-source/mixed-scope manifest 返回 `manifest_invalid`），Node Host `FilePublicationWriter` 物化 `output/novel.md`。`status: 'current'` 只表示所选场景全部 released，**不代表**小说文档已装配或落盘。
 
 ---
 
@@ -388,7 +397,7 @@ flowchart LR
 - Plugin 可注册 provider、validator，或返回受长度/ID 校验的 non-authoritative prompt decorations。
 - `onBuildPass1Prompt` / `onBuildPass2Prompt` 的 transform 异常是 hard scene failure。
 - Plugin 不能改写 story state、discourse state、logical summary、validator policy、release decision 或 accepted prose。
-- plugin identity 进入 cache identity（`pluginIdentityHash`）；nova.yaml 的 `plugins` 只有 `enabled` 开关。**接线缺口（2026-08-05 复核）**：`NodePluginCatalog`（Node Host）/ `PluginLoader` / `PluginHooksManager`（core）的算法与类型存在，但当前**没有 production Host 构造**——CLI 与 Workbench Host 都不实例化 plugin catalog / hooks manager，编辑渲染路径插件身份恒为 `[]` 且不注入 `pluginHooksManager`，项目插件**不会自动发现 / 激活**。`RenderPipelineOptions.pluginHooksManager` 只是可选注入点，只有调用方显式构造并传入时才生效（当前仅测试 / 未来 Host 使用）。
+- plugin identity 进入 cache identity（`pluginIdentityHash`）；nova.yaml 的 `plugins` 只有 `enabled` 开关。**接线现状（2026-08-06）**：Workbench Host 在 launch 时经 `activateNodePlugins` 激活受信任本机插件（`trustedPlugins` 的 manifest + index.js SHA-256 身份校验，不匹配抛 `PluginIdentityMismatchError`），构造的 `PluginHooksManager` 注入项目 Core runtime（`RenderPipelineOptions.pluginHooksManager` 在编辑渲染路径生效，插件身份不再是恒 `[]`）；插件身份（name/version/manifestHash/moduleHash/hook names/validators）进入 `validationIdentity`、`planHash` 与 `pluginIdentityHash` cache key；`PluginExtensionSchemaRegistrar` 把 EventFile `extensions` 命名空间接入 accepted/working 验证（未知/禁用 namespace = source error）。证据：`plugin-snapshot.spec.ts`（e2e 6 tests）、`launch-phase1a.test.ts`、`mcp-tools-v3.test.ts`。
 ---
 
 ## 5. Preview（previewEditorialRun）与 subset render 分支
@@ -445,8 +454,9 @@ flowchart LR
   Complete -- no --> Stale[buildPublication → stale]
   Unchanged[空选择] --> Stale
 
-  NovelData[verified scene heads + discourse scene sequence] --> Assembly[canonicalAssemble / customAssemble<br/>buildNovelDocument 纯文档值（算法有测试）]
-  Assembly -. design-only：无 production caller .-> Materialize[Host 文件物化（未接线）<br/>当前无 Host 接上 assembly；Core 不写 output/novel.md]
+  NovelData[verified scene heads + discourse scene sequence] --> Assembly[Core assembleRelease<br/>canonicalAssemble / customAssemble → buildNovelDocument 纯文档值]
+  Assembly --> Materialize[Workbench ProjectPublicationService<br/>FilePublicationWriter 写 output/novel.md（Core 不直接写）]
+  Materialize -. refreshCanonical：accepted commit / gate 决议 / revise 后自动刷新 .-> Assembly
 
   ReportInput[L1/L2 ValidationReport] --> Reporter[Core formatValidationReport 纯格式化<br/>Node Host writeFileValidationReport]
   Reporter --> Validation[output/validation.md（Node Host 写入）]
@@ -475,26 +485,32 @@ flowchart LR
 | `packages/core/src/state/discourse-sequence.ts` | `compileDiscourseSceneSequence()`（ledger 章节块 → 场景序列，strict preflight）与 `resolveDiscourseBranch()`（唯一场景覆盖匹配） |
 | `packages/core/src/editorial/compiler.ts` | `compileEditorialRun()` 纯编译：selector/revision preflight、每场景 identity、branch contracts、planHash、intents |
 | `packages/core/src/editorial/identity.ts` | `computeSceneSourceHash` / `computeScopeHash` / `computeEditorialBasisHash` / `computeValidationIdentity` / `computePlanHash` / `computeSelectorHash` |
-| `packages/core/src/editorial/render-service.ts` | `executeEditorialRender` / `executeEditorialTreeRender` / `previewEditorialRun`（编译 → plan → surface → 执行 → promote → 发布摘要 + operation 记录）；`buildPublication` 只返回 status（`outputPath` 恒空、`novelHash` null）；`persistInlineInstructionReview` / `applySceneLineReviews` / `applyChapterNovelReviews` 三个 inline/chapter review hook 是 no-op（无 caller） |
+| `packages/core/src/editorial/render-service.ts` | `executeEditorialRender` / `executeEditorialTreeRender` / `previewEditorialRun`（编译 → plan → surface → 执行 → promote → 发布摘要 + operation 记录）；渲染级 `buildPublication` 只返回 status（`outputPath` 恒空、`novelHash` null，成书由 Workbench publication service 负责）；`persistInlineInstructionReview` / `applySceneLineReviews` / `applyChapterNovelReviews` 三个 inline/chapter review hook 是 no-op（无 caller） |
 | `packages/core/src/editorial/selector.ts` | `preflightSelector()` 纯校验：去重、narrativeOrder 排序、errors 累积不抛 |
 | `packages/core/src/editorial/facade.ts` | `listSourceDocuments` / `getSourceDocument` / `previewSourceChange` / `getSceneRevision` / `getEditorialOperation` / `reviewServices` |
-| `packages/core/src/editorial/review-facade.ts` | `listReviewComments` / `addReviewComment` / `replaceReviewComment` / `updateReviewComment`（经 execution 端口）；revision prompt 消费 ledger（render-service 经 `ReviewManager` 读），但 add/replace/update **无产品 producer**（CLI / MCP / Workbench 均未调用；审计 §9.2） |
+| `packages/core/src/editorial/review-facade.ts` | `listReviewComments` / `addReviewComment` / `replaceReviewComment` / `updateReviewComment`（经 execution 端口）；revision prompt 消费 ledger（render-service 经 `ReviewManager` 读）。**生产 producer 已接线**：Workbench Host `review-service.ts`（append-only review stream）+ `nova_review_list/get/add/update` + CLI `review` 命令 |
 | `packages/core/src/pipeline/render.ts` | cache lookup/revalidation（当前 protocol 重 parse + `validatePost`）、Pass 1/Pass 2、断路器重试、validator 调用、request ledger |
 | `packages/core/src/pipeline/surface-scheduler.ts` | deterministic dependency-ready wave planning、persisted accepted artifact resolution |
-| `packages/core/src/pipeline/release-decision.ts` | `accepted` / `pending_waiver` / `blocked` 的唯一判定（第 4 参 `interactionManager` 可选，编辑管线不传） |
+| `packages/core/src/pipeline/release-decision.ts` | `accepted` / `pending_waiver` / `blocked` 的唯一判定（`evaluateReleaseDecision`：第 4 参 `interactionManager` 由 `executeEditorialRender` / `resolveReleaseGate` 传入，第 5 参 `options` 携带 `releasePolicy` 与 gate identity；`computeReleaseGateId` 是 gate 身份的 sha256） |
 | `packages/core/src/pipeline/output.ts` | 纯 JSON-safe output intents（`RenderOutputs` + `DerivedData` + `appendPlayerChoicesBlock`）；不写文件 |
 | `packages/core/src/cache/render-cache.ts` | logical/surface 键材料、`computeSourceContentHash`（= `snapshot.sourceHash`）、`getCachedRender` / `setCachedRender`、cache diagnostics；validation/attempt 材料与 `computeFlatCacheKey` 仅 tooling 导出 |
 | `packages/core/src/validator/aggregator.ts` | active validator identity（28 内置）、analysis contract、`validatePre` / `validatePost`（uncertainty preflight + observationRef/pointer 校验） |
-| `packages/core/src/plugin/hooks-manager.ts` | plugin lifecycle、provider/validator registration、safe prompt decoration；无 production Host 构造（见 §4；审计 §9.3） |
+| `packages/core/src/plugin/hooks-manager.ts` | plugin lifecycle、provider/validator registration、safe prompt decoration；production 由 Node Host `activateNodePlugins` 构造并注入渲染管线（见 §4） |
 | `packages/core/src/reporter/validation-reporter.ts` | `formatValidationReport()` 纯 Markdown 格式化；`@novalistically/core/tooling` 导出 |
-| `packages/core/src/assembler/release-assembly.ts` + `publication-model.ts` | `validateManifestHeads` / `canonicalAssemble` / `customAssemble` / `buildNovelDocument`（verified heads + discourse scene sequence → 纯文档值）；**算法有测试但无 production caller**（CLI / MCP / Workbench 均未调用；render-service 的 `buildPublication` 与 assembler 无关，只返回 status；审计 §9.1） |
+| `packages/core/src/assembler/release-assembly.ts` + `publication-model.ts` | `validateManifestHeads` / `canonicalAssemble` / `customAssemble` / `buildNovelDocument`（verified heads + discourse scene sequence → 纯文档值）与 `assembleRelease`（production assembly 入口）；**production caller 已接线**：Workbench `ProjectPublicationService`（`nova_publish` / `refreshCanonical`） |
 | `packages/core/src/ports/` | `CoreRuntimeServices` 与 `CoreExecutionRepository` / `RenderCacheRepository` / `StateLogRepository` / `StateSnapshotRepository` 语义端口 |
-| `packages/node-host/src/` | `FileProjectSourceLoader` / `FileProjectSourceWriter`、`FileExecutionRepository`（`.nova/execution`）、`FileRenderCacheRepository`（`.nova/render-cache`）、`FileStateLogRepository` / `FileStateSnapshotRepository`（`.nova/state-log` / `.nova/state-snapshots`）、`writeFileValidationReport`（`output/validation.md`）、`AiSdkProvider` / `FileMockPass2Provider`、`createFileCoreRuntimeServices`；`NodePluginCatalog` 导出但无 production 构造（见 §4） |
+| `packages/node-host/src/` | `FileProjectSourceLoader` / `FileProjectSourceWriter`、`FileExecutionRepository`（`.nova/execution`）、`FileRenderCacheRepository`（`.nova/render-cache`）、`FileStateLogRepository` / `FileStateSnapshotRepository`（`.nova/state-log` / `.nova/state-snapshots`）、`writeFileValidationReport`（`output/validation.md`）、`AiSdkProvider` / `FileMockPass2Provider` / `createDeterministicMockProvider`、`createFileCoreRuntimeServices`、`FileProjectStatusReporter`（`PROJECT_STATUS.md`）、`FilePublicationWriter`（`output/novel.md`）、`activateNodePlugins` / `shutdownNodePlugins`（受信任插件激活）、`createWorkbenchAgentModelAdapter`（内置 Agent 模型缝） |
+| `packages/workbench/src/host/operation-service.ts` | `createProjectOperationService`：每项目一个持久 operation 队列（`project_operations` 表）；两阶段 detached render（lane 内 prepare/commit、lane 外 execute）、cancel（AbortController）、重启 interrupted sweep 不自动重放、host 级并发门 |
+| `packages/workbench/src/host/review/review-service.ts` | append-only review event stream：comment + release gate 记录同一流；`nova_review_*` / `nova_release_gate_*` 的投影与写入方；gate 决议调 Core `resolveReleaseGate` |
+| `packages/workbench/src/host/publication/publication-service.ts` | `createProjectPublicationService`：publish 作为 `publish` operation 入队；runner 重读 accepted artifacts → Core `assembleRelease` 验证 → `FilePublicationWriter` 写字节 → durable publication 行 CAS 更新；`refreshCanonical()` 自动刷新（plan 6.5） |
+| `packages/workbench/src/host/state/canonical-state-projection.ts` | `createCanonicalStateProjectionService`：按不可变 source/route 派生 canonical-world 快照流（`snapshotInterval` 事件一个）；`nova_event_state_diff` / `nova_status` 经它读取（最近验证快照 → 后缀，全量重放 fallback） |
+| `packages/workbench/src/host/agent/` | `createProjectToolExecutor`（内置 principal 与外部 device 同一工具表面）、`WorkbenchAgentRunService`（agent-run 经 operation 队列入队、capability 行持久化）；模型缝在 `@novalistically/node-host`（`createWorkbenchAgentModelAdapter`）；`agent-chat` capability 门 = V3 `agent.enabled` && `supportsToolCalls` && parity matrix（`agent-parity-matrix.test.ts`，4/4） |
+| `packages/workbench/src/host/mcp/registry.ts` | `createProjectSessionMcpRegistry` / `createAdminMcpRegistry`：与 `MCP_TOOL_CATALOG_V1` 双向一致（`mcp-catalog-parity.test.ts`，零 orphan）；`buildWorkflowStatusForSession` 是 `nova_status` / `PROJECT_STATUS.md` 的组合点 |
 
 ## 8. 运行时排障顺序
 
 1. 先看该 event 的 `RenderNovelSceneResult`（operation 记录 / scene 结果）：`releaseDecision.status`、`reasons`、`errors`、`analysis`、`providerCalls`；记录经 `CoreExecutionRepository` 读取（Node Host 落在 `.nova/execution/`，可用 `getEditorialOperation` / `getSceneRevision` 查询）。
 2. `blocked` 且 reason 含 `MISSING_SURFACE_SOURCE`：检查 surface group/lane、predecessor 的 accepted 状态和 `scopeHash`（matching-scope 的 persisted `AcceptedSceneArtifact` 才可用）。
-3. `pending_waiver`：说明没有 error-severity issue，但 warning 尚未有对应 waiver（当前编辑管线不消费请求级 waivers）；candidate 不会进入 promotion 或 assembly。
+3. `pending_waiver`：`require-waiver` 策略下 warning-only candidate 在 review stream 中开了 release gate；用 `nova_release_gate_list` 查 open gate、`nova_release_gate_decide` 决议（accept 记录 maintainer waiver 并经 `resolveReleaseGate` 单头 CAS promotion；reject 记录拒绝理由，blocked 分支永不被绕过；source/candidate/validator identity 漂移 → gate 被 supersede）。candidate 在决议前不会进入 promotion 或 assembly。
 4. `cacheHit: true`：确认结果中 `requestRecords: []`，这是刻意不伪造旧请求的行为。
-5. 小说未生成或过时：`buildPublication()` 的 `status`（`current` / `stale` / `unchanged`）与 `reasons` 说明原因，但**只返回状态**——`outputPath` 恒空、`novelHash` null。`canonicalAssemble` / `customAssemble`（`buildNovelDocument`）算法存在且有测试，但当前没有 production caller，Host 未接上小说物化；`status: 'current'` 只表示所选场景全部 released，**不**表示小说文档已装配或落盘。不要以文件是否存在判断发布状态。
+5. 小说未生成或过时：workbench 侧查 `nova_publication_get`（durable publication 记录 `current` / `stale` / `missing` + stale reasons）或 CLI `publication status`。`refreshCanonical()` 只在全集就绪时写 `output/novel.md`，否则只把记录降级为 `stale`（绝不写部分小说）；publish operation 的 `manifest_invalid` 说明 accepted 集不完整或 source 已移动。渲染级 `buildPublication()` 的 `status`（`current` / `stale` / `unchanged`）只表示所选场景全部 released，**不**表示小说已装配或落盘——不要以文件是否存在判断发布状态。

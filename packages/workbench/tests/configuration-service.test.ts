@@ -2,7 +2,11 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { WorkbenchConfigurationV1 } from '../src/contracts/configuration.js';
+import {
+  DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
+  type WorkbenchConfigurationV1,
+  type WorkbenchConfigurationV3,
+} from '../src/contracts/configuration.js';
 import {
   ConfigurationFileStore,
   normalizeWorkbenchConfiguration,
@@ -44,6 +48,42 @@ function baseConfiguration(
   };
 }
 
+function baseConfigurationV3(
+  root: string,
+  overrides: Partial<WorkbenchConfigurationV3> = {},
+): WorkbenchConfigurationV3 {
+  return {
+    version: 3,
+    projects: [
+      {
+        projectId: 'demo',
+        displayName: 'Demo',
+        root,
+        revisionMirror: { mode: 'disabled' },
+        providerProfile: 'default',
+        trustedPlugins: [],
+      },
+    ],
+    defaultProjectId: 'demo',
+    providers: {},
+    network: {
+      mode: 'loopback',
+      port: 8787,
+      allowedHosts: [],
+      allowedOrigins: [],
+      unixSocket: null,
+    },
+    referenceLimits: { ...DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2 },
+    operationLimits: {
+      maxQueuedPerProject: 8,
+      maxConcurrentRendersPerProject: 1,
+      maxConcurrentRendersPerHost: 2,
+    },
+    agent: { enabled: false, maxTurns: 8, maxToolCalls: 24 },
+    ...overrides,
+  };
+}
+
 async function harness(overrides: { busyProjects?: string[] } = {}) {
   const home = await tempProjectRoot();
   const root = await projectRoot();
@@ -74,6 +114,82 @@ describe('computeChangedFields / requiresRestart', () => {
     expect(requiresRestart(fields)).toBe(true);
     expect(requiresRestart(computeChangedFields(current, baseConfiguration(root)))).toBe(false);
   });
+
+  it('normalizes legacy provider edits to the default profile path', () => {
+    const root = '/tmp/x';
+    const current = baseConfiguration(root);
+    const next = baseConfiguration(root, {
+      provider: { kind: 'ai-sdk', baseUrl: 'https://api.example.com', model: 'm' },
+    });
+    const fields = computeChangedFields(current, next);
+    expect(fields).toEqual(['providers.default']);
+    expect(requiresRestart(fields)).toBe(true);
+  });
+
+  it('reports every V3 domain change with stable paths', () => {
+    const root = '/tmp/x';
+    const current = baseConfigurationV3(root);
+    const next = baseConfigurationV3(root, {
+      providers: {
+        default: { kind: 'ai-sdk', baseUrl: 'https://api.example.com', model: 'm-1' },
+      },
+      projects: [
+        {
+          projectId: 'demo',
+          displayName: 'Demo',
+          root,
+          revisionMirror: { mode: 'disabled' },
+          providerProfile: 'fast',
+          trustedPlugins: [
+            { name: 'arc', version: '1.0.0', moduleHash: 'abc123', required: false },
+          ],
+        },
+      ],
+      operationLimits: {
+        maxQueuedPerProject: 16,
+        maxConcurrentRendersPerProject: 1,
+        maxConcurrentRendersPerHost: 3,
+      },
+      agent: { enabled: true, maxTurns: 4, maxToolCalls: 8 },
+    });
+    const fields = computeChangedFields(current, next);
+    expect(fields).toEqual([
+      'projects.demo.providerProfile',
+      'projects.demo.trustedPlugins',
+      'providers.default',
+      'operationLimits.maxQueuedPerProject',
+      'operationLimits.maxConcurrentRendersPerHost',
+      'agent.enabled',
+      'agent.maxTurns',
+      'agent.maxToolCalls',
+    ]);
+    expect(requiresRestart(fields)).toBe(true);
+  });
+
+  it('ignores an unchanged trusted plugin allowlist', () => {
+    const root = '/tmp/x';
+    const current = baseConfigurationV3(root, {
+      projects: [
+        {
+          projectId: 'demo',
+          displayName: 'Demo',
+          root,
+          revisionMirror: { mode: 'disabled' },
+          providerProfile: 'default',
+          trustedPlugins: [{ name: 'arc', version: '1.0.0', moduleHash: 'abc123', required: true }],
+        },
+      ],
+    });
+    expect(computeChangedFields(current, current)).toEqual([]);
+  });
+
+  it('requires restart for every V3 domain field', () => {
+    expect(requiresRestart(['providers.default.baseUrl'])).toBe(true);
+    expect(requiresRestart(['projects.demo.providerProfile'])).toBe(true);
+    expect(requiresRestart(['projects.demo.trustedPlugins'])).toBe(true);
+    expect(requiresRestart(['operationLimits.maxQueuedPerProject'])).toBe(true);
+    expect(requiresRestart(['agent.enabled'])).toBe(true);
+  });
 });
 
 describe('ConfigurationChangeService apply', () => {
@@ -86,9 +202,11 @@ describe('ConfigurationChangeService apply', () => {
     expect(receipt.changedFields).toEqual([
       'projects',
       'defaultProjectId',
-      'provider',
+      'providers',
       'network',
       'referenceLimits',
+      'operationLimits',
+      'agent',
     ]);
     expect(receipt.diagnostics).toEqual([]);
     expect(await service.readActive()).toEqual({
@@ -96,7 +214,7 @@ describe('ConfigurationChangeService apply', () => {
       revision: receipt.activeRevision,
     });
     const active = await service.readActive();
-    expect(active?.configuration.version).toBe(2);
+    expect(active?.configuration.version).toBe(3);
     expect(active?.configuration.projects[0]?.revisionMirror).toEqual({ mode: 'disabled' });
     expect(active?.configuration.referenceLimits.enabled).toBe(true);
   });
@@ -181,7 +299,7 @@ describe('ConfigurationChangeService apply', () => {
     expect([ra.status, rb.status].sort()).toEqual(['restart-required', 'stale']);
     const active = await service.readActive();
     expect(active?.configuration.defaultProjectId).toBeNull(); // the first apply won
-    expect(active?.configuration.provider).toBeNull();
+    expect(active?.configuration.providers).toEqual({});
   });
 
   it('returns invalid with diagnostics for a malformed candidate without writing', async () => {
@@ -278,7 +396,173 @@ describe('ConfigurationChangeService apply', () => {
       origin: 'dashboard',
     });
     expect(receipt.status).toBe('restart-required');
-    expect(receipt.changedFields).toEqual(['provider']);
+    expect(receipt.changedFields).toEqual(['providers.default']);
+  });
+
+  it('applies a V3 configuration with all new domains under the revision CAS', async () => {
+    const { service } = await harness();
+    const root = await projectRoot();
+    const candidate = baseConfigurationV3(root, {
+      providers: {
+        default: { kind: 'ai-sdk', baseUrl: 'https://api.example.com', model: 'm-1' },
+      },
+      projects: [
+        {
+          projectId: 'demo',
+          displayName: 'Demo',
+          root,
+          revisionMirror: { mode: 'disabled' },
+          providerProfile: 'default',
+          trustedPlugins: [{ name: 'arc', version: '1.0.0', moduleHash: 'abc123', required: true }],
+        },
+      ],
+      operationLimits: {
+        maxQueuedPerProject: 4,
+        maxConcurrentRendersPerProject: 1,
+        maxConcurrentRendersPerHost: 1,
+      },
+      agent: { enabled: true, maxTurns: 16, maxToolCalls: 48 },
+    });
+    const receipt = await service.apply({ candidate, expectedRevision: null, origin: 'setup' });
+    expect(receipt.status).toBe('restart-required');
+    expect(receipt.changedFields).toEqual([
+      'projects',
+      'defaultProjectId',
+      'providers',
+      'network',
+      'referenceLimits',
+      'operationLimits',
+      'agent',
+    ]);
+    const active = await service.readActive();
+    expect(active?.configuration.version).toBe(3);
+    expect(active?.configuration.providers.default).toEqual({
+      kind: 'ai-sdk',
+      baseUrl: 'https://api.example.com',
+      model: 'm-1',
+    });
+    expect(active?.configuration.projects[0]?.providerProfile).toBe('default');
+    expect(active?.configuration.projects[0]?.trustedPlugins).toEqual([
+      { name: 'arc', version: '1.0.0', moduleHash: 'abc123', required: true },
+    ]);
+    expect(active?.configuration.operationLimits.maxQueuedPerProject).toBe(4);
+    expect(active?.configuration.operationLimits.maxConcurrentRendersPerHost).toBe(1);
+    expect(active?.configuration.agent).toEqual({ enabled: true, maxTurns: 16, maxToolCalls: 48 });
+  });
+
+  it('rejects a stale V3-domain apply and keeps the file untouched', async () => {
+    const { service } = await harness();
+    const root = await projectRoot();
+    const first = await service.apply({
+      candidate: baseConfigurationV3(root),
+      expectedRevision: null,
+      origin: 'setup',
+    });
+    const receipt = await service.apply({
+      candidate: baseConfigurationV3(root, {
+        agent: { enabled: true, maxTurns: 8, maxToolCalls: 24 },
+      }),
+      expectedRevision: 'stale-revision',
+      origin: 'dashboard',
+    });
+    expect(receipt.status).toBe('stale');
+    expect(receipt.diagnostics.map((d) => d.code)).toContain('CONFIG_STALE');
+    expect((await service.readActive())?.configuration.agent.enabled).toBe(false);
+    expect(first.activeRevision).toBe((await service.readActive())?.revision);
+  });
+
+  it('reports restart-required for an agent-only change on a V3 configuration', async () => {
+    const { service } = await harness();
+    const root = await projectRoot();
+    const first = await service.apply({
+      candidate: baseConfigurationV3(root),
+      expectedRevision: null,
+      origin: 'setup',
+    });
+    const receipt = await service.apply({
+      candidate: baseConfigurationV3(root, {
+        agent: { enabled: true, maxTurns: 8, maxToolCalls: 24 },
+      }),
+      expectedRevision: first.activeRevision,
+      origin: 'dashboard',
+    });
+    expect(receipt.status).toBe('restart-required');
+    expect(receipt.changedFields).toEqual(['agent.enabled']);
+  });
+
+  it('reports operation limit and profile binding changes on a V3 configuration', async () => {
+    const { service } = await harness();
+    const root = await projectRoot();
+    const first = await service.apply({
+      candidate: baseConfigurationV3(root),
+      expectedRevision: null,
+      origin: 'setup',
+    });
+    const receipt = await service.apply({
+      candidate: baseConfigurationV3(root, {
+        projects: [
+          {
+            projectId: 'demo',
+            displayName: 'Demo',
+            root,
+            revisionMirror: { mode: 'disabled' },
+            providerProfile: 'fast',
+            trustedPlugins: [],
+          },
+        ],
+        operationLimits: {
+          maxQueuedPerProject: 16,
+          maxConcurrentRendersPerProject: 1,
+          maxConcurrentRendersPerHost: 2,
+        },
+      }),
+      expectedRevision: first.activeRevision,
+      origin: 'dashboard',
+    });
+    expect(receipt.status).toBe('restart-required');
+    expect(receipt.changedFields).toEqual([
+      'projects.demo.providerProfile',
+      'operationLimits.maxQueuedPerProject',
+    ]);
+  });
+
+  it('rejects trusted plugin identities that carry paths, URLs, or whitespace', async () => {
+    const { service } = await harness();
+    const root = await projectRoot();
+    await service.apply({
+      candidate: baseConfigurationV3(root),
+      expectedRevision: null,
+      origin: 'setup',
+    });
+    const active = await service.readActive();
+    const cases: readonly { name: string; version: string; moduleHash: string }[] = [
+      { name: 'arc', version: '1.0.0', moduleHash: '/etc/passwd' },
+      { name: 'arc', version: '1.0.0', moduleHash: 'https://example.com/index.js' },
+      { name: 'arc/plugin', version: '1.0.0', moduleHash: 'abc123' },
+      { name: 'arc', version: '1.0.0', moduleHash: 'abc 123' },
+      { name: '', version: '1.0.0', moduleHash: 'abc123' },
+    ];
+    for (const entry of cases) {
+      const receipt = await service.apply({
+        candidate: baseConfigurationV3(root, {
+          projects: [
+            {
+              projectId: 'demo',
+              displayName: 'Demo',
+              root,
+              revisionMirror: { mode: 'disabled' },
+              providerProfile: 'default',
+              trustedPlugins: [{ ...entry, required: true }],
+            },
+          ],
+        }),
+        expectedRevision: active?.revision ?? null,
+        origin: 'dashboard',
+      });
+      expect(receipt.status).toBe('invalid');
+      expect(receipt.diagnostics.map((d) => d.code)).toContain('CONFIG_INVALID');
+      expect(receipt.diagnostics.some((d) => d.message.includes('pathless'))).toBe(true);
+    }
   });
 });
 
@@ -306,7 +590,7 @@ describe('ConfigurationChangeService watcher path', () => {
     ]);
   });
 
-  it('reports CONFIG_INVALID when parsed YAML omits defaultProjectId or provider', async () => {
+  it('reports CONFIG_INVALID when parsed YAML omits required top-level fields', async () => {
     const { store, service } = await harness();
     await service.apply({
       candidate: baseConfiguration(await projectRoot()),
@@ -322,14 +606,15 @@ describe('ConfigurationChangeService watcher path', () => {
     expect(receiptDefault?.status).toBe('invalid');
     expect(receiptDefault?.diagnostics.map((d) => d.code)).toContain('CONFIG_INVALID');
 
-    const withoutProvider = yaml.replace(/provider: null\n/, '');
-    await writeFile(store.filePath, withoutProvider, 'utf8');
-    const receiptProvider = await service.observeExternalChange();
-    expect(receiptProvider).not.toBeNull();
-    expect(receiptProvider?.status).toBe('invalid');
-    expect(receiptProvider?.diagnostics.map((d) => d.code)).toContain('CONFIG_INVALID');
+    // A hand-edited document missing required V3 fields is rejected and preserved.
+    const missingFields = 'version: 3\nprojects: []\n';
+    await writeFile(store.filePath, missingFields, 'utf8');
+    const receiptMissing = await service.observeExternalChange();
+    expect(receiptMissing).not.toBeNull();
+    expect(receiptMissing?.status).toBe('invalid');
+    expect(receiptMissing?.diagnostics.map((d) => d.code)).toContain('CONFIG_INVALID');
     // The hand-edited file is never rewritten.
-    expect(await readFile(store.filePath, 'utf8')).toBe(withoutProvider);
+    expect(await readFile(store.filePath, 'utf8')).toBe(missingFields);
   });
 
   it('keeps the last valid active revision when the hand-edited file is invalid', async () => {

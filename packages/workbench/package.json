@@ -27,6 +27,8 @@
     "build:client": "vite build --config vite.config.ts",
     "test:host": "vitest run --config vitest.host.config.ts",
     "test:client": "vitest run --config vitest.client.config.ts",
+    "test:e2e": "playwright test",
+    "smoke:workbench-agent:live": "node scripts/smoke-agent-live.mjs",
     "typecheck:host": "tsc -p tsconfig.json",
     "typecheck:client": "tsc -p tsconfig.client.json",
     "typecheck:e2e": "tsc -p tsconfig.e2e.json",

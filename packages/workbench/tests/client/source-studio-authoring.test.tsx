@@ -1,6 +1,7 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, render, screen, within } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { BrowserAuthoringApiError } from '../../src/client/authoring-client.js';
 import { SourceStudio } from '../../src/client/source-studio.js';
 import type { AuthoringStateV1 } from '../../src/contracts/authoring.js';
 import type { SourceStudioStateV1 } from '../../src/contracts/source-studio.js';
@@ -79,5 +80,125 @@ describe('Source Studio authoring identities', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('invalid YAML')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Submit working layer' })).not.toBeInTheDocument();
+  });
+});
+
+describe('Source Studio working-document lifecycle', () => {
+  it('creates a working document with the exact CAS request', async () => {
+    const onCreateDocument = vi.fn();
+    const user = userEvent.setup();
+    render(() => (
+      <SourceStudio state={source} authoring={authoring} onCreateDocument={onCreateDocument} />
+    ));
+    await user.click(screen.getByRole('button', { name: 'New working document' }));
+    await user.type(screen.getByLabelText('Manifest-relative logical path'), 'scenes/E1.md');
+    await user.selectOptions(screen.getByLabelText('Document kind'), 'prose');
+    await user.click(screen.getByRole('button', { name: 'Create working document' }));
+    expect(onCreateDocument).toHaveBeenCalledWith({
+      version: 2,
+      projectId: 'proj-a',
+      logicalPath: 'scenes/E1.md',
+      kind: 'prose',
+      expectedAcceptedSourceHash: 'accepted-hash',
+      expectedWorkspaceDigest: 'workspace-hash',
+    });
+  });
+
+  it('moves a working document to a new logical path', async () => {
+    const onMoveDocument = vi.fn();
+    const user = userEvent.setup();
+    render(() => (
+      <SourceStudio state={source} authoring={authoring} onMoveDocument={onMoveDocument} />
+    ));
+    const item = screen.getByText('nova.yaml').closest('li');
+    expect(item).not.toBeNull();
+    const row = within(item as HTMLElement);
+    await user.click(row.getByRole('button', { name: 'Rename/Move' }));
+    const pathInput = row.getByLabelText('New manifest-relative logical path');
+    await user.clear(pathInput);
+    await user.type(pathInput, 'scenes/E2.md');
+    await user.click(row.getByRole('button', { name: 'Move document' }));
+    expect(onMoveDocument).toHaveBeenCalledWith({
+      version: 2,
+      projectId: 'proj-a',
+      documentId: 'nova.yaml',
+      logicalPath: 'scenes/E2.md',
+      expectedAcceptedSourceHash: 'accepted-hash',
+      expectedWorkspaceDigest: 'workspace-hash',
+    });
+  });
+
+  it('deletes a working document only after explicit confirmation', async () => {
+    const onDeleteDocument = vi.fn();
+    const user = userEvent.setup();
+    render(() => (
+      <SourceStudio state={source} authoring={authoring} onDeleteDocument={onDeleteDocument} />
+    ));
+    const item = screen.getByText('nova.yaml').closest('li');
+    expect(item).not.toBeNull();
+    const row = within(item as HTMLElement);
+    await user.click(row.getByRole('button', { name: 'Delete' }));
+    expect(onDeleteDocument).not.toHaveBeenCalled();
+    await user.click(row.getByRole('button', { name: 'Cancel' }));
+    expect(onDeleteDocument).not.toHaveBeenCalled();
+    await user.click(row.getByRole('button', { name: 'Delete' }));
+    await user.click(row.getByRole('button', { name: 'Confirm delete' }));
+    expect(onDeleteDocument).toHaveBeenCalledWith({
+      version: 2,
+      projectId: 'proj-a',
+      documentId: 'nova.yaml',
+      expectedAcceptedSourceHash: 'accepted-hash',
+      expectedWorkspaceDigest: 'workspace-hash',
+    });
+  });
+
+  it('surfaces stale lifecycle failures with the typed client error', async () => {
+    const onCreateDocument = vi.fn(async () => {
+      throw new BrowserAuthoringApiError(
+        409,
+        'WORKSPACE_STALE',
+        'The working layer changed; re-read before mutating.',
+      );
+    });
+    const user = userEvent.setup();
+    render(() => (
+      <SourceStudio state={source} authoring={authoring} onCreateDocument={onCreateDocument} />
+    ));
+    await user.click(screen.getByRole('button', { name: 'New working document' }));
+    await user.type(screen.getByLabelText('Manifest-relative logical path'), 'scenes/E1.md');
+    await user.click(screen.getByRole('button', { name: 'Create working document' }));
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('The working layer changed; re-read before mutating.');
+    expect(alert).toHaveAttribute('data-mutation-error');
+  });
+
+  it('offers no lifecycle actions without a Host handler', () => {
+    render(() => <SourceStudio state={source} authoring={authoring} />);
+    expect(screen.queryByRole('button', { name: 'New working document' })).not.toBeInTheDocument();
+    const item = screen.getByText('nova.yaml').closest('li');
+    expect(item).not.toBeNull();
+    expect(
+      within(item as HTMLElement).queryByRole('button', { name: 'Delete' }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(item as HTMLElement).queryByRole('button', { name: 'Rename/Move' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('disables lifecycle actions when the working digest is unknown', () => {
+    render(() => (
+      <SourceStudio
+        state={source}
+        authoring={{ ...authoring, workspaceDigest: null }}
+        onCreateDocument={vi.fn()}
+        onMoveDocument={vi.fn()}
+        onDeleteDocument={vi.fn()}
+      />
+    ));
+    expect(screen.queryByRole('button', { name: 'New working document' })).not.toBeInTheDocument();
+    const item = screen.getByText('nova.yaml').closest('li');
+    expect(item).not.toBeNull();
+    expect(within(item as HTMLElement).getByRole('button', { name: 'Delete' })).toBeDisabled();
+    expect(within(item as HTMLElement).getByRole('button', { name: 'Rename/Move' })).toBeDisabled();
   });
 });

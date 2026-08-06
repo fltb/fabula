@@ -36,6 +36,7 @@ import {
   type ProjectSessionProjectionV1,
   type SessionAuditRecord,
   type SessionAuditSink,
+  type SessionOperation,
 } from '../src/host/project-session.js';
 import {
   createYjsWorkingDocumentCore,
@@ -269,13 +270,25 @@ async function createHarness(
   const coordinator: AuthoringCoordinator = {
     projectId: PROJECT_ID,
     getState: () => state,
-    listOperations: () => [],
-    getOperation: () => null,
+    listOperations: async () => [],
+    getOperation: async () => null,
     isAgentPaused: () => false,
     refreshWorkingState,
     notifyExternalChange: async () => undefined,
     submit,
     reconcileExternal,
+    validateWorking: async () => ({
+      version: AUTHORING_CONTRACT_VERSION,
+      layer: 'working',
+      projectId: PROJECT_ID,
+      workspaceDigest: 'wd-1',
+      acceptedSourceHash: snapshot.sourceHash,
+      candidateSourceHash: 'candidate-1',
+      passed: true,
+      diagnostics: [],
+      iss: { overall: 100, target: 100, dimensions: [] },
+      results: {},
+    }),
     refreshAccepted: async () => undefined,
     dispose: async () => undefined,
   };
@@ -553,6 +566,7 @@ describe('MCP authoring coordinator port', () => {
       actorId: 'device-owner',
       capabilityId: adapterGrant.capabilityId,
       capabilityScopes: ['mcp:submit'],
+      expectedVersion: adapterGrant.version,
     });
     if (result.status !== 'completed') throw new Error(`expected completed, got ${result.status}`);
     expect(result).toEqual({
@@ -672,6 +686,7 @@ describe('MCP authoring coordinator port', () => {
       actorId: 'device-owner',
       capabilityId: adapterGrant.capabilityId,
       capabilityScopes: ['mcp:submit'],
+      expectedVersion: adapterGrant.version,
     });
     expect(result).toEqual({ status: 'completed', receipt: resolved });
   });
@@ -701,5 +716,43 @@ describe('MCP authoring coordinator port', () => {
       status: 'rejected',
       failure: { code: 'CONFLICT_REQUIRES_RESOLUTION' },
     });
+  });
+
+  it('passes the issued grant version as expectedVersion on every mutation enqueue', async () => {
+    const h = await createHarness();
+    activeHarness = h;
+    const recorded: Array<{ kind: string; capabilityId: string; expectedVersion?: number }> = [];
+    const originalEnqueue = h.session.enqueueOperation.bind(h.session);
+    h.session.enqueueOperation = (async (operation: SessionOperation) => {
+      recorded.push({
+        kind: operation.kind,
+        capabilityId: operation.capabilityId,
+        expectedVersion: operation.expectedVersion,
+      });
+      return originalEnqueue(operation);
+    }) as typeof h.session.enqueueOperation;
+
+    const digest = await h.documents.workspaceDigest();
+    if (digest === null) throw new Error('expected a seeded workspace digest');
+    const applied = await h.port.apply(
+      {
+        version: AUTHORING_CONTRACT_VERSION,
+        projectId: PROJECT_ID,
+        documentId: DOCUMENT_ID,
+        expectedWorkspaceDigest: digest.digest,
+        expectedAcceptedSourceHash: h.acceptedSourceHash,
+        replacementText: REPLACEMENT_CONTENT,
+      },
+      h.caller,
+    );
+    expect(applied.status).toBe('applied');
+
+    const grant = h.capabilities.issued.at(-1)?.grant;
+    const mutation = recorded.find((entry) => entry.kind === 'mcp.authoring.apply');
+    expect(mutation).toBeDefined();
+    expect(mutation?.capabilityId).toBe(grant?.capabilityId);
+    // The session gate re-checks the persisted grant version against this
+    // binding, exactly like the render path's capability generation recheck.
+    expect(mutation?.expectedVersion).toBe(grant?.version);
   });
 });

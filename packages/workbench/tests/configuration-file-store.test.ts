@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  DEFAULT_WORKBENCH_AGENT_CONFIGURATION_V3,
+  DEFAULT_WORKBENCH_OPERATION_LIMITS_V3,
   DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
   type WorkbenchConfigurationV1,
 } from '../src/contracts/configuration.js';
@@ -99,19 +101,23 @@ describe('configuration file store', () => {
     expect(roundTrip).not.toBeNull();
     expect(roundTrip?.revision).toBe(revision);
     expect(roundTrip?.configuration).toEqual({
-      version: 2,
+      version: 3,
       projects: [
         {
           projectId: 'demo',
           displayName: 'Demo',
           root: configuration.projects[0]?.root,
           revisionMirror: { mode: 'disabled' },
+          providerProfile: 'default',
+          trustedPlugins: [],
         },
       ],
       defaultProjectId: 'demo',
-      provider: null,
+      providers: {},
       network: configuration.network,
       referenceLimits: DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
+      operationLimits: DEFAULT_WORKBENCH_OPERATION_LIMITS_V3,
+      agent: DEFAULT_WORKBENCH_AGENT_CONFIGURATION_V3,
     });
   });
 
@@ -123,7 +129,7 @@ describe('configuration file store', () => {
     expect(configurationRevision(a)).not.toBe(configurationRevision(b));
   });
 
-  it('serializes to canonical V2 YAML with normalized mirror and reference limits', () => {
+  it('serializes to canonical V3 YAML with normalized mirror and reference limits', () => {
     const configuration = baseConfiguration('/srv/project', {
       provider: { kind: 'ai-sdk', baseUrl: 'https://api.example.com', model: 'fast-model' },
       network: {
@@ -135,16 +141,26 @@ describe('configuration file store', () => {
       },
     });
     const yaml = serializeConfigurationYaml(configuration);
-    expect(yaml).toContain('version: 2');
+    expect(yaml).toContain('version: 3');
     expect(yaml).toContain('revisionMirror:');
     expect(yaml).toContain('mode: disabled');
     expect(yaml).toContain('referenceLimits:');
+    expect(yaml).toContain('providers:');
+    expect(yaml).toContain('providerProfile: default');
+    expect(yaml).toContain('trustedPlugins: []');
+    expect(yaml).toContain('operationLimits:');
+    expect(yaml).toContain('agent:');
     const parsed = parseConfigurationYaml(yaml);
     expect(parsed.ok).toBe(true);
     if (parsed.ok) {
-      expect(parsed.configuration.version).toBe(2);
+      expect(parsed.configuration.version).toBe(3);
       expect(parsed.configuration.projects[0]?.revisionMirror).toEqual({ mode: 'disabled' });
+      expect(parsed.configuration.projects[0]?.providerProfile).toBe('default');
+      expect(parsed.configuration.projects[0]?.trustedPlugins).toEqual([]);
       expect(parsed.configuration.referenceLimits).toEqual(DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2);
+      expect(parsed.configuration.providers).toEqual({
+        default: { kind: 'ai-sdk', baseUrl: 'https://api.example.com', model: 'fast-model' },
+      });
     }
   });
 
@@ -193,8 +209,8 @@ describe('strict configuration shape validation', () => {
   it('rejects unknown top-level fields', () => {
     const result = parseConfigurationYaml(
       serializeConfigurationYaml(baseConfiguration(root)).replace(
-        'version: 2',
-        'version: 2\nsurprise: true',
+        'version: 3',
+        'version: 3\nsurprise: true',
       ),
     );
     expect(result.ok).toBe(false);
@@ -203,17 +219,17 @@ describe('strict configuration shape validation', () => {
     }
   });
 
-  it('requires explicit defaultProjectId and provider keys', () => {
+  it('requires explicit defaultProjectId and providers keys', () => {
     const yaml = serializeConfigurationYaml(baseConfiguration(root));
     const missingDefault = parseConfigurationYaml(yaml.replace(/defaultProjectId: demo\n/, ''));
     expect(missingDefault.ok).toBe(false);
     if (!missingDefault.ok) {
       expect(missingDefault.diagnostics.map((d) => d.code)).toContain('CONFIG_INVALID');
     }
-    const missingProvider = parseConfigurationYaml(yaml.replace(/provider: null\n/, ''));
-    expect(missingProvider.ok).toBe(false);
-    if (!missingProvider.ok) {
-      expect(missingProvider.diagnostics.map((d) => d.code)).toContain('CONFIG_INVALID');
+    const missingProviders = parseConfigurationYaml(yaml.replace(/providers: {}\n/, ''));
+    expect(missingProviders.ok).toBe(false);
+    if (!missingProviders.ok) {
+      expect(missingProviders.diagnostics.map((d) => d.code)).toContain('CONFIG_INVALID');
     }
   });
 

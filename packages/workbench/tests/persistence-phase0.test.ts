@@ -38,7 +38,7 @@ function applyV1Only(databasePath: string): void {
 }
 
 describe('Phase 0 persistence contracts', () => {
-  it('migrates a V1 database through V4 without losing any V1 rows', async () => {
+  it('migrates a V1 database through V6 without losing any V1 rows', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'fabula-phase0-v1-'));
     try {
       const databasePath = join(dir, 'workbench.sqlite');
@@ -76,7 +76,7 @@ describe('Phase 0 persistence contracts', () => {
         .run();
       v1db.close();
 
-      // The real worker migration now upgrades the V1 database through V4.
+      // The real worker migration now upgrades the V1 database through V6.
       const db = createWorkerDatabase(databasePath);
       try {
         migrate(db);
@@ -85,7 +85,7 @@ describe('Phase 0 persistence contracts', () => {
             version: number;
           }[]
         ).map((row) => row.version);
-        expect(versions).toEqual([1, 2, 3, 4]);
+        expect(versions).toEqual([1, 2, 3, 4, 5, 6, 7]);
 
         // V1 rows survive every later migration untouched.
         const user = db.prepare('SELECT * FROM users WHERE user_id=?').get('owner-1') as
@@ -116,6 +116,7 @@ describe('Phase 0 persistence contracts', () => {
           'project_memberships',
           'capability_verifiers',
           'mcp_device_verifiers',
+          'project_operations',
         ]) {
           expect(tables).toContain(table);
         }
@@ -167,7 +168,7 @@ describe('Phase 0 persistence contracts', () => {
     }
   });
 
-  it('boots a fresh database through migrations 1–4 in order', async () => {
+  it('boots a fresh database through migrations 1–6 in order', async () => {
     const harness = createRealPersistence();
     try {
       const db = new DatabaseSync(harness.databasePath, { readOnly: true });
@@ -177,7 +178,7 @@ describe('Phase 0 persistence contracts', () => {
             version: number;
           }[]
         ).map((row) => row.version);
-        expect(versions).toEqual([1, 2, 3, 4]);
+        expect(versions).toEqual([1, 2, 3, 4, 5, 6, 7]);
         const capabilityDdl = db
           .prepare(
             "SELECT sql FROM sqlite_master WHERE type='table' AND name='capability_verifiers'",

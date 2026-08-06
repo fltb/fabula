@@ -6,6 +6,7 @@ import {
 } from '../src/host/authoring/coordinator.js';
 import type { AuthoringWorkingDocumentStore } from '../src/host/authoring/document-store.js';
 import type { AuthoringCandidateStore } from '../src/host/authoring/filesystem-observer.js';
+import { createInMemoryOperationStore } from './helpers/in-memory-operation-store.js';
 
 function assembly(
   persisted: AuthoringStateRecord | null,
@@ -25,6 +26,7 @@ function assembly(
     projectId: 'project-a',
     materializer: documents,
     documents,
+    operationStore: createInMemoryOperationStore(),
     staging: {
       ...staging,
       async put() {},

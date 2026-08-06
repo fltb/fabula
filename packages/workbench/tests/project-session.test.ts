@@ -635,6 +635,236 @@ describe('ProjectSession operation queue', () => {
   });
 });
 
+// ─── Detached (two-phase) operations ────────────────────────────────────────
+
+describe('ProjectSession detached operations', () => {
+  it('runs prepare/commit inside the lane and execute outside it without blocking authoring', async () => {
+    const fixture = createFixture({ sourceHash: 'hash-a' });
+    const { session } = fixture;
+    const events: string[] = [];
+    let releaseExecute: (() => void) | undefined;
+    const executeGate = new Promise<void>((resolve) => {
+      releaseExecute = () => resolve();
+    });
+
+    const detached = session.enqueueDetachedOperation({
+      kind: 'render',
+      capabilityId: 'cap-1',
+      scope: ['scene:edit'],
+      prepare: async () => {
+        events.push('prepare');
+        return { sourceHash: session.source?.sourceHash ?? null };
+      },
+      execute: async () => {
+        events.push('execute-start');
+        await executeGate;
+        events.push('execute-end');
+        return 'candidate';
+      },
+      commit: async () => {
+        events.push('commit');
+        return { status: 'completed', result: 'done' };
+      },
+    });
+
+    // While the render's execute is pending, the authoring lane stays free:
+    // a regular operation enqueued afterwards runs before the commit slot.
+    const authoring = session.enqueueOperation({
+      kind: 'edit',
+      capabilityId: 'cap-1',
+      scope: ['scene:edit'],
+      run: () => {
+        events.push('authoring');
+        return 'ok';
+      },
+    });
+
+    await flush();
+    expect(events).toEqual(['prepare', 'execute-start', 'authoring']);
+    await expect(authoring).resolves.toEqual({
+      status: 'completed',
+      operationId: 'operation-2',
+      result: 'ok',
+    });
+    expect(events).toEqual(['prepare', 'execute-start', 'authoring']);
+    expect(session.busy).toBe(true);
+
+    if (releaseExecute === undefined) throw new Error('execute gate is missing');
+    releaseExecute();
+    await expect(detached).resolves.toEqual({
+      status: 'completed',
+      operationId: 'operation-1',
+      result: 'done',
+    });
+    expect(events).toEqual(['prepare', 'execute-start', 'authoring', 'execute-end', 'commit']);
+    expect(session.busy).toBe(false);
+    // Prepare and commit each record their own capability-gated audit entry.
+    expect(fixture.audit.records.map((record) => record.outcome)).toEqual([
+      'completed',
+      'completed',
+      'completed',
+    ]);
+    const kinds = fixture.audit.records.map((record) => (record as { kind?: string }).kind);
+    expect(kinds).toEqual([
+      'operation.render.prepare.completed',
+      'operation.edit.completed',
+      'operation.render.commit.completed',
+    ]);
+  });
+
+  it('returns stale without promoting when the source moved between prepare and commit', async () => {
+    const fixture = createFixture({ sourceHash: 'hash-a' });
+    const { session } = fixture;
+    let releaseExecute: (() => void) | undefined;
+    const executeGate = new Promise<void>((resolve) => {
+      releaseExecute = () => resolve();
+    });
+
+    const detached = session.enqueueDetachedOperation({
+      kind: 'render',
+      capabilityId: 'cap-1',
+      scope: ['scene:edit'],
+      prepare: async () => ({ sourceHash: session.source?.sourceHash ?? null }),
+      execute: async () => {
+        await executeGate;
+        return 'candidate';
+      },
+      commit: async (_context, capture) => {
+        // The runner's identity re-check: the accepted source moved while the
+        // render executed, so the candidate is archived and never promoted.
+        if (session.source?.sourceHash !== capture.sourceHash) {
+          return { status: 'stale', reason: 'SOURCE_MOVED: candidate archived.' };
+        }
+        return { status: 'completed', result: 'promoted' };
+      },
+    });
+
+    // Adopt a newer source through the lane while the render executes.
+    const adopt = session.enqueueOperation({
+      kind: 'adopt',
+      capabilityId: 'cap-1',
+      scope: ['scene:edit'],
+      run: () => {
+        const adopted = session.adoptSourceWithinOperation(makeSnapshot('hash-b'));
+        return adopted.status;
+      },
+    });
+    await flush();
+    if (releaseExecute === undefined) throw new Error('execute gate is missing');
+    releaseExecute();
+
+    await expect(adopt).resolves.toMatchObject({
+      status: 'completed',
+      result: 'accepted',
+    });
+    expect(session.source?.sourceHash).toBe('hash-b');
+    await expect(detached).resolves.toEqual({
+      status: 'stale',
+      operationId: 'operation-1',
+      reason: 'SOURCE_MOVED: candidate archived.',
+    });
+  });
+
+  it('revokes the commit token on cancellation so a late result is never promoted', async () => {
+    const fixture = createFixture({ sourceHash: 'hash-a' });
+    const { session } = fixture;
+    const controller = new AbortController();
+    let commitCalled = false;
+
+    const pending = session.enqueueDetachedOperation({
+      kind: 'render',
+      capabilityId: 'cap-1',
+      scope: ['scene:edit'],
+      signal: controller.signal,
+      prepare: async () => ({ sourceHash: session.source?.sourceHash ?? null }),
+      execute: async () => 'late-candidate',
+      commit: async () => {
+        commitCalled = true;
+        return { status: 'completed', result: 'promoted' };
+      },
+    });
+    // Abort before the commit slot runs: the execute result may still arrive
+    // late, but the commit token is already revoked.
+    controller.abort();
+
+    await expect(pending).resolves.toEqual({
+      status: 'cancelled',
+      operationId: 'operation-1',
+    });
+    expect(commitCalled).toBe(false);
+    expect(fixture.audit.records.map((record) => record.outcome)).toEqual(['completed']);
+  });
+
+  it('re-gates the commit phase when the grant is revoked mid-render', async () => {
+    // The first gate call (prepare) is allowed; the second (commit) is revoked.
+    let checks = 0;
+    const fixture = createFixture({
+      sourceHash: 'hash-a',
+      capabilities: {
+        checkGrant: async () => {
+          checks += 1;
+          return checks === 1
+            ? allowedVerdict('user-1', 'project-a', ['scene:edit'])
+            : { allowed: false, reason: 'REVOKED' };
+        },
+      },
+    });
+    const { session } = fixture;
+    const events: string[] = [];
+
+    const result = await session.enqueueDetachedOperation({
+      kind: 'render',
+      capabilityId: 'cap-a',
+      scope: ['scene:edit'],
+      prepare: async () => {
+        events.push('prepare');
+        return { sourceHash: session.source?.sourceHash ?? null };
+      },
+      execute: async () => {
+        events.push('execute');
+        return 'candidate';
+      },
+      commit: async () => {
+        events.push('commit');
+        return { status: 'completed', result: 'promoted' };
+      },
+    });
+
+    // The commit phase runs its own fresh capability gate (cap-a is denied
+    // on the second check) so the candidate is never promoted.
+    expect(result).toEqual({ status: 'denied', operationId: 'operation-1', reason: 'REVOKED' });
+    expect(events).toEqual(['prepare', 'execute']);
+  });
+
+  it('reports a failing prepare/execute as failed without running commit', async () => {
+    const fixture = createFixture({ sourceHash: 'hash-a' });
+    const { session } = fixture;
+    let commitCalled = false;
+
+    const result = await session.enqueueDetachedOperation({
+      kind: 'render',
+      capabilityId: 'cap-1',
+      scope: ['scene:edit'],
+      prepare: async () => {
+        throw Object.assign(new Error('boom'), { code: 'PROVIDER_REQUIRED' });
+      },
+      execute: async () => 'candidate',
+      commit: async () => {
+        commitCalled = true;
+        return { status: 'completed', result: 'promoted' };
+      },
+    });
+
+    expect(result).toEqual({
+      status: 'failed',
+      operationId: 'operation-1',
+      errorCode: 'PROVIDER_REQUIRED',
+      message: 'boom',
+    });
+    expect(commitCalled).toBe(false);
+  });
+});
+
 // ─── Presence immutability ───────────────────────────────────────────────────
 
 describe('ProjectSession presence', () => {

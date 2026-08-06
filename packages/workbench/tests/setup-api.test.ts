@@ -286,13 +286,15 @@ describe('setup wizard flow', () => {
     const active = await configuration.readActive();
     expect(active).not.toBeNull();
     expect(active?.configuration.projects[0]?.projectId).toBe('demo');
-    expect(active?.configuration.provider).toEqual({
+    expect(active?.configuration.providers.default).toEqual({
       kind: 'ai-sdk',
       baseUrl: 'https://api.example.com',
       model: 'model-x',
     });
-    expect(active?.configuration.version).toBe(2);
+    expect(active?.configuration.version).toBe(3);
     expect(active?.configuration.projects[0]?.revisionMirror).toEqual({ mode: 'disabled' });
+    expect(active?.configuration.projects[0]?.providerProfile).toBe('default');
+    expect(active?.configuration.projects[0]?.trustedPlugins).toEqual([]);
     expect(active?.configuration.referenceLimits).toEqual(DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2);
 
     // A later finish is refused: the Host is configured now.

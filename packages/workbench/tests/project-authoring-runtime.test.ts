@@ -1,10 +1,16 @@
 import { cpSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PluginExtensionSchemaRegistrar } from '@novalistically/core';
 import { buildSourceSnapshot, computeSourceDocumentHash } from '@novalistically/core/source';
 import { MockProvider } from '@novalistically/core/testing';
-import { createFileCoreRuntimeServices, FileProjectSourceLoader } from '@novalistically/node-host';
+import {
+  createFileCoreRuntimeServices,
+  FileProjectSourceLoader,
+  FileProjectStatusReporter,
+} from '@novalistically/node-host';
 import { describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 import { AgentCapabilityService, createCapabilityPersistence } from '../src/host/agent/index.js';
@@ -118,9 +124,13 @@ describe('project authoring runtime', () => {
           capabilityScopes: ['mcp:submit'],
         });
 
+        // The durable record's sourceHash is the immutable accepted-source
+        // identity the operation was CAS-bound to at creation; the newly
+        // accepted hash flows via the submit-receipt event and the authoring
+        // state, not through the derived receipt.
         expect(receipt).toMatchObject({
           status: 'completed',
-          acceptedSourceHash: session.source?.sourceHash,
+          acceptedSourceHash: state.acceptedSourceHash,
         });
         expect(receipt.revisionId).toMatch(/^[0-9a-f-]{36}$/);
         expect(session.source?.sourceHash).not.toBe(source.sourceHash);
@@ -213,6 +223,84 @@ describe('project authoring runtime', () => {
     }
   });
 
+  it('reports an unknown extension namespace as a source error through validateWorking', async () => {
+    const root = copyFixture();
+    const persistence = createRealPersistence();
+    try {
+      const stagingRoot = mkdtempSync(join(tmpdir(), 'wb-authoring-extensions-'));
+      const capabilities = new AgentCapabilityService({
+        persistence: createCapabilityPersistence(persistence.client),
+      });
+      const source = new FileProjectSourceLoader().load(root);
+      const session = createProjectSession({
+        projectId: 'fixture',
+        runtime: createProjectCoreRuntime({
+          projectId: 'fixture',
+          services: createFileCoreRuntimeServices(root, { provider: new MockProvider() }),
+        }),
+        capabilities,
+        audit: { record: async () => undefined },
+        initialSource: source,
+      });
+      const core = createYjsWorkingDocumentCore({
+        persistence: createYjsPersistencePort(persistence.client),
+      });
+      // No enabled plugins (plan 7.5): every extension namespace is unknown.
+      const runtime = await createProjectAuthoringRuntime({
+        projectId: 'fixture',
+        projectRoot: root,
+        hostStagingRoot: stagingRoot,
+        session,
+        capabilities,
+        persistence: persistence.client,
+        yjsCore: core,
+        events: { publish: () => undefined },
+        extensionRegistrar: new PluginExtensionSchemaRegistrar([]),
+      });
+      try {
+        const eventPath = 'chapters/chapter_01/E0_arrival.yaml';
+        const before = await runtime.documents.load({
+          projectId: 'fixture',
+          documentId: eventPath,
+        });
+        if (before === null) throw new Error('accepted event document was not hydrated into Yjs');
+        const working = new Y.Doc();
+        Y.applyUpdate(working, before.update);
+        const text = working.getText('prose');
+        text.insert(text.length, '\nextensions:\n  unknown-plugin:\n    enabled: true\n');
+        const applied = await runtime.documents.applyScopedUpdate({
+          projectId: 'fixture',
+          documentId: eventPath,
+          expectedBaseVector: before.stateVector,
+          expectedHumanPresenceGeneration: session.presenceGeneration,
+          update: Y.encodeStateAsUpdate(working),
+        });
+        expect(applied.ok).toBe(true);
+        await vi.waitFor(() => {
+          expect(runtime.coordinator.getState().phase).toBe('working-dirty');
+        });
+        const digest = await runtime.documents.workspaceDigest();
+        if (digest === null) throw new Error('no workspace digest');
+        const result = await runtime.coordinator.validateWorking({
+          expectedWorkspaceDigest: digest.digest,
+          expectedAcceptedSourceHash: runtime.coordinator.getState().acceptedSourceHash,
+        });
+        expect(result.passed).toBe(false);
+        expect(
+          result.diagnostics.some(
+            (diagnostic) =>
+              diagnostic.code === 'SOURCE_EXTENSION_NAMESPACE_UNKNOWN' &&
+              diagnostic.severity === 'error',
+          ),
+        ).toBe(true);
+      } finally {
+        await runtime.dispose();
+      }
+    } finally {
+      await persistence.dispose();
+    }
+  });
+
   it('removes a deleted accepted document from the catalog without overwriting working state', async () => {
     const persistence = createRealPersistence();
     try {
@@ -263,6 +351,93 @@ describe('project authoring runtime', () => {
       expect(await documents.materializeDocument('nova.yaml')).toContain('# local working edit');
       documents.dispose();
       await core.close();
+    } finally {
+      await persistence.dispose();
+    }
+  });
+
+  it('refreshes the derived PROJECT_STATUS.md after an accepted submit without rolling back', async () => {
+    const root = copyFixture();
+    const persistence = createRealPersistence();
+    try {
+      const stagingRoot = mkdtempSync(join(tmpdir(), 'wb-authoring-status-'));
+      const capabilities = new AgentCapabilityService({
+        persistence: createCapabilityPersistence(persistence.client),
+      });
+      const source = new FileProjectSourceLoader().load(root);
+      const session = createProjectSession({
+        projectId: 'fixture',
+        runtime: createProjectCoreRuntime({
+          projectId: 'fixture',
+          services: createFileCoreRuntimeServices(root, { provider: new MockProvider() }),
+        }),
+        capabilities,
+        audit: { record: async () => undefined },
+        initialSource: source,
+      });
+      const core = createYjsWorkingDocumentCore({
+        persistence: createYjsPersistencePort(persistence.client),
+      });
+      const reporter = new FileProjectStatusReporter(root);
+      const runtime = await createProjectAuthoringRuntime({
+        projectId: 'fixture',
+        projectRoot: root,
+        hostStagingRoot: stagingRoot,
+        session,
+        capabilities,
+        persistence: persistence.client,
+        yjsCore: core,
+        events: { publish: () => undefined },
+        statusReporter: reporter,
+      });
+      try {
+        const original = readFileSync(join(root, 'nova.yaml'), 'utf8');
+        const revised = original.replace(/^title:.*$/m, 'title: "Status Refreshed Fixture"');
+        writeFileSync(join(root, 'nova.yaml'), revised);
+        await runtime.observer.notify({ hintPaths: ['nova.yaml'] });
+        await vi.waitFor(() => {
+          expect(runtime.coordinator.getState().phase).toBe('external-pending');
+        });
+        const state = runtime.coordinator.getState();
+        const candidate = state.externalCandidate;
+        if (candidate === null) throw new Error('external candidate was not staged');
+        const grant = await capabilities.issue({
+          userId: 'owner',
+          projectId: 'fixture',
+          scopes: ['mcp:submit'],
+        });
+        const receipt = await runtime.coordinator.reconcileExternal({
+          choice: 'accept-external',
+          candidateHash: candidate.candidateHash,
+          expectedAcceptedSourceHash: state.acceptedSourceHash,
+          actorId: 'owner',
+          capabilityId: grant.grant.capabilityId,
+          capabilityScopes: ['mcp:submit'],
+        });
+        expect(receipt).toMatchObject({ status: 'completed' });
+        const acceptedSourceHash = session.source?.sourceHash;
+        if (acceptedSourceHash === undefined)
+          throw new Error('session has no accepted source after submit');
+
+        // The derived status file refresh is best-effort and asynchronous.
+        await vi.waitFor(async () => {
+          const markdown = await readFile(join(root, 'PROJECT_STATUS.md'), 'utf8');
+          expect(markdown).toContain(acceptedSourceHash);
+        });
+        expect(reporter.degraded).toBe(false);
+        const markdown = await readFile(join(root, 'PROJECT_STATUS.md'), 'utf8');
+        expect(markdown).toContain('# Project Status');
+        expect(markdown).toContain('fixture');
+        expect(markdown).toContain(receipt.revisionId ?? '');
+        expect(markdown).toContain('## Next actions');
+
+        // The status write never rolls back the accepted native revision.
+        await expect(runtime.revision.loadAccepted('fixture')).resolves.toMatchObject({
+          sourceHash: acceptedSourceHash,
+        });
+      } finally {
+        await runtime.dispose();
+      }
     } finally {
       await persistence.dispose();
     }

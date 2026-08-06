@@ -70,6 +70,24 @@ describe('createBrowserReadClient', () => {
     expect(requested).toBe('/api/v1/projects/proj%2Fa/source');
   });
 
+  it('reads Host-derived capabilities from the project capabilities route', async () => {
+    let requested = '';
+    const capabilities = {
+      version: 1 as const,
+      projectId: 'proj-a',
+      features: ['project-home', 'source-studio', 'scene-canvas', 'graph-route'],
+    };
+    const client = createBrowserReadClient({
+      fetch: async (input) => {
+        requested = String(input);
+        return json(capabilities);
+      },
+    });
+
+    await expect(client.loadCapabilities('proj/a')).resolves.toEqual(capabilities);
+    expect(requested).toBe('/api/v1/projects/proj%2Fa/capabilities');
+  });
+
   it('encodes only documented pagination for reference library reads', async () => {
     let requested = '';
     const client = createBrowserReadClient({

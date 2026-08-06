@@ -1,8 +1,9 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AccessDevicesPage } from '../../src/client/admin/AccessDevicesPage';
 import { AdminShell } from '../../src/client/admin/AdminShell';
+import { AdvancedPage } from '../../src/client/admin/AdvancedPage';
 import {
   type AdminApiError,
   type AdminFetch,
@@ -66,8 +67,84 @@ const inviteOverview: WorkbenchAdminOverviewV1 = {
   },
 };
 
+const advancedResponse = {
+  version: 1,
+  providers: [
+    {
+      profileId: 'default',
+      kind: 'ai-sdk',
+      configured: false,
+      endpoint: 'https://api.****/v1',
+      model: 'de****t',
+      lastValidation: 'unvalidated',
+      lastValidatedAt: null,
+    },
+    {
+      profileId: 'fast',
+      kind: 'ai-sdk',
+      configured: true,
+      endpoint: 'https://fa****/v1',
+      model: 'fa****l',
+      lastValidation: 'valid',
+      lastValidatedAt: null,
+    },
+  ],
+  projects: [
+    { projectId: 'p-1', displayName: 'One', providerProfile: 'default', trustedPlugins: [] },
+  ],
+  operationLimits: {
+    maxQueuedPerProject: 8,
+    maxConcurrentRendersPerProject: 1,
+    maxConcurrentRendersPerHost: 2,
+  },
+  agent: { enabled: false, maxTurns: 8, maxToolCalls: 24 },
+  generatedAt: '2026-08-03T00:00:00.000Z',
+};
+
+const appliedReceipt = {
+  status: 'applied',
+  activeRevision: 'a',
+  candidateRevision: 'b',
+  changedFields: [],
+  diagnostics: [],
+};
+
+const discoveredResponse = {
+  version: 1,
+  projectId: 'p-1',
+  plugins: [
+    {
+      name: 'arc',
+      version: '1.0.0',
+      manifestHash: 'manifest-hash-1',
+      moduleHash: 'abc123',
+      hookNames: ['transform'],
+    },
+    {
+      name: 'novel-prose',
+      version: '2.1.0',
+      manifestHash: 'manifest-hash-2',
+      moduleHash: 'def456',
+      hookNames: ['observe'],
+    },
+  ],
+};
+
 const json = (value: unknown, status = 200): Response =>
   new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
+
+class ResizeObserverStub {
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+}
+
+beforeAll(() => {
+  // The Kobalte Tabs indicator (owner AdminShell tabs) needs ResizeObserver.
+  if (typeof globalThis.ResizeObserver === 'undefined') {
+    (globalThis as { ResizeObserver?: unknown }).ResizeObserver = ResizeObserverStub;
+  }
+});
 
 afterEach(() => {
   cleanup();
@@ -199,23 +276,307 @@ describe('owner admin surfaces', () => {
     expect(screen.queryByText('active-revision')).not.toBeInTheDocument();
   });
 
-  it('clears a provider secret after a successful one-way credential write', async () => {
+  it('clears a provider profile secret after a successful one-way credential write', async () => {
     const user = userEvent.setup();
-    let requestBody = '';
-    const fetch: AdminFetch = async (_input, init) => {
-      requestBody = String(init?.body ?? '');
-      return json({ version: 1, providerId: 'ai-sdk', configured: true });
+    const bodies: string[] = [];
+    const singleProfile = {
+      ...advancedResponse,
+      providers: advancedResponse.providers.slice(0, 1),
+    };
+    const fetch: AdminFetch = async (input, init) => {
+      if (String(input).endsWith('/config/advanced')) return json(singleProfile);
+      bodies.push(String(init?.body ?? ''));
+      return json({ version: 1, profileId: 'default', configured: true });
     };
     const client = createAdminClient({ fetch, initialAuthorization: 'owner' });
     render(() => <ProviderPage overview={overview} client={client} authorization="owner" />);
 
-    const input = screen.getByLabelText('Provider API key');
+    const input = await screen.findByLabelText('Provider API key for default');
     await user.type(input, 'secret-value');
     await user.click(screen.getByRole('button', { name: 'Store credential' }));
 
-    expect(requestBody).toContain('secret-value');
-    expect(input).toHaveValue('');
+    expect(bodies.some((body) => body.includes('secret-value'))).toBe(true);
+    await waitFor(() => expect(input).toHaveValue(''));
     expect(window.localStorage.getItem('novalistically.workbench.preferences')).toBeNull();
-    expect(screen.getByText(/not displayed or retained/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/not displayed or retained by this browser/i),
+    ).toBeInTheDocument();
+  });
+
+  it('applies a project provider profile binding through the advanced CAS', async () => {
+    const user = userEvent.setup();
+    const calls: Array<{ input: RequestInfo | URL; init?: RequestInit }> = [];
+    const fetch: AdminFetch = async (input, init) => {
+      calls.push({ input, init });
+      if (String(input).endsWith('/config/advanced') && (init?.method ?? 'GET') === 'GET') {
+        return json(advancedResponse);
+      }
+      return json({ version: 1, receipt: appliedReceipt });
+    };
+    const client = createAdminClient({ fetch, initialAuthorization: 'owner' });
+    render(() => <ProviderPage overview={overview} client={client} authorization="owner" />);
+
+    const select = await screen.findByLabelText(/Provider profile/);
+    await user.selectOptions(select, 'fast');
+
+    const request = calls.find(
+      (call) =>
+        String(call.input) === '/api/v1/admin/config/advanced' && call.init?.method === 'PUT',
+    );
+    expect(JSON.parse(String(request?.init?.body ?? ''))).toEqual({
+      version: 1,
+      projects: [{ projectId: 'p-1', providerProfile: 'fast' }],
+    });
+  });
+});
+
+describe('owner advanced configuration surface', () => {
+  it('renders operation limits, agent settings, and the plugin allowlist from the read view', async () => {
+    const fetch: AdminFetch = async (input) => {
+      if (String(input).includes('/plugins/discovered/')) return json(discoveredResponse);
+      return json(advancedResponse);
+    };
+    const client = createAdminClient({ fetch, initialAuthorization: 'owner' });
+    render(() => <AdvancedPage client={client} authorization="owner" />);
+
+    await screen.findByTestId('admin-advanced-page');
+    await waitFor(() =>
+      expect(screen.getByLabelText('Max queued operations per project')).toHaveValue(8),
+    );
+    expect(screen.getByLabelText('Max concurrent renders per host')).toHaveValue(2);
+    expect(screen.getByLabelText('Enable the workbench agent')).not.toBeChecked();
+    expect(screen.getByLabelText('Max turns')).toHaveValue(8);
+    expect(screen.getByLabelText('Max tool calls')).toHaveValue(24);
+    expect(await screen.findByText('One')).toBeInTheDocument();
+  });
+
+  it('applies operation limit and agent changes through the CAS', async () => {
+    const user = userEvent.setup();
+    const calls: Array<{ input: RequestInfo | URL; init?: RequestInit }> = [];
+    const fetch: AdminFetch = async (input, init) => {
+      calls.push({ input, init });
+      if (String(input).endsWith('/config/advanced') && (init?.method ?? 'GET') === 'GET') {
+        return json(advancedResponse);
+      }
+      return json({ version: 1, receipt: appliedReceipt });
+    };
+    const client = createAdminClient({ fetch, initialAuthorization: 'owner' });
+    render(() => <AdvancedPage client={client} authorization="owner" />);
+
+    const queued = await screen.findByLabelText('Max queued operations per project');
+    await waitFor(() => expect(queued).toHaveValue(8));
+    await user.clear(queued);
+    await user.type(queued, '16');
+    await user.click(screen.getByRole('button', { name: 'Save operation limits' }));
+    await screen.findByText(/Operation limits saved/i);
+
+    await waitFor(() => expect(screen.getByLabelText('Max turns')).toHaveValue(8));
+    await user.click(screen.getByRole('button', { name: 'Save agent settings' }));
+
+    const requests = calls.filter(
+      (call) =>
+        String(call.input) === '/api/v1/admin/config/advanced' && call.init?.method === 'PUT',
+    );
+    expect(requests.length).toBeGreaterThanOrEqual(2);
+    const bodies = requests.map((call) => JSON.parse(String(call.init?.body ?? '')));
+    expect(bodies).toContainEqual({
+      version: 1,
+      operationLimits: { maxQueuedPerProject: 16, maxConcurrentRendersPerHost: 2 },
+    });
+    expect(bodies).toContainEqual({
+      version: 1,
+      agent: { enabled: false, maxTurns: 8, maxToolCalls: 24 },
+    });
+  });
+
+  it('previews agent and limits changes without applying them', async () => {
+    const user = userEvent.setup();
+    const previewBodies: string[] = [];
+    let applied = false;
+    const fetch: AdminFetch = async (input, init) => {
+      if (String(input).endsWith('/config/advanced')) return json(advancedResponse);
+      if (String(input).includes('/plugins/discovered/')) return json(discoveredResponse);
+      if (String(input).endsWith('/config/preview')) {
+        previewBodies.push(String(init?.body ?? ''));
+        return json({
+          version: 1,
+          valid: true,
+          diagnostics: [],
+          changedFields: ['agent.enabled'],
+          restartRequired: true,
+          candidateRevision: 'candidate-revision',
+        });
+      }
+      applied = true;
+      return json({ version: 1, receipt: appliedReceipt });
+    };
+    const client = createAdminClient({ fetch, initialAuthorization: 'owner' });
+    render(() => <AdvancedPage client={client} authorization="owner" />);
+
+    await screen.findByTestId('admin-advanced-page');
+    await user.click(screen.getByRole('button', { name: 'Preview' }));
+
+    await screen.findByTestId('advanced-config-preview');
+    expect(screen.getByText('valid')).toBeInTheDocument();
+    expect(screen.getByText('agent.enabled')).toBeInTheDocument();
+    expect(screen.getByText('yes')).toBeInTheDocument();
+    expect(applied).toBe(false);
+    expect(JSON.parse(previewBodies[0] ?? '{}')).toEqual({
+      version: 1,
+      operationLimits: { maxQueuedPerProject: 8, maxConcurrentRendersPerHost: 2 },
+      agent: { enabled: false, maxTurns: 8, maxToolCalls: 24 },
+    });
+  });
+
+  it('adds a trusted plugin to the selected project allowlist from the discovered set only', async () => {
+    const user = userEvent.setup();
+    const calls: Array<{ input: RequestInfo | URL; init?: RequestInit }> = [];
+    const withPlugin = {
+      ...advancedResponse,
+      projects: [
+        {
+          ...advancedResponse.projects[0],
+          trustedPlugins: [
+            { name: 'arc', version: '1.0.0', moduleHash: 'abc123', required: false },
+          ],
+        },
+      ],
+    };
+    let trusted = false;
+    const fetch: AdminFetch = async (input, init) => {
+      calls.push({ input, init });
+      if (String(input).endsWith('/config/advanced') && (init?.method ?? 'GET') === 'GET') {
+        return json(trusted ? withPlugin : advancedResponse);
+      }
+      if (String(input).includes('/plugins/discovered/')) return json(discoveredResponse);
+      trusted = true;
+      return json({ version: 1, receipt: appliedReceipt });
+    };
+    const client = createAdminClient({ fetch, initialAuthorization: 'owner' });
+    render(() => <AdvancedPage client={client} authorization="owner" />);
+
+    await screen.findByTestId('admin-advanced-page');
+    await screen.findByTestId('discovered-plugins-table');
+    await user.click(screen.getByRole('button', { name: 'Trust plugin arc' }));
+    // Wait for the apply + refresh cycle before asserting the trusted state.
+    await screen.findByText('Trusted');
+
+    const request = calls.find(
+      (call) =>
+        String(call.input) === '/api/v1/admin/config/advanced' && call.init?.method === 'PUT',
+    );
+    expect(JSON.parse(String(request?.init?.body ?? ''))).toEqual({
+      version: 1,
+      projects: [
+        {
+          projectId: 'p-1',
+          trustedPlugins: [
+            { name: 'arc', version: '1.0.0', moduleHash: 'abc123', required: false },
+          ],
+        },
+      ],
+    });
+    // The trusted entry now renders as already trusted in the discovered table.
+    expect(screen.getByRole('button', { name: 'Trust plugin arc' })).toBeDisabled();
+    expect(screen.getByText('Trusted')).toBeInTheDocument();
+    // The refreshed allowlist shows the entry with its applied required status.
+    expect(screen.getByRole('checkbox', { name: 'Require plugin arc' })).not.toBeChecked();
+  });
+
+  it('offers only Host-discovered plugins and never exposes path or URL inputs', async () => {
+    const fetch: AdminFetch = async (input) => {
+      if (String(input).endsWith('/config/advanced')) return json(advancedResponse);
+      if (String(input).includes('/plugins/discovered/')) return json(discoveredResponse);
+      return json({ version: 1 });
+    };
+    const client = createAdminClient({ fetch, initialAuthorization: 'owner' });
+    render(() => <AdvancedPage client={client} authorization="owner" />);
+
+    await screen.findByTestId('discovered-plugins-table');
+    expect(screen.getByText('arc')).toBeInTheDocument();
+    expect(screen.getByText('novel-prose')).toBeInTheDocument();
+    expect(screen.getByText('transform')).toBeInTheDocument();
+    expect(screen.getByText('observe')).toBeInTheDocument();
+    // No free-text identity fields exist: the UI cannot submit a path or URL.
+    expect(screen.queryByLabelText('Plugin name')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Plugin version')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Module hash')).not.toBeInTheDocument();
+  });
+
+  it('toggles the required flag and surfaces the restart-required receipt', async () => {
+    const user = userEvent.setup();
+    const calls: Array<{ input: RequestInfo | URL; init?: RequestInit }> = [];
+    const restartReceipt = {
+      ...appliedReceipt,
+      status: 'restart-required',
+      changedFields: ['projects.p-1.trustedPlugins'],
+    };
+    const withPlugin = {
+      ...advancedResponse,
+      projects: [
+        {
+          ...advancedResponse.projects[0],
+          trustedPlugins: [
+            { name: 'arc', version: '1.0.0', moduleHash: 'abc123', required: false },
+          ],
+        },
+      ],
+    };
+    const fetch: AdminFetch = async (input, init) => {
+      calls.push({ input, init });
+      if (String(input).endsWith('/config/advanced') && (init?.method ?? 'GET') === 'GET') {
+        return json(withPlugin);
+      }
+      if (String(input).includes('/plugins/discovered/')) return json(discoveredResponse);
+      return json({ version: 1, receipt: restartReceipt });
+    };
+    const client = createAdminClient({ fetch, initialAuthorization: 'owner' });
+    render(() => <AdvancedPage client={client} authorization="owner" />);
+
+    await screen.findByTestId('admin-advanced-page');
+    await screen.findByTestId('trusted-plugins-table');
+    const toggle = await screen.findByRole('checkbox', { name: 'Require plugin arc' });
+    expect(toggle).not.toBeChecked();
+    await user.click(toggle);
+
+    await screen.findByTestId('advanced-restart-receipt');
+    expect(screen.getByText('Saved — restart required')).toBeInTheDocument();
+    expect(screen.getByText('projects.p-1.trustedPlugins')).toBeInTheDocument();
+    const request = calls.find(
+      (call) =>
+        String(call.input) === '/api/v1/admin/config/advanced' && call.init?.method === 'PUT',
+    );
+    expect(JSON.parse(String(request?.init?.body ?? ''))).toEqual({
+      version: 1,
+      projects: [
+        {
+          projectId: 'p-1',
+          trustedPlugins: [{ name: 'arc', version: '1.0.0', moduleHash: 'abc123', required: true }],
+        },
+      ],
+    });
+  });
+
+  it('mounts the advanced section for an owner session', async () => {
+    const user = userEvent.setup();
+    const fetch: AdminFetch = async (input) => {
+      if (String(input) === '/api/v1/admin/overview') return json(overview);
+      if (String(input) === '/api/v1/admin/operations') {
+        return json({
+          version: 1,
+          configurationOperations: [],
+          audit: [],
+          generatedAt: '2026-08-03T00:00:00.000Z',
+        });
+      }
+      if (String(input).endsWith('/config/advanced')) return json(advancedResponse);
+      return json({ version: 1 });
+    };
+    const client = createAdminClient({ fetch, initialAuthorization: 'owner' });
+    render(() => <AdminShell client={client} authorization="owner" />);
+
+    await screen.findByRole('heading', { name: 'Workbench administration' });
+    await user.click(screen.getByRole('tab', { name: /Advanced/i }));
+    expect(await screen.findByTestId('admin-advanced-page')).toBeInTheDocument();
   });
 });

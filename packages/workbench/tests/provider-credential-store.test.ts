@@ -109,6 +109,30 @@ describe('provider credential store', () => {
     await store.remove('deepseek'); // removing a missing credential is idempotent
   });
 
+  it('stores profile-scoped AI-SDK credentials under ai-sdk:<profile> keys', async () => {
+    const store = createProviderCredentialStore({ configDir: newTempConfigDir() });
+    await store.set('ai-sdk:default', 'sk-default-profile');
+    await store.set('ai-sdk:prod-eu', 'sk-prod-eu');
+    await expect(store.get('ai-sdk:default')).resolves.toBe('sk-default-profile');
+    await expect(store.get('ai-sdk:prod-eu')).resolves.toBe('sk-prod-eu');
+    await expect(store.get('openai')).resolves.toBeNull();
+    await store.remove('ai-sdk:prod-eu');
+    await expect(store.get('ai-sdk:prod-eu')).resolves.toBeNull();
+    await expect(store.get('ai-sdk:default')).resolves.toBe('sk-default-profile');
+  });
+
+  it('falls back to the legacy bare ai-sdk key when reading ai-sdk:default', async () => {
+    const configDir = newTempConfigDir();
+    const legacy = new XdgCredentialFileStore({ configDir });
+    await legacy.set('ai-sdk', 'sk-legacy-bare');
+    const store = createProviderCredentialStore({ configDir });
+    await expect(store.get('ai-sdk:default')).resolves.toBe('sk-legacy-bare');
+    // A profile-scoped write supersedes the legacy key without losing unrelated entries.
+    await store.set('ai-sdk:default', 'sk-canonical');
+    await expect(store.get('ai-sdk:default')).resolves.toBe('sk-canonical');
+    await expect(store.get('ai-sdk')).resolves.toBe('sk-legacy-bare');
+  });
+
   it('keeps credentials across a host restart (new store instance, same directory)', async () => {
     const configDir = newTempConfigDir();
     const first = createProviderCredentialStore({ configDir });
@@ -225,11 +249,24 @@ describe('provider id validation', () => {
       'a',
       'x'.repeat(63),
       'my-provider-2',
+      'ai-sdk',
+      'ai-sdk:default',
+      'ai-sdk:prod-eu-1',
     ]) {
       expect(isValidProviderId(good)).toBe(true);
     }
     expect(PROVIDER_ID_PATTERN.test('openai')).toBe(true);
+    expect(PROVIDER_ID_PATTERN.test('ai-sdk:default')).toBe(true);
     for (const bad of INVALID_IDS) {
+      expect(isValidProviderId(bad)).toBe(false);
+    }
+    for (const bad of [
+      'ai-sdk:',
+      'ai-sdk:123abc',
+      'ai-sdk:open_ai',
+      'openai:foo',
+      'AI-SDK:default',
+    ]) {
       expect(isValidProviderId(bad)).toBe(false);
     }
   });

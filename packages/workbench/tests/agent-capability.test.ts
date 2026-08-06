@@ -303,6 +303,149 @@ describe('AgentCapabilityService over the real persistence worker', () => {
     });
   });
 
+  it('persists a server-derived grant row that checkGrant consumes and upserts idempotently', async () => {
+    const persisted = await service.persistGrant({
+      capabilityId: 'device:device-1',
+      userId: 'u1',
+      projectId: 'p1',
+      scope: ['edit:prose', 'render:novel'],
+      version: 1,
+      expiresAt: new Date(now + 60_000).toISOString(),
+    });
+    expect(persisted).toEqual({
+      capabilityId: 'device:device-1',
+      userId: 'u1',
+      projectId: 'p1',
+      scope: ['edit:prose', 'render:novel'],
+      version: 1,
+      expiresAt: new Date(now + 60_000).toISOString(),
+    });
+    // The row is durable and the per-effect gate consumes exactly what was
+    // persisted — same capabilityId, version, expiry, project, and scopes.
+    const row = await harness.client.request('loadCapability', { capabilityId: 'device:device-1' });
+    expect(row).toEqual(persisted);
+    await expect(
+      service.checkGrant({
+        capabilityId: 'device:device-1',
+        projectId: 'p1',
+        scopes: ['render:novel'],
+        expectedVersion: 1,
+      }),
+    ).resolves.toEqual({
+      allowed: true,
+      grant: {
+        capabilityId: 'device:device-1',
+        userId: 'u1',
+        projectId: 'p1',
+        scopes: ['edit:prose', 'render:novel'],
+        version: 1,
+        expiresAt: new Date(now + 60_000).toISOString(),
+      },
+    });
+
+    // The upsert is idempotent: a re-pair with a fresh scope set and expiry
+    // overwrites the previous row, and the gate immediately honors the new
+    // values (and stops honoring the old ones).
+    const rePersisted = await service.persistGrant({
+      capabilityId: 'device:device-1',
+      userId: 'u1',
+      projectId: 'p1',
+      scope: ['edit:prose'],
+      version: 1,
+      expiresAt: new Date(now + 120_000).toISOString(),
+    });
+    await expect(
+      service.checkGrant({
+        capabilityId: 'device:device-1',
+        projectId: 'p1',
+        scopes: ['edit:prose'],
+        expectedVersion: 1,
+      }),
+    ).resolves.toEqual({
+      allowed: true,
+      grant: {
+        capabilityId: 'device:device-1',
+        userId: 'u1',
+        projectId: 'p1',
+        scopes: ['edit:prose'],
+        version: 1,
+        expiresAt: new Date(now + 120_000).toISOString(),
+      },
+    });
+    await expect(
+      service.checkGrant({
+        capabilityId: 'device:device-1',
+        projectId: 'p1',
+        scopes: ['render:novel'],
+        expectedVersion: 1,
+      }),
+    ).resolves.toEqual({ allowed: false, reason: 'SCOPE_MISMATCH' });
+    await expect(
+      service.checkGrant({
+        capabilityId: 'device:device-1',
+        projectId: 'p1',
+        scopes: ['edit:prose'],
+        expectedVersion: 2,
+      }),
+    ).resolves.toEqual({ allowed: false, reason: 'VERSION_MISMATCH' });
+  });
+
+  it('persistGrant rejects unknown fields and malformed rows before any side effect', async () => {
+    const grant = (extra: Record<string, unknown>): CapabilityState =>
+      ({
+        capabilityId: 'device:device-1',
+        userId: 'u1',
+        projectId: 'p1',
+        scope: ['edit:prose'],
+        version: 1,
+        expiresAt: new Date(now + 60_000).toISOString(),
+        ...extra,
+      }) as CapabilityState;
+    // Caller-chosen actor/permission fields and the plural input spelling are
+    // rejected exactly like issue/validate/checkGrant.
+    await expect(service.persistGrant(grant({ actorId: 'u2' }))).rejects.toBeInstanceOf(
+      CapabilityInputError,
+    );
+    await expect(service.persistGrant(grant({ permissions: ['admin'] }))).rejects.toBeInstanceOf(
+      CapabilityInputError,
+    );
+    await expect(service.persistGrant(grant({ scopes: ['edit:prose'] }))).rejects.toBeInstanceOf(
+      CapabilityInputError,
+    );
+    // Malformed rows are rejected before any row is written.
+    await expect(service.persistGrant(grant({ capabilityId: '' }))).rejects.toBeInstanceOf(
+      CapabilityInputError,
+    );
+    await expect(service.persistGrant(grant({ userId: '' }))).rejects.toBeInstanceOf(
+      CapabilityInputError,
+    );
+    await expect(service.persistGrant(grant({ projectId: '' }))).rejects.toBeInstanceOf(
+      CapabilityInputError,
+    );
+    await expect(service.persistGrant(grant({ scope: [] }))).rejects.toBeInstanceOf(
+      CapabilityInputError,
+    );
+    await expect(service.persistGrant(grant({ scope: [''] }))).rejects.toBeInstanceOf(
+      CapabilityInputError,
+    );
+    await expect(service.persistGrant(grant({ version: 0 }))).rejects.toBeInstanceOf(
+      CapabilityInputError,
+    );
+    await expect(service.persistGrant(grant({ version: 1.5 }))).rejects.toBeInstanceOf(
+      CapabilityInputError,
+    );
+    await expect(service.persistGrant(grant({ expiresAt: 'not-a-date' }))).rejects.toBeInstanceOf(
+      CapabilityInputError,
+    );
+    await expect(service.persistGrant(grant({ revokedAt: 7 }))).rejects.toBeInstanceOf(
+      CapabilityInputError,
+    );
+    // None of the rejected attempts left a row behind.
+    await expect(
+      harness.client.request('loadCapability', { capabilityId: 'device:device-1' }),
+    ).resolves.toBeNull();
+  });
+
   it('keeps outstanding tokens valid across a Host restart through the durable hash-only verifier store', async () => {
     const { token, grant } = await service.issue({
       userId: 'u1',

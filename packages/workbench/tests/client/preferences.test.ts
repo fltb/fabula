@@ -15,7 +15,6 @@ const VALID_PAYLOAD = {
   navigatorCollapsed: false,
   inspectorPinned: true,
   operationCenterExpanded: false,
-  agentShelfOpen: false,
   selectedNavigationView: 'project-home',
 } as const;
 
@@ -79,7 +78,6 @@ describe('workbench client preferences', () => {
       navigatorCollapsed: true,
       inspectorPinned: false,
       operationCenterExpanded: true,
-      agentShelfOpen: true,
       selectedNavigationView: 'source-studio',
     });
     expect(saveWorkbenchPreferences(custom, storage)).toBe(true);
@@ -91,7 +89,6 @@ describe('workbench client preferences', () => {
     expect(Object.isFrozen(loaded)).toBe(true);
     const stored = JSON.parse(writes[0]?.value) as Record<string, unknown>;
     expect(Object.keys(stored).sort()).toEqual([
-      'agentShelfOpen',
       'inspectorPinned',
       'navigatorCollapsed',
       'operationCenterExpanded',
@@ -143,12 +140,7 @@ describe('workbench client preferences', () => {
 
   it('rejects wrong types for every boolean flag and the navigation view', () => {
     for (const bad of ['true', 1, 0, null, {}, []]) {
-      for (const key of [
-        'navigatorCollapsed',
-        'inspectorPinned',
-        'operationCenterExpanded',
-        'agentShelfOpen',
-      ]) {
+      for (const key of ['navigatorCollapsed', 'inspectorPinned', 'operationCenterExpanded']) {
         expect(
           parseWorkbenchPreferences(JSON.stringify({ ...VALID_PAYLOAD, [key]: bad })),
         ).toBeNull();

@@ -87,7 +87,7 @@ describe('McpDevicePairingService over the real persistence worker', () => {
       ownerUserId: OWNER,
       kind: 'project',
       projectId: 'p1',
-      role: 'reader',
+      role: 'author',
     });
     const claimed = await devices.claim({
       pairingCode: pairing.pairingCode,
@@ -173,6 +173,16 @@ describe('McpDevicePairingService over the real persistence worker', () => {
         ttlMs: 60_000,
       }),
     ).resolves.toEqual({ ok: false, code: 'SCOPE_INVALID' });
+    // The reader grant no longer includes mcp:render (render writes the
+    // accepted-scene head), so a reader pairing cannot claim it.
+    await expect(
+      devices.claim({
+        pairingCode: pairing.pairingCode,
+        clientLabel: 'cli',
+        scopes: ['mcp:render'],
+        ttlMs: 60_000,
+      }),
+    ).resolves.toEqual({ ok: false, code: 'SCOPE_INVALID' });
     await expect(
       devices.claim({
         pairingCode: pairing.pairingCode,
@@ -212,13 +222,13 @@ describe('McpDevicePairingService over the real persistence worker', () => {
     const claimed = await devices.claim({
       pairingCode: pairing.pairingCode,
       clientLabel: 'cli',
-      scopes: ['mcp:read', 'mcp:read', 'mcp:render'],
+      scopes: ['mcp:read', 'mcp:read'],
       ttlMs: 60_000,
     });
     expect(claimed.ok).toBe(true);
     if (!claimed.ok) return;
     // Scopes are deduplicated into a stable least-scope set.
-    expect(claimed.device.scopes).toEqual(['mcp:read', 'mcp:render']);
+    expect(claimed.device.scopes).toEqual(['mcp:read']);
   });
 
   it('only the owner may pair, and owner pairings may carry mcp:admin', async () => {

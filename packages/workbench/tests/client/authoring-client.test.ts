@@ -87,6 +87,89 @@ describe('browser authoring client', () => {
     expect(new Headers(calls[0]?.init?.headers).get('x-fabula-session')).toBe('transient-session');
   });
 
+  it('sends only the versioned lifecycle CAS fields for create/move/delete', async () => {
+    const calls: Array<{ input: RequestInfo | URL; init?: RequestInit }> = [];
+    const fetch: BrowserFetch = async (input, init) => {
+      calls.push({ input, init });
+      return json({
+        status: 'applied',
+        operationId: 'op-lifecycle',
+        documentId: 'doc-1',
+        logicalPath: 'scenes/E1.md',
+        workspaceDigest: 'workspace-hash-2',
+      });
+    };
+    const client = createBrowserAuthoringClient({ fetch });
+    await client.createDocument({
+      version: 2,
+      projectId: 'proj-a',
+      logicalPath: 'scenes/E1.md',
+      kind: 'prose',
+      expectedAcceptedSourceHash: 'accepted-hash',
+      expectedWorkspaceDigest: 'workspace-hash',
+    });
+    await client.moveDocument({
+      version: 2,
+      projectId: 'proj-a',
+      documentId: 'doc-1',
+      logicalPath: 'scenes/E2.md',
+      expectedAcceptedSourceHash: 'accepted-hash',
+      expectedWorkspaceDigest: 'workspace-hash',
+    });
+    await client.deleteDocument({
+      version: 2,
+      projectId: 'proj-a',
+      documentId: 'doc-1',
+      expectedAcceptedSourceHash: 'accepted-hash',
+      expectedWorkspaceDigest: 'workspace-hash',
+    });
+    const create = calls.find((call) => String(call.input).includes('/documents/create'));
+    const move = calls.find((call) => String(call.input).includes('/documents/move'));
+    const del = calls.find((call) => String(call.input).includes('/documents/delete'));
+    expect(create).toBeDefined();
+    expect(move).toBeDefined();
+    expect(del).toBeDefined();
+    expect(JSON.parse(String(create?.init?.body))).toEqual({
+      version: 2,
+      projectId: 'proj-a',
+      logicalPath: 'scenes/E1.md',
+      kind: 'prose',
+      expectedAcceptedSourceHash: 'accepted-hash',
+      expectedWorkspaceDigest: 'workspace-hash',
+    });
+    expect(JSON.parse(String(move?.init?.body))).toEqual({
+      version: 2,
+      projectId: 'proj-a',
+      documentId: 'doc-1',
+      logicalPath: 'scenes/E2.md',
+      expectedAcceptedSourceHash: 'accepted-hash',
+      expectedWorkspaceDigest: 'workspace-hash',
+    });
+    expect(JSON.parse(String(del?.init?.body))).toEqual({
+      version: 2,
+      projectId: 'proj-a',
+      documentId: 'doc-1',
+      expectedAcceptedSourceHash: 'accepted-hash',
+      expectedWorkspaceDigest: 'workspace-hash',
+    });
+  });
+
+  it('throws the typed client error for stale lifecycle responses', async () => {
+    const fetch: BrowserFetch = async () =>
+      json({ error: { code: 'WORKSPACE_STALE', message: 're-read before mutating.' } }, 409);
+    const client = createBrowserAuthoringClient({ fetch });
+    await expect(
+      client.createDocument({
+        version: 2,
+        projectId: 'proj-a',
+        logicalPath: 'scenes/E1.md',
+        kind: 'raw-yaml',
+        expectedAcceptedSourceHash: 'accepted-hash',
+        expectedWorkspaceDigest: 'workspace-hash',
+      }),
+    ).rejects.toMatchObject({ status: 409, code: 'WORKSPACE_STALE' });
+  });
+
   it('reads native revision history and sends restore CAS fields', async () => {
     const calls: Array<{ input: RequestInfo | URL; init?: RequestInit }> = [];
     const fetch: BrowserFetch = async (input, init) => {
@@ -146,6 +229,25 @@ describe('browser authoring client', () => {
     });
   });
 
+  it('posts to the cancel route with the transient session header', async () => {
+    const calls: Array<{ input: RequestInfo | URL; init?: RequestInit }> = [];
+    const fetch: BrowserFetch = async (input, init) => {
+      calls.push({ input, init });
+      return json({ ...operation, operationId: 'render-1', kind: 'render', status: 'cancelled' });
+    };
+    const client = createBrowserAuthoringClient({
+      fetch,
+      getSessionId: () => 'transient-session',
+    });
+    const result = await client.cancelOperation('proj-a', 'render-1');
+    expect(result.status).toBe('cancelled');
+    expect(calls).toHaveLength(1);
+    expect(String(calls[0]?.input)).toContain(
+      '/api/v1/projects/proj-a/authoring/operations/render-1/cancel',
+    );
+    expect(new Headers(calls[0]?.init?.headers).get('x-fabula-session')).toBe('transient-session');
+  });
+
   it('reduces safe SSE operation and presence events without HTTP on apply', async () => {
     const event: AuthoringActivityEventV1 = {
       type: 'presence-changed',
@@ -167,6 +269,27 @@ describe('browser authoring client', () => {
       getOperation: async () => operation,
       submit: async () => ({ status: 'queued' as const, receipt: operation }),
       reconcile: async () => ({ status: 'queued' as const, receipt: operation }),
+      createDocument: async () => ({
+        status: 'applied' as const,
+        operationId: 'op-lifecycle',
+        documentId: 'doc-new',
+        logicalPath: 'scenes/E1.md',
+        workspaceDigest: 'workspace-hash-2',
+      }),
+      moveDocument: async () => ({
+        status: 'applied' as const,
+        operationId: 'op-lifecycle',
+        documentId: 'doc-new',
+        logicalPath: 'scenes/E2.md',
+        workspaceDigest: 'workspace-hash-2',
+      }),
+      deleteDocument: async () => ({
+        status: 'applied' as const,
+        operationId: 'op-lifecycle',
+        documentId: 'doc-new',
+        logicalPath: 'scenes/E1.md',
+        workspaceDigest: 'workspace-hash-2',
+      }),
       subscribeEvents: () => ({ ready: Promise.resolve(), close: () => undefined }),
       listRevisions: async () => ({
         version: 2 as const,
@@ -194,6 +317,7 @@ describe('browser authoring client', () => {
         revisionId: 'revision-2',
         receiptHash: 'receipt-2',
       }),
+      cancelOperation: async () => operation,
     };
     const client = createProjectEventClient({ projectId: 'proj-a', client: fakeClient });
     await client.start();

@@ -4,6 +4,7 @@
 // ============================================================================
 
 export {
+  extractExpectedProtocol,
   type MockPass2Entry,
   type MockPass2Options,
   MockPass2Provider,

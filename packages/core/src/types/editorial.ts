@@ -1,6 +1,7 @@
 import type { CompletionResponse, LLMProvider, Message } from '../ai/types.ts';
 import type { ProjectSourceSnapshotV1 } from '../contracts/source.ts';
 import type { TypedEventBus } from '../event-bus.ts';
+import type { PluginHooksManager } from '../plugin/hooks-manager.ts';
 import type { CoreRuntimeServices } from '../ports/runtime-services.ts';
 import type { ProjectReferencePacketV1 } from '../reference.ts';
 import type { AnalysisResult } from './analysis.ts';
@@ -138,6 +139,13 @@ export interface EditorialRuntime {
   eventBus?: TypedEventBus;
   trace?: boolean;
   concurrency?: number;
+  /**
+   * Optional active plugin hooks manager. When present, plugin identities
+   * (name/version/manifestHash/moduleHash/hook names/validator names) feed
+   * validationIdentity/planHash/render cache keys, plugin validators join
+   * the pipeline validator set, and observation hooks run around scenes.
+   */
+  pluginHooksManager?: PluginHooksManager;
 }
 
 export interface EditorialRenderRequestV1 {
@@ -294,8 +302,30 @@ export interface EditorialAssembleResult {
   markdown: string;
   wordCount: number;
   sceneCount: number;
+  revisionIds: readonly string[];
   publication: PublicationResult;
 }
+
+/** Successful pure assembly value — exact markdown text plus derived counts. */
+export interface AssembleReleaseResultV1 {
+  version: 1;
+  status: 'ready';
+  markdown: string;
+  sceneCount: number;
+  wordCount: number;
+  novelHash: string;
+  scopeHash: string;
+  revisionIds: readonly string[];
+}
+
+/** Manifest validation failure — Core never assembles a partial novel. */
+export interface AssembleReleaseFailureV1 {
+  version: 1;
+  status: 'manifest_invalid';
+  errors: readonly EditorialError[];
+}
+
+export type AssembleReleaseOutcomeV1 = AssembleReleaseResultV1 | AssembleReleaseFailureV1;
 
 export interface EditorialOperationV1 {
   version: 1;
@@ -473,7 +503,6 @@ export interface SceneActionResult {
 export interface AssembleRequestV1 {
   version: 1;
   mutation: EditorialMutationContext;
-  outputPath?: string;
   title?: string;
   language?: string;
   branchPath?: BranchPath;

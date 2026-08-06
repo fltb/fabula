@@ -9,7 +9,17 @@
 // from `readNearestValid`.
 // ============================================================================
 
-import type { Snapshot, WorldState } from '../types/index.js';
+import type { Snapshot, WorldState } from '../types/index.ts';
+import {
+  CANONICAL_WORLD_SCHEMA,
+  CANONICAL_WORLD_SCHEMA_VERSION,
+  computeSnapshotStateHash,
+} from './canonical-snapshot.ts';
+
+export interface SnapshotStampOptions {
+  /** Canonical schema version stamped on the snapshot (default: 1). */
+  readonly schemaVersion?: number;
+}
 
 export class SnapshotEngine {
   private snapshotInterval: number;
@@ -28,13 +38,22 @@ export class SnapshotEngine {
   }
 
   /** Create a snapshot of the current world state (pure value, no I/O) */
-  createSnapshot(eventCount: number, eventId: string, state: WorldState): Snapshot {
+  createSnapshot(
+    eventCount: number,
+    eventId: string,
+    state: WorldState,
+    options: SnapshotStampOptions = {},
+  ): Snapshot {
+    const value = JSON.parse(JSON.stringify(state)) as WorldState; // deep clone
     const snapshot: Snapshot = {
       version: 1,
       eventCount,
       eventId,
       timestamp: this.now(),
-      state: JSON.parse(JSON.stringify(state)), // deep clone
+      state: value,
+      schema: CANONICAL_WORLD_SCHEMA,
+      schemaVersion: options.schemaVersion ?? CANONICAL_WORLD_SCHEMA_VERSION,
+      snapshotHash: computeSnapshotStateHash(value),
     };
     this.snapshots.push(snapshot);
     return snapshot;

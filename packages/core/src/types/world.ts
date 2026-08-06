@@ -63,6 +63,12 @@ export interface Snapshot {
   timestamp: string;
   version: number;
   state: WorldState;
+  /** Canonical schema identity stamped by SnapshotEngine (state/canonical-snapshot.ts). */
+  schema: string;
+  /** Canonical schema version stamped by SnapshotEngine. */
+  schemaVersion: number;
+  /** sha256 of the canonical JSON of `state` (the snapshot value). */
+  snapshotHash: string;
 }
 
 // ——— World Initial State ———

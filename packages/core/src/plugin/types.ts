@@ -3,6 +3,7 @@
 // ============================================================================
 
 import type { LLMProvider } from '../ai/types.ts';
+import type { JsonValue } from '../contracts/json.js';
 import type { ValidatorRegistrar } from './validator-registry.js';
 
 // ——— Conflict Detection ———
@@ -98,6 +99,12 @@ export interface BuildPromptInput {
   readonly pass2Attempt?: number;
   readonly contractHash: string;
   readonly messages: readonly Readonly<{ role: string; content: string }>[];
+  /**
+   * Read-only plugin extension payloads from the EventFile's `extensions`
+   * block, keyed by enabled plugin name. Extensions never enter WorldState;
+   * this is the only surface plugins may read them from.
+   */
+  readonly extensions?: Readonly<Record<string, JsonValue>>;
 }
 
 // ——— Plugin Hooks ———
@@ -111,6 +118,25 @@ export interface BuildPromptInput {
 export interface PluginHooks {
   /** Unique plugin name for identification in errors/logs */
   name: string;
+
+  /**
+   * Plugin manifest version — stamped by the host loader from the plugin
+   * manifest. Part of plugin identity: any change invalidates render cache
+   * keys, validationIdentity, and planHash.
+   */
+  version?: string;
+  /**
+   * SHA-256 of the plugin manifest content — stamped by the host loader.
+   * Part of plugin identity: any change invalidates render cache keys,
+   * validationIdentity, and planHash.
+   */
+  manifestHash?: string;
+  /**
+   * SHA-256 of the plugin module (e.g. index.js) — stamped by the host loader.
+   * Part of plugin identity: any change invalidates render cache keys,
+   * validationIdentity, and planHash.
+   */
+  moduleHash?: string;
 
   /** Called when the plugin is loaded */
   onLoad?(ctx: PluginContext): Promise<void>;

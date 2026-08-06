@@ -12,20 +12,39 @@ describe('Core public runtime contract', () => {
     const root = await import(rootUrl);
 
     expect(Object.keys(root).sort()).toEqual([
+      'CANONICAL_WORLD_SCHEMA',
+      'CANONICAL_WORLD_SCHEMA_VERSION',
       'DeterministicReferenceExtractor',
       'LLMError',
       'NovalisticallyError',
+      'PluginExtensionSchemaRegistrar',
+      'PluginHooksManager',
+      'PluginLoader',
       'ReferenceExtractionError',
+      'ReplayEngine',
+      'SnapshotEngine',
+      'StateManager',
+      'ValidatorRegistry',
       'buildReferencePacket',
+      'buildWorkflowStatus',
       'compareFact',
       'compileProject',
+      'computeSnapshotStateHash',
+      'detectConflicts',
       'extractReferenceChunks',
       'getProjectStatus',
+      'legacyLedgerToReviewEvents',
       'listEntities',
+      'narrativeEventToStateEvent',
+      'parseLegacyReviewLedger',
+      'projectReviewState',
+      'resolveConflict',
       'resolveTemporalContext',
       'sanitizeError',
       'showEntity',
       'validateNovel',
+      'verifySnapshotRecord',
+      'worldStateToSnapshotRecord',
     ]);
   });
 
@@ -43,7 +62,6 @@ describe('Core public runtime contract', () => {
     for (const name of [
       'initializeProject',
       'EntityMapper',
-      'StateManager',
       'AiSdkProvider',
       'ResultAggregator',
       'TimelineValidator',
@@ -71,7 +89,7 @@ describe('Core public runtime contract', () => {
     expect(testing).toHaveProperty('MemoryStateSnapshotRepository');
     expect(Object.keys(extensions)).toHaveLength(0);
 
-    for (const name of ['EntityMapper', 'StateManager', 'initializeProject', 'TimelineValidator']) {
+    for (const name of ['EntityMapper', 'initializeProject', 'TimelineValidator']) {
       for (const namespace of namespaces) {
         expect(namespace).not.toHaveProperty(name);
       }

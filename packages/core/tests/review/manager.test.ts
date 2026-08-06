@@ -1,38 +1,38 @@
 // ============================================================================
 // ReviewManager — V1 semantic repository-backed behavior tests
 //
-// Tests the async ReviewManager over MemoryExecutionRepository review records
-// with an explicit project ID.  No storage, coordinator, or ledger-path
-// assumptions appear: persistence is the semantic CoreExecutionRepository
-// review record, and conflicts are optimistic compare-and-swap outcomes.
+// Tests the async ReviewManager over the append-only review event stream
+// (CoreExecutionRepository.readReviewEvents / appendReviewEvents) with an
+// explicit project ID. No storage, coordinator, or ledger-path assumptions
+// appear: persistence is the semantic event stream, and conflicts are
+// optimistic compare-and-swap outcomes.
 // ============================================================================
 
 import * as crypto from 'node:crypto';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { EditorialOperationError } from '../src/editorial/errors.ts';
+import { EditorialOperationError } from '../../src/editorial/errors.ts';
 import {
   addReviewComment,
   listReviewComments,
   replaceReviewComment,
   updateReviewComment,
-} from '../src/editorial/review-facade.ts';
-import type { Clock, IdGenerator } from '../src/ports/runtime-services.ts';
-import { markWontfix, resolve } from '../src/review/comment.ts';
-import { ReviewManager } from '../src/review/index.ts';
-import { reviewLedgerV1Schema } from '../src/schemas/review.ts';
-import { MemoryExecutionRepository } from '../src/testing/memory-repositories.ts';
-import type { EditorialRuntime } from '../src/types/editorial.ts';
+} from '../../src/editorial/review-facade.ts';
+import type { Clock, IdGenerator } from '../../src/ports/runtime-services.ts';
+import { markWontfix, resolve } from '../../src/review/comment.ts';
+import type { ReviewEventRecordV1 } from '../../src/review/index.ts';
+import { ReviewManager } from '../../src/review/index.ts';
+import { reviewEventRecordV1Schema } from '../../src/schemas/review.ts';
+import { MemoryExecutionRepository } from '../../src/testing/memory-repositories.ts';
+import type { EditorialRuntime } from '../../src/types/editorial.ts';
 import type {
   NewReviewComment,
   ReviewApplicationV1,
   ReviewComment,
-  ReviewLedgerV1,
-} from '../src/types/index.ts';
+} from '../../src/types/index.ts';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const PROJECT_ID = 'test-project';
-const LEDGER_REVIEW_ID = 'ledger';
 
 function newComment(overrides?: Partial<NewReviewComment>): NewReviewComment {
   return {
@@ -155,19 +155,16 @@ describe('ReviewManager', () => {
       expect(comments[0].id).toBe(comment.id);
     });
 
-    it('persists the comment as a review record in the execution repository', async () => {
+    it('persists the comment as an event in the review stream', async () => {
       const comment = await manager.addReviewComment(newComment(), 'actor-1');
 
-      const record = await execution.readReview({
-        projectId: PROJECT_ID,
-        reviewId: LEDGER_REVIEW_ID,
-      });
-      expect(record).not.toBeNull();
-      if (!record) throw new Error('Expected persisted review record fixture');
-      const parsed = reviewLedgerV1Schema.parse(record.value.value);
-      expect(parsed.version).toBe(1);
-      expect(parsed.comments).toHaveLength(1);
-      expect(parsed.comments[0].id).toBe(comment.id);
+      const { version, events } = await execution.readReviewEvents({ projectId: PROJECT_ID });
+      expect(version).toBe(1);
+      expect(events).toHaveLength(1);
+      expect(events[0].kind).toBe('comment_added');
+      expect(events[0].commentId).toBe(comment.id);
+      expect(events[0].sequence).toBe(1);
+      expect(reviewEventRecordV1Schema.safeParse(events[0]).success).toBe(true);
     });
 
     it('trims whitespace from actorId', async () => {
@@ -564,66 +561,43 @@ describe('ReviewManager', () => {
     });
   });
 
-  // 7. Semantic review record validation ────────────────────────────────────
+  // 7. Semantic review event stream validation ─────────────────────────────
 
-  describe('semantic review record validation', () => {
-    it('rejects a non-object review record from the repository', async () => {
-      await execution.compareAndSwapReview({
+  describe('semantic review event stream validation', () => {
+    it('rejects an event stream containing an event without required fields', async () => {
+      // Simulate a corrupt stream: bypass the manager and append a malformed
+      // record (missing createdAt) directly through the repository port.
+      await execution.appendReviewEvents({
         projectId: PROJECT_ID,
-        reviewId: LEDGER_REVIEW_ID,
-        expectedVersion: null,
-        value: {
-          version: 1,
-          projectId: PROJECT_ID,
-          reviewId: LEDGER_REVIEW_ID,
-          value: 'just a string',
-        },
-      });
-      await expect(manager.readLedger()).rejects.toThrow('Invalid review ledger structure');
-    });
-
-    it('rejects a structurally invalid v1 ledger record', async () => {
-      await execution.compareAndSwapReview({
-        projectId: PROJECT_ID,
-        reviewId: LEDGER_REVIEW_ID,
-        expectedVersion: null,
-        value: {
-          version: 1,
-          projectId: PROJECT_ID,
-          reviewId: LEDGER_REVIEW_ID,
-          value: { version: 1, comments: 'not-an-array', patches: [] },
-        },
-      });
-      await expect(manager.readLedger()).rejects.toThrow('Invalid review ledger structure');
-    });
-
-    it('rejects comments that fail the semantic comment schema', async () => {
-      const invalid = {
-        version: 1,
-        comments: [
+        expectedVersion: 0,
+        events: [
           {
-            id: 'c1',
-            author: 'human',
-            actorId: 'x',
-            target: { type: 'scene', id: 'E1' },
-            severity: 'nit',
-            category: 'style',
-            content: 'x',
-            status: 'bogus',
-            applications: [],
-            createdAt: '2025-01-01T00:00:00.000Z',
-          },
+            version: 1,
+            projectId: PROJECT_ID,
+            kind: 'comment_added',
+            commentId: 'c1',
+            payload: {},
+          } as unknown as ReviewEventRecordV1,
         ],
-        patches: [],
-      };
-      expect(reviewLedgerV1Schema.safeParse(invalid).success).toBe(false);
-      await execution.compareAndSwapReview({
-        projectId: PROJECT_ID,
-        reviewId: LEDGER_REVIEW_ID,
-        expectedVersion: null,
-        value: { version: 1, projectId: PROJECT_ID, reviewId: LEDGER_REVIEW_ID, value: invalid },
       });
-      await expect(manager.readLedger()).rejects.toThrow('Invalid review ledger structure');
+      await expect(manager.readLedger()).rejects.toThrow('Invalid review event stream');
+    });
+
+    it('rejects an event stream with an unknown event kind', async () => {
+      await execution.appendReviewEvents({
+        projectId: PROJECT_ID,
+        expectedVersion: 0,
+        events: [
+          {
+            version: 1,
+            projectId: PROJECT_ID,
+            kind: 'comment_teleported',
+            payload: {},
+            createdAt: '2025-01-01T00:00:00.000Z',
+          } as unknown as ReviewEventRecordV1,
+        ],
+      });
+      await expect(manager.readLedger()).rejects.toThrow('Invalid review event stream');
     });
   });
 
@@ -631,7 +605,7 @@ describe('ReviewManager', () => {
 
   describe('CAS stale expected hash', () => {
     it('throws STORAGE_CONFLICT when expectedLedgerHash is stale', async () => {
-      // Establish a ledger
+      // Establish a stream
       await manager.addReviewComment(newComment(), 'a');
       const snapshot = await manager.readLedger();
       expect(snapshot.contentHash).toBeDefined();
@@ -639,32 +613,13 @@ describe('ReviewManager', () => {
         throw new Error('Expected review ledger hash fixture');
       const staleHash = snapshot.contentHash;
 
-      // Replace the ledger externally — different content, different hash
-      const external: ReviewLedgerV1 = {
-        version: 1,
-        comments: [
-          {
-            id: 'ext',
-            author: 'human',
-            actorId: 'x',
-            target: { type: 'novel', id: 'novel' },
-            severity: 'blocking',
-            category: 'style',
-            content: 'external',
-            status: 'open',
-            applications: [],
-            createdAt: '2025-01-01T00:00:00.000Z',
-          },
-        ],
-        patches: [],
-      };
-      const result = await execution.compareAndSwapReview({
-        projectId: PROJECT_ID,
-        reviewId: LEDGER_REVIEW_ID,
-        expectedVersion: 1,
-        value: { version: 1, projectId: PROJECT_ID, reviewId: LEDGER_REVIEW_ID, value: external },
-      });
-      expect(result.kind).toBe('committed');
+      // Concurrent writer appends a comment directly to the same stream
+      const other = new ReviewManager(
+        execution,
+        PROJECT_ID,
+        fixedServices('2026-08-02T00:00:00.000Z', ['ext-1']),
+      );
+      await other.addReviewComment(newComment({ content: 'external' }), 'x');
 
       // Attempt a mutation with the stale hash
       let caught: unknown;
@@ -764,29 +719,9 @@ describe('ReviewManager', () => {
       expect(await manager.getPatches()).toEqual([]);
     });
 
-    it('returns patches stored in the ledger record', async () => {
-      const ledger: ReviewLedgerV1 = {
-        version: 1,
-        comments: [],
-        patches: [
-          {
-            sourceReviewIds: ['c1'],
-            description: 'Fix grammar',
-            changes: [
-              { type: 'rewrite', target: 'E1', newValue: 'corrected', rationale: 'grammar' },
-            ],
-          },
-        ],
-      };
-      await execution.compareAndSwapReview({
-        projectId: PROJECT_ID,
-        reviewId: LEDGER_REVIEW_ID,
-        expectedVersion: null,
-        value: { version: 1, projectId: PROJECT_ID, reviewId: LEDGER_REVIEW_ID, value: ledger },
-      });
-      const patches = await manager.getPatches();
-      expect(patches).toHaveLength(1);
-      expect(patches[0].description).toBe('Fix grammar');
+    it('always returns an empty array: patches are not part of the event stream', async () => {
+      await manager.addReviewComment(newComment(), 'a');
+      expect(await manager.getPatches()).toEqual([]);
     });
   });
 
@@ -901,7 +836,7 @@ describe('ReviewManager', () => {
       expect(updated.resolvedBy).toBe('reviewer-1');
     });
 
-    it('a create/replace/resolve sequence yields byte-identical persisted ledgers for fixed services', async () => {
+    it('a create/replace/resolve sequence yields byte-identical persisted event streams for fixed services', async () => {
       const run = async () => {
         const repo = new MemoryExecutionRepository();
         const manager = new ReviewManager(
@@ -922,10 +857,8 @@ describe('ReviewManager', () => {
         expect(open).toBeDefined();
         if (!open) throw new Error('Expected open deterministic review comment fixture');
         await manager.updateReviewComment(open.id, 'resolve', 'c');
-        const record = await repo.readReview({ projectId: PROJECT_ID, reviewId: LEDGER_REVIEW_ID });
-        expect(record).not.toBeNull();
-        if (!record) throw new Error('Expected deterministic review record fixture');
-        return record.value.value;
+        const { events } = await repo.readReviewEvents({ projectId: PROJECT_ID });
+        return events;
       };
       expect(await run()).toEqual(await run());
     });

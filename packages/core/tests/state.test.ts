@@ -6,8 +6,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { JsonValue } from '../src/contracts/json.js';
 import { compileEntityTypeCatalog } from '../src/entity/entity-catalog-compiler.js';
-import type { StateEvent, StateStreamKey } from '../src/ports/state-repository.js';
-import { EventStore, ReplayEngine, SnapshotEngine, StateManager } from '../src/state/index.js';
+import type {
+  StateEvent,
+  StateSnapshotRecord,
+  StateStreamKey,
+} from '../src/ports/state-repository.js';
+import {
+  CANONICAL_WORLD_SCHEMA,
+  compileStoryRuntimeGraph,
+  EventStore,
+  narrativeEventToStateEvent,
+  ReplayEngine,
+  SnapshotEngine,
+  StateManager,
+  verifySnapshotRecord,
+  worldStateToSnapshotRecord,
+} from '../src/state/index.js';
 import { applyRuleTransaction } from '../src/state/rule-replay.js';
 import {
   MemoryStateLogRepository,
@@ -1832,5 +1846,435 @@ describe('Rule replay determinism', () => {
     expect(first.contract_law?.currentEpoch).toBe('contract_law-epoch-E11');
     expect(first.contract_law?.activation).toBe('enabled');
     expect(first.contract_law?.specificationId).toBe('contract_law-spec-v2');
+  });
+});
+
+// ============================================================================
+// Canonical snapshot bridge — derived StateEvent mapping and snapshot records
+// (plan 8.2)
+// ============================================================================
+
+describe('canonical snapshot bridge', () => {
+  const STREAM_KEY: StateStreamKey = {
+    projectId: 'project',
+    streamId: 'source-hash-a',
+    branchId: 'main',
+  };
+
+  /**
+   * Fixture whose canonical replay order differs from authored narrativeOrder:
+   * storyTime drives the graph order (day_1 < day_2 < day_3) while
+   * narrativeOrder is authored 3, 2, 1.
+   */
+  function orderVsNarrativeFixture(): NarrativeEvent[] {
+    const e1 = makeEvent(3, {
+      storyTime: { type: 'absolute', value: 'day_1' },
+      postconditions: [makeFact('camille', 'age', 1)],
+    });
+    const e2 = makeEvent(2, {
+      storyTime: { type: 'absolute', value: 'day_2' },
+      postconditions: [makeFact('camille', 'age', 2)],
+    });
+    const e3 = makeEvent(1, {
+      storyTime: { type: 'absolute', value: 'day_3' },
+      postconditions: [makeFact('camille', 'age', 3)],
+    });
+    return [e1, e2, e3];
+  }
+
+  const REPLAY_OPTIONS = { initialFacts: INITIAL_FACTS };
+
+  function emptyState(age = 0): WorldState {
+    return {
+      entities: age === 0 ? {} : { camille: { lifecycle: 'active', age } },
+      relationships: {},
+      epistemicLedger: { claims: {}, bySubject: {}, byProposition: {}, actLog: [] },
+      propositionCatalog: { version: 1, propositions: {}, dependencyGraph: {} },
+      commonGround: [],
+      threads: {},
+      rules: {},
+      facts: [],
+    };
+  }
+
+  it('maps events with 1-based contiguous sequences in canonical replay order, never narrativeOrder', () => {
+    const events = orderVsNarrativeFixture();
+    const compiled = compileStoryRuntimeGraph({
+      events,
+      initialFacts: INITIAL_FACTS,
+      initialThreads: [],
+      timeAnchors: [],
+      branchPath: { decisions: [] },
+    });
+    const canonicalOrder = compiled.order.topologicalOrder;
+    // Sanity: the fixture really diverges from narrativeOrder.
+    expect(canonicalOrder.map((id) => events.find((e) => e.id === id)?.narrativeOrder)).toEqual([
+      3, 2, 1,
+    ]);
+
+    const byId = new Map(events.map((event) => [event.id, event]));
+    const derived = canonicalOrder.map((id, index) =>
+      narrativeEventToStateEvent(byId.get(id)!, index + 1),
+    );
+
+    expect(derived.map((entry) => entry.sequence)).toEqual([1, 2, 3]);
+    expect(derived.map((entry) => entry.eventId)).toEqual(canonicalOrder);
+    // Sequence must follow canonical order, never the authored narrative order.
+    const payloadOrders = derived.map(
+      (entry) => (JSON.parse(JSON.stringify(entry.payload)) as NarrativeEvent).narrativeOrder,
+    );
+    expect(payloadOrders).toEqual([3, 2, 1]);
+    // The payload carries the full NarrativeEvent.
+    expect((JSON.parse(JSON.stringify(derived[0].payload)) as NarrativeEvent).storyTime).toEqual({
+      type: 'absolute',
+      value: 'day_1',
+    });
+  });
+
+  it('rejects non-positive sequences for StateEvents', () => {
+    const event = makeEvent(1);
+    expect(() => narrativeEventToStateEvent(event, 0)).toThrow();
+    expect(() => narrativeEventToStateEvent(event, -1)).toThrow();
+  });
+
+  it('stamps canonical-world schema, schemaVersion and a value hash on snapshot records', () => {
+    const state = emptyState(25);
+    const record = worldStateToSnapshotRecord(state, { key: STREAM_KEY, sequence: 20 });
+
+    expect(record.version).toBe(1);
+    expect(record.schema).toBe(CANONICAL_WORLD_SCHEMA);
+    expect(record.schemaVersion).toBe(1);
+    expect(record.sequence).toBe(20);
+    expect(record.key).toEqual(STREAM_KEY);
+    expect(record.snapshotHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(verifySnapshotRecord(record)).toEqual({ valid: true });
+
+    // The record deep-clones the state: later mutation cannot leak in.
+    state.entities.camille.age = 99;
+    const stored = JSON.parse(JSON.stringify(record.state)) as WorldState;
+    expect(stored.entities.camille.age).toBe(25);
+  });
+
+  it('honors an explicit schemaVersion', () => {
+    const record = worldStateToSnapshotRecord(emptyState(1), {
+      key: STREAM_KEY,
+      sequence: 10,
+      schemaVersion: 2,
+    });
+    expect(record.schemaVersion).toBe(2);
+    expect(verifySnapshotRecord(record)).toEqual({ valid: true });
+  });
+
+  it('verifySnapshotRecord detects a tampered state as corrupt', () => {
+    const record = worldStateToSnapshotRecord(emptyState(25), {
+      key: STREAM_KEY,
+      sequence: 20,
+    });
+    const tampered: StateSnapshotRecord = {
+      ...record,
+      state: {
+        ...(record.state as Record<string, unknown>),
+        entities: { camille: { lifecycle: 'active', age: 999 } },
+      },
+    };
+    const verdict = verifySnapshotRecord(tampered);
+    expect(verdict.valid).toBe(false);
+    if (!verdict.valid) expect(verdict.reason).toContain('hash mismatch');
+  });
+
+  it('verifySnapshotRecord rejects a foreign schema', () => {
+    const record = worldStateToSnapshotRecord(emptyState(1), {
+      key: STREAM_KEY,
+      sequence: 10,
+    });
+    expect(verifySnapshotRecord({ ...record, schema: 'other' })).toEqual({
+      valid: false,
+      reason: 'unexpected snapshot schema "other"',
+    });
+  });
+
+  it('SnapshotEngine stamps schema/schemaVersion/snapshotHash on created snapshots', () => {
+    const engine = new SnapshotEngine(20);
+    const state = emptyState(25);
+    const snapshot = engine.createSnapshot(20, 'evt_stamped', state);
+
+    expect(snapshot.schema).toBe(CANONICAL_WORLD_SCHEMA);
+    expect(snapshot.schemaVersion).toBe(1);
+    expect(snapshot.snapshotHash).toMatch(/^[0-9a-f]{64}$/);
+    // The stamped hash is the bridge hash of the same value: a record built
+    // from the same state carries the identical hash and verifies.
+    const record = worldStateToSnapshotRecord(state, { key: STREAM_KEY, sequence: 20 });
+    expect(record.snapshotHash).toBe(snapshot.snapshotHash);
+    expect(verifySnapshotRecord(record)).toEqual({ valid: true });
+  });
+
+  it('SnapshotEngine honors a custom schemaVersion', () => {
+    const engine = new SnapshotEngine(20);
+    const snapshot = engine.createSnapshot(20, 'evt_v2', emptyState(1), { schemaVersion: 2 });
+    expect(snapshot.schemaVersion).toBe(2);
+  });
+});
+
+// ============================================================================
+// ReplayEngine snapshot replay — verified-snapshot-first read path (plan 8.3)
+// ============================================================================
+
+describe('ReplayEngine snapshot replay', () => {
+  let engine: ReplayEngine;
+  const STREAM_KEY: StateStreamKey = {
+    projectId: 'project',
+    streamId: 'source-hash-a',
+    branchId: 'main',
+  };
+
+  beforeEach(() => {
+    engine = new ReplayEngine(CATALOG_CONTEXT);
+  });
+
+  /** Same fixture as the bridge tests: canonical order e1→e2→e3 (days 1-3),
+   *  authored narrativeOrder 3, 2, 1. Each event raises camille.age. */
+  function fixture(): NarrativeEvent[] {
+    const e1 = makeEvent(3, {
+      storyTime: { type: 'absolute', value: 'day_1' },
+      postconditions: [makeFact('camille', 'age', 1)],
+    });
+    const e2 = makeEvent(2, {
+      storyTime: { type: 'absolute', value: 'day_2' },
+      postconditions: [makeFact('camille', 'age', 2)],
+    });
+    const e3 = makeEvent(1, {
+      storyTime: { type: 'absolute', value: 'day_3' },
+      postconditions: [makeFact('camille', 'age', 3)],
+    });
+    return [e1, e2, e3];
+  }
+
+  const REPLAY_OPTIONS = { initialFacts: INITIAL_FACTS };
+
+  function snapshotAt(events: NarrativeEvent[], sequence: number): StateSnapshotRecord {
+    return worldStateToSnapshotRecord(engine.getStateAt(events, sequence, REPLAY_OPTIONS), {
+      key: STREAM_KEY,
+      sequence,
+    });
+  }
+
+  it('replayFromSnapshot hydrates the snapshot value and applies the canonical suffix', () => {
+    const events = fixture();
+    // Snapshot after 2 canonical events (age = 2); suffix is [e3] (age → 3).
+    const snapshot = snapshotAt(events, 2);
+    const state = engine.replayFromSnapshot(snapshot, events, REPLAY_OPTIONS);
+
+    // Canonical order applied: e1 (age 1) → e2 (age 2) → e3 (age 3).
+    expect(state.entities.camille?.age).toBe(3);
+    expect(state).toEqual(engine.replay(events, REPLAY_OPTIONS));
+  });
+
+  it('replayFromSnapshot with a head snapshot equals the full replay', () => {
+    const events = fixture();
+    const snapshot = snapshotAt(events, 3);
+    expect(engine.replayFromSnapshot(snapshot, events, REPLAY_OPTIONS)).toEqual(
+      engine.replay(events, REPLAY_OPTIONS),
+    );
+  });
+
+  it('replayFromSnapshot rejects a snapshot position outside the replay range', () => {
+    const events = fixture();
+    const bad = worldStateToSnapshotRecord(engine.replay(events, REPLAY_OPTIONS), {
+      key: STREAM_KEY,
+      sequence: 99,
+    });
+    expect(() => engine.replayFromSnapshot(bad, events, REPLAY_OPTIONS)).toThrow(
+      /outside the canonical replay range/,
+    );
+  });
+
+  it('replayFromNearest hydrates the nearest valid snapshot and applies the suffix', () => {
+    const events = fixture();
+    const snapshot = snapshotAt(events, 1);
+    const result = engine.replayFromNearest([snapshot], 3, events, REPLAY_OPTIONS);
+
+    expect(result.corrupt).toEqual([]);
+    expect(result.source).toEqual({
+      kind: 'snapshot',
+      sequence: 1,
+      schema: CANONICAL_WORLD_SCHEMA,
+      schemaVersion: 1,
+      snapshotHash: snapshot.snapshotHash,
+    });
+    // Hydrated at sequence 1 (age 1) + suffix [e2, e3] → age 3, exactly the
+    // full canonical replay.
+    expect(result.state.entities.camille?.age).toBe(3);
+    expect(result.state).toEqual(engine.replay(events, REPLAY_OPTIONS));
+  });
+
+  it('replayFromNearest at the snapshot position applies an empty suffix', () => {
+    const events = fixture();
+    const snapshot = snapshotAt(events, 2);
+    const result = engine.replayFromNearest([snapshot], 2, events, REPLAY_OPTIONS);
+
+    expect(result.source.kind).toBe('snapshot');
+    expect(result.state).toEqual(engine.getStateAt(events, 2, REPLAY_OPTIONS));
+    expect(result.state.entities.camille?.age).toBe(2);
+  });
+
+  it('falls back to full replay when no snapshot exists', () => {
+    const events = fixture();
+    const result = engine.replayFromNearest([], 3, events, REPLAY_OPTIONS);
+
+    expect(result.source).toEqual({ kind: 'full-replay' });
+    expect(result.corrupt).toEqual([]);
+    expect(result.state).toEqual(engine.replay(events, REPLAY_OPTIONS));
+  });
+
+  it('ignores valid snapshots positioned after the target (full replay to target)', () => {
+    const events = fixture();
+    const late = snapshotAt(events, 3);
+    const result = engine.replayFromNearest([late], 2, events, REPLAY_OPTIONS);
+
+    expect(result.source).toEqual({ kind: 'full-replay' });
+    expect(result.corrupt).toEqual([]); // valid but too late — unused, not corrupt
+    expect(result.state).toEqual(engine.getStateAt(events, 2, REPLAY_OPTIONS));
+    expect(result.state.entities.camille?.age).toBe(2);
+  });
+
+  it('quarantines a corrupt snapshot and still uses the nearest valid one', () => {
+    const events = fixture();
+    const good = snapshotAt(events, 2);
+    const tampered: StateSnapshotRecord = {
+      ...good,
+      state: {
+        ...(good.state as Record<string, unknown>),
+        entities: { camille: { lifecycle: 'active', age: 999 } },
+      },
+    };
+    const result = engine.replayFromNearest([tampered, good], 3, events, REPLAY_OPTIONS);
+
+    expect(result.corrupt).toEqual([tampered]);
+    expect(result.source.kind).toBe('snapshot');
+    expect(result.source.sequence).toBe(2);
+    // The forged value never surfaces: state comes from the valid snapshot.
+    expect(result.state.entities.camille?.age).toBe(3);
+    expect(result.state).toEqual(engine.replay(events, REPLAY_OPTIONS));
+  });
+
+  it('never hydrates a corrupt snapshot as state — full replay fallback', () => {
+    const events = fixture();
+    const forged = worldStateToSnapshotRecord(engine.replay(events, REPLAY_OPTIONS), {
+      key: STREAM_KEY,
+      sequence: 3,
+    });
+    const corruptRecord: StateSnapshotRecord = {
+      ...forged,
+      state: {
+        ...(forged.state as Record<string, unknown>),
+        entities: { camille: { lifecycle: 'active', age: 999 } },
+      },
+    };
+    const result = engine.replayFromNearest([corruptRecord], 3, events, REPLAY_OPTIONS);
+
+    expect(result.corrupt).toEqual([corruptRecord]);
+    expect(result.source).toEqual({ kind: 'full-replay' });
+    expect(result.state.entities.camille?.age).toBe(3);
+  });
+
+  it('quarantines snapshots whose sequence is outside the replay range', () => {
+    const events = fixture();
+    const outOfRange = worldStateToSnapshotRecord(engine.replay(events, REPLAY_OPTIONS), {
+      key: STREAM_KEY,
+      sequence: 99,
+    });
+    const result = engine.replayFromNearest([outOfRange], 3, events, REPLAY_OPTIONS);
+
+    expect(result.corrupt).toEqual([outOfRange]);
+    expect(result.source).toEqual({ kind: 'full-replay' });
+    expect(result.state).toEqual(engine.replay(events, REPLAY_OPTIONS));
+  });
+});
+
+// ============================================================================
+// StateManager recovery — verified-snapshot-first with full-replay fallback
+// (plan 8.3)
+// ============================================================================
+
+describe('StateManager recovery', () => {
+  const STREAM_KEY: StateStreamKey = {
+    projectId: 'project',
+    streamId: 'source-hash-a',
+    branchId: 'main',
+  };
+
+  function fixture(): NarrativeEvent[] {
+    const e1 = makeEvent(3, {
+      storyTime: { type: 'absolute', value: 'day_1' },
+      postconditions: [makeFact('camille', 'age', 1)],
+    });
+    const e2 = makeEvent(2, {
+      storyTime: { type: 'absolute', value: 'day_2' },
+      postconditions: [makeFact('camille', 'age', 2)],
+    });
+    const e3 = makeEvent(1, {
+      storyTime: { type: 'absolute', value: 'day_3' },
+      postconditions: [makeFact('camille', 'age', 3)],
+    });
+    return [e1, e2, e3];
+  }
+
+  const REPLAY_OPTIONS = { initialFacts: INITIAL_FACTS };
+
+  it('recovers verified-snapshot-first and continues committing from the stream', () => {
+    const events = fixture();
+    const manager = new StateManager(CATALOG_CONTEXT, 20, REPLAY_OPTIONS);
+    const snapshot = worldStateToSnapshotRecord(
+      new ReplayEngine(CATALOG_CONTEXT).getStateAt(events, 1, REPLAY_OPTIONS),
+      { key: STREAM_KEY, sequence: 1 },
+    );
+
+    const result = manager.recover({ events, snapshots: [snapshot], targetCount: 3 });
+    expect(result.source.kind).toBe('snapshot');
+    expect(result.source.sequence).toBe(1);
+    expect(result.corrupt).toEqual([]);
+    expect(result.state.entities.camille?.age).toBe(3);
+    expect(manager.eventStore.count).toBe(3);
+
+    // Subsequent commits continue from the recovered stream.
+    manager.commit(
+      makeEvent(4, {
+        storyTime: { type: 'absolute', value: 'day_4' },
+        postconditions: [makeFact('camille', 'age', 4)],
+      }),
+    );
+    expect(manager.getCurrentState().entities.camille?.age).toBe(4);
+  });
+
+  it('falls back to full replay when no snapshot exists', () => {
+    const events = fixture();
+    const manager = new StateManager(CATALOG_CONTEXT, 20, REPLAY_OPTIONS);
+    const result = manager.recover({ events, snapshots: [], targetCount: 3 });
+
+    expect(result.source).toEqual({ kind: 'full-replay' });
+    expect(result.state).toEqual(new ReplayEngine(CATALOG_CONTEXT).replay(events, REPLAY_OPTIONS));
+    expect(manager.eventStore.count).toBe(3);
+  });
+
+  it('quarantines corrupt snapshots during recovery and rebuilds from the source', () => {
+    const events = fixture();
+    const manager = new StateManager(CATALOG_CONTEXT, 20, REPLAY_OPTIONS);
+    const forged = worldStateToSnapshotRecord(
+      new ReplayEngine(CATALOG_CONTEXT).replay(events, REPLAY_OPTIONS),
+      { key: STREAM_KEY, sequence: 3 },
+    );
+    const corruptRecord: StateSnapshotRecord = {
+      ...forged,
+      state: {
+        ...(forged.state as Record<string, unknown>),
+        entities: { camille: { lifecycle: 'active', age: 999 } },
+      },
+    };
+
+    const result = manager.recover({ events, snapshots: [corruptRecord], targetCount: 3 });
+    expect(result.corrupt).toEqual([corruptRecord]);
+    expect(result.source).toEqual({ kind: 'full-replay' });
+    // The corrupt snapshot never hydrates as empty (or forged) state.
+    expect(result.state.entities.camille?.age).toBe(3);
   });
 });

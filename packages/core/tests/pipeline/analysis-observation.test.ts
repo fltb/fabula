@@ -26,9 +26,13 @@ import {
   type ValidationKeyMaterial,
 } from '../../src/ai/prompts/render-analysis.ts';
 import { type MockPass2Entry, MockPass2Provider } from '../../src/ai/providers/mock-pass2.ts';
+import { sha256 } from '../../src/cache/pure-sha256.ts';
 import { canonicalJson } from '../../src/cache/render-cache.ts';
 import { InteractionManager } from '../../src/pipeline/interaction-gate.ts';
-import { evaluateReleaseDecision } from '../../src/pipeline/release-decision.ts';
+import {
+  computeReleaseGateId,
+  evaluateReleaseDecision,
+} from '../../src/pipeline/release-decision.ts';
 import { type RenderJob, RenderPipeline } from '../../src/pipeline/render.ts';
 import {
   analysisObservationSchema,
@@ -967,7 +971,8 @@ describe('disposition semantics', () => {
         expect(warning.observationRef?.analysisPointer).toBeUndefined();
       }
 
-      // Default release: warnings without a waiver → pending_waiver.
+      // Require-waiver policy: warnings without a waiver → pending_waiver,
+      // bound to the deterministic gate identity.
       const manager = new InteractionManager();
       const candidate = {
         eventId: 'E0',
@@ -977,25 +982,48 @@ describe('disposition semantics', () => {
         needsReview: false,
         errors: [],
       };
+      const requireWaiver = {
+        warnings: 'require-waiver' as const,
+        openBlockingReviews: 'block' as const,
+      };
+      const gateContext = {
+        projectId: 'proj',
+        sourceHash: 'source-hash',
+        proseHash: sha256(PROSE),
+      };
       const pending = evaluateReleaseDecision(
         candidate,
         'scope-hash',
         'validation-identity',
         manager,
+        { policy: requireWaiver, gateIdentity: gateContext },
       );
       expect(pending.status).toBe('pending_waiver');
+      expect(pending.gateId).toBe(
+        computeReleaseGateId({
+          projectId: 'proj',
+          sourceHash: 'source-hash',
+          eventId: 'E0',
+          proseHash: sha256(PROSE),
+          scopeHash: 'scope-hash',
+          validationIdentity: 'validation-identity',
+          warnings: validation.warnings,
+        }),
+      );
+      expect(pending.warningFingerprints).toBeDefined();
 
       // Exact waiver → accepted, and the observation map is untouched.
       const observationsBefore = canonicalJson(result.observations);
-      manager.recordWaiver('gate:E0:validation', 'author accepts measurement uncertainty');
+      manager.recordWaiver(pending.gateId ?? '', 'author accepts measurement uncertainty');
       const accepted = evaluateReleaseDecision(
         candidate,
         'scope-hash',
         'validation-identity',
         manager,
+        { policy: requireWaiver, gateIdentity: gateContext },
       );
       expect(accepted.status).toBe('accepted');
-      expect(accepted.waiverId).toBe('gate:E0:validation');
+      expect(accepted.waiverId).toBe(pending.gateId);
       expect(canonicalJson(result.observations)).toBe(observationsBefore);
     }
   });

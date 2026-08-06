@@ -2,6 +2,7 @@
 // Novalistically — Narrative Event & Event File Types
 // ============================================================================
 
+import type { JsonValue } from '../contracts/json.js';
 import type { BranchSet } from './branch.js';
 import type { Anachrony, VoiceProfile } from './discourse.js';
 import type { DurationProfile } from './duration.js';
@@ -122,6 +123,8 @@ export interface NarrativeEvent {
   }>;
   /** Free-form author notes passed verbatim to the Pass 1 prompt (pure pass-through) */
   authorNotes?: string[];
+  /** Read-only plugin extension payloads — never written into WorldState. */
+  extensions?: Readonly<Record<string, JsonValue>>;
 }
 
 export interface ThreadProgressEntry {
@@ -335,4 +338,10 @@ export interface EventFile {
   metanarrativeLevel?: MetanarrativeLevel;
   /** Free-form author notes passed verbatim to the Pass 1 prompt (pure pass-through) */
   authorNotes?: string[];
+  /**
+   * Plugin extension payloads, keyed by enabled plugin name. Read-only
+   * source data: extensions never enter WorldState and never mutate state;
+   * all source modification still flows through working validate → submit.
+   */
+  extensions?: Record<string, JsonValue>;
 }

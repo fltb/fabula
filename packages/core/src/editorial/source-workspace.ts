@@ -4,7 +4,7 @@ import type {
   SourceChangeV1,
   SourceDocumentV1,
 } from '../contracts/source.ts';
-import { analyzeSource } from '../entity/source-analysis.ts';
+import { analyzeSource, type SourceAnalysisOptions } from '../entity/source-analysis.ts';
 
 /** Pure authored-source queries and candidate analysis over an immutable snapshot. */
 export class SourceWorkspace {
@@ -22,7 +22,7 @@ export class SourceWorkspace {
     return this.snapshot.documents.find((document) => document.logicalPath === logicalPath) ?? null;
   }
 
-  analyze(changes: readonly SourceChangeV1[]): SourceAnalysisV1 {
-    return analyzeSource(this.snapshot, changes);
+  analyze(changes: readonly SourceChangeV1[], options?: SourceAnalysisOptions): SourceAnalysisV1 {
+    return analyzeSource(this.snapshot, changes, options);
   }
 }

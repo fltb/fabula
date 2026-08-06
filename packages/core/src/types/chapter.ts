@@ -4,7 +4,7 @@
 
 import type { StyleGuidance } from './event.js';
 import type { IdeaIR } from './idea-ir.js';
-import type { RenderSurfaceConfig } from './render-surface.js';
+import type { ReleasePolicy, RenderSurfaceConfig } from './render-surface.js';
 
 // ——— Chapter Metadata ———
 
@@ -45,6 +45,12 @@ export interface ProjectConfig {
   traceLevel?: 'off' | 'basic' | 'detailed';
   cacheEnabled?: boolean;
   defaultSceneTextTarget?: number;
+  /**
+   * Release policy for warning-level validation findings. Absent projects
+   * fall back to the canonical accept-and-record default at the gate path;
+   * the policy is NEVER inferred from historical pending_waiver records.
+   */
+  releasePolicy?: ReleasePolicy;
   plugins?: {
     enabled: boolean;
     /** Select a provider registered by a plugin. */

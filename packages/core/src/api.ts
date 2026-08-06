@@ -9,6 +9,10 @@ import {
 import type { PreviewResult } from './editorial/render-service.ts';
 import { toPublicEntityTypeCatalog } from './entity/entity-catalog-compiler.js';
 import { compileCanonicalRuntime, loadCanonicalProject } from './entity/project-runtime.ts';
+import {
+  extensionDiagnosticsForSnapshot,
+  type SourceAnalysisOptions,
+} from './entity/source-analysis.ts';
 import type { CompileProjectOptions, ProjectCompilation } from './entity/types.ts';
 import { sanitizeError } from './errors.ts';
 import { calculateISS } from './iss/score.ts';
@@ -99,6 +103,20 @@ export function compileProject(
     entityDeclarations: structuredClone(ir.entityDeclarations),
     entities,
     boundaries: structuredClone(runtime.boundaries),
+    replay: {
+      // The runtime catalog pair carries executable zod value schemas that
+      // replay validation exercises, so it cannot be structured-cloned; the
+      // IR hands out fresh catalogs per call, and a fresh wrapper keeps the
+      // detachment contract for the container itself.
+      catalogContext: {
+        entityDeclarationCatalog: ir.catalogContext.entityDeclarationCatalog,
+        entityTypeCatalog: ir.catalogContext.entityTypeCatalog,
+      },
+      ...(ir.relationshipReplayContext === undefined
+        ? {}
+        : { relationshipReplayContext: structuredClone(ir.relationshipReplayContext) }),
+      ...(ir.baseline === undefined ? {} : { baseline: structuredClone(ir.baseline) }),
+    },
   };
 }
 export interface ProjectGraphSnapshot {
@@ -218,6 +236,7 @@ export async function previewEditorialRun(
 export async function validateNovel(
   snapshot: ProjectSourceSnapshotV1,
   overrides?: Record<string, 'off' | 'warning' | 'error'>,
+  sourceOptions?: SourceAnalysisOptions,
 ): Promise<NovelValidationResult> {
   const ir = loadCanonicalProject(snapshot);
   const events = [...ir.authoredEvents];
@@ -237,8 +256,17 @@ export async function validateNovel(
     },
   );
   const threads = ir.data.worldInitialState?.threads ?? [];
+  // Optional enabled-plugin extension gate (plan 7.5): an unknown/disabled
+  // namespace is a SOURCE ERROR, so it flips `passed` even though the strict
+  // EventFile schema accepts the block structurally.
+  const sourceDiagnostics =
+    sourceOptions?.extensionRegistrar === undefined
+      ? undefined
+      : extensionDiagnosticsForSnapshot(snapshot, sourceOptions.extensionRegistrar);
+  const sourceErrorCount =
+    sourceDiagnostics?.filter((diagnostic) => diagnostic.severity === 'error').length ?? 0;
   return {
-    passed: [...results.values()].every((result) => result.passed),
+    passed: [...results.values()].every((result) => result.passed) && sourceErrorCount === 0,
     results,
     iss: calculateISS({
       entities: ir.registry,
@@ -246,6 +274,9 @@ export async function validateNovel(
       threads: threads.map((thread) => ({ id: thread.threadId, name: thread.name })),
       rules: ir.data.ruleDeclarations,
     }),
+    ...(sourceDiagnostics === undefined || sourceDiagnostics.length === 0
+      ? {}
+      : { sourceDiagnostics }),
   };
 }
 function runtimeFor(snapshot: ProjectSourceSnapshotV1) {

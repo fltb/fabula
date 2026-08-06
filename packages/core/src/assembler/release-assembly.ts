@@ -1,14 +1,17 @@
 import { includesPath } from '../branch/set.ts';
 import { sha256 } from '../cache/pure-sha256.ts';
 import type { JsonObject } from '../contracts/json.ts';
-import { PublicationError } from '../editorial/errors.ts';
+import { EditorialOperationError, PublicationError } from '../editorial/errors.ts';
+import { computeScopeHash } from '../editorial/identity.ts';
 import type { CoreExecutionRepository } from '../ports/execution-repository.ts';
 import type { BranchPath, BranchSet, Condition } from '../types/branch.ts';
 import type { ChapterMetadata } from '../types/chapter.ts';
 import type {
+  AssembleReleaseOutcomeV1,
   AssembleRequestV1,
   EditorialAssembleResult,
   EditorialError,
+  EditorialRuntime,
   PublicationManifestV1,
   SceneProseSource,
   SceneRevisionEnvelopeV1,
@@ -195,6 +198,7 @@ export async function validateManifestHeads(
   input: AssemblySemanticInput,
   branchPath?: BranchPath | null,
   requiredEvents?: ReadonlyMap<string, number>,
+  expectedScopeHash?: (eventId: string) => string,
 ): Promise<{ scenes: Map<string, VerifiedAssemblyScene>; errors: EditorialError[] }> {
   const scenes = new Map<string, VerifiedAssemblyScene>();
   const errors: EditorialError[] = [];
@@ -267,6 +271,19 @@ export async function validateManifestHeads(
     const metadata = scene.metadata;
     const branchExistence: BranchSet = toBranchSet(metadata.branch_existence) ?? { type: 'all' };
     if (branchPath && !includesPath(branchExistence, branchPath)) continue;
+    if (expectedScopeHash) {
+      const expected = expectedScopeHash(eventId);
+      if (envelope.scopeHash !== expected) {
+        errors.push(
+          error(
+            'PUBLICATION_INCOMPLETE',
+            `Revision ${revisionId} for event ${eventId} mixes a different scope than the assembly request`,
+            eventId,
+          ),
+        );
+        continue;
+      }
+    }
     const head: VerifiedHeadData = {
       revisionId: envelope.revisionId,
       proseHash: envelope.proseHash,
@@ -307,14 +324,34 @@ async function assemble(
   input: AssemblySemanticInput,
   request: AssembleRequestV1,
   repository: CoreExecutionRepository,
+  expectedScopeHash?: (eventId: string) => string,
 ): Promise<EditorialAssembleResult> {
   const { scenes, errors } = await validateManifestHeads(
     input.manifest,
     repository,
     input,
     request.branchPath,
+    undefined,
+    expectedScopeHash,
   );
   if (errors.length) throw new PublicationError('Assembly inputs are incomplete', errors);
+  // Every discourse entry must resolve to a verified scene: branch-excluded
+  // scenes may be dropped, but unpublished or unmaterialized entries fail
+  // closed instead of assembling a partial novel.
+  const sequenceErrors: EditorialError[] = [];
+  for (const entry of input.discourseSequence) {
+    if (scenes.has(entry.sceneId)) continue;
+    if (request.branchPath && input.scenes.has(entry.sceneId)) continue;
+    sequenceErrors.push(
+      error(
+        'PUBLICATION_INCOMPLETE',
+        `Scene sequence entry "${entry.sceneId}" has no published revision`,
+        entry.sceneId,
+      ),
+    );
+  }
+  if (sequenceErrors.length)
+    throw new PublicationError('Assembly inputs are incomplete', sequenceErrors);
   const ordered = input.discourseSequence
     .map((entry) => scenes.get(entry.sceneId))
     .filter((scene): scene is VerifiedAssemblyScene => scene !== undefined);
@@ -340,17 +377,20 @@ async function assemble(
     candidates,
     titles,
     request.title ?? 'Untitled',
-    input.discourseSequence.map((entry) => ({
-      sceneId: entry.sceneId,
-      sequence: entry.sequence,
-      chapter: entry.chapter,
-    })),
+    input.discourseSequence
+      .filter((entry) => scenes.has(entry.sceneId))
+      .map((entry) => ({
+        sceneId: entry.sceneId,
+        sequence: entry.sequence,
+        chapter: entry.chapter,
+      })),
   );
   return {
     operationId: request.mutation.operationId,
     markdown,
     wordCount: markdown.split(/\s+/).filter(Boolean).length,
     sceneCount: candidates.length,
+    revisionIds: ordered.map((scene) => scene.head.revisionId),
     publication: {
       status: 'current',
       outputPath: '',
@@ -364,14 +404,65 @@ export function canonicalAssemble(
   request: AssembleRequestV1,
   input: AssemblySemanticInput,
   repository: CoreExecutionRepository,
+  expectedScopeHash?: (eventId: string) => string,
 ): Promise<EditorialAssembleResult> {
-  return assemble(input, request, repository);
+  return assemble(input, request, repository, expectedScopeHash);
 }
 
 export function customAssemble(
   request: AssembleRequestV1,
   input: AssemblySemanticInput,
   repository: CoreExecutionRepository,
+  expectedScopeHash?: (eventId: string) => string,
 ): Promise<EditorialAssembleResult> {
-  return assemble(input, request, repository);
+  return assemble(input, request, repository, expectedScopeHash);
+}
+
+/**
+ * Pure assembly facade: exact markdown + derived counts + novel hash, never
+ * writing files and never accepting a host output path. Canonical and custom
+ * (branch) assembly are selected by the request; manifest heads are verified
+ * (missing / blocked / old-source / mixed-scope) before any novel is built.
+ */
+export async function assembleRelease(
+  request: AssembleRequestV1,
+  source: AssemblySemanticInput,
+  runtime: EditorialRuntime,
+): Promise<AssembleReleaseOutcomeV1> {
+  const execution = runtime.services?.execution;
+  if (!execution) {
+    throw new EditorialOperationError(
+      'INVALID_OPERATION',
+      'assembleRelease requires an execution repository in runtime.services',
+    );
+  }
+  const branchPath = request.branchPath ?? null;
+  const expectedScopeHash = (eventId: string): string =>
+    computeScopeHash(eventId, branchPath ?? undefined);
+  const assembleFn =
+    branchPath !== null || request.discourseBranch !== undefined
+      ? customAssemble
+      : canonicalAssemble;
+  try {
+    const result = await assembleFn(request, source, execution, expectedScopeHash);
+    return {
+      version: 1,
+      status: 'ready',
+      markdown: result.markdown,
+      sceneCount: result.sceneCount,
+      wordCount: result.wordCount,
+      novelHash: result.publication.novelHash ?? sha256(result.markdown),
+      scopeHash: source.manifest.branch_scope_hash,
+      revisionIds: [...result.revisionIds],
+    };
+  } catch (caught) {
+    if (caught instanceof PublicationError) {
+      return {
+        version: 1,
+        status: 'manifest_invalid',
+        errors: [...caught.reasons],
+      };
+    }
+    throw caught;
+  }
 }

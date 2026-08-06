@@ -24,7 +24,6 @@ import {
 import type { AcceptedSceneRecord } from '../../src/ports/execution-repository.ts';
 import type { Clock, IdGenerator } from '../../src/ports/runtime-services.ts';
 import { ReviewManager } from '../../src/review/manager.ts';
-import { reviewLedgerV1Schema } from '../../src/schemas/review.ts';
 import {
   MemoryExecutionRepository,
   MemoryRenderCacheRepository,
@@ -560,14 +559,19 @@ describe('editorial revision feedback', () => {
     expect(resolved.status).toBe('resolved');
     expect(resolved.resolvedAt).toBe(now);
 
-    // The injected identities are exactly what reached the review ledger via
-    // repository compare-and-swap — no fallback IDs or timestamps leaked in.
-    const record = await execution.readReview({ projectId: PROJECT_ID, reviewId: 'ledger' });
-    if (record === null) {
-      throw new Error('expected the review ledger record');
-    }
-    const ledger = reviewLedgerV1Schema.parse(record.value.value);
-    expect(ledger.comments.map((entry) => entry.id)).toEqual(['rev_facade_1', 'rev_facade_2']);
-    expect(ledger.comments.every((entry) => entry.createdAt === now)).toBe(true);
+    // The injected identities are exactly what reached the review event
+    // stream — no fallback IDs or timestamps leaked in.
+    const { events } = await execution.readReviewEvents({ projectId: PROJECT_ID });
+    expect(events.map((entry) => entry.kind)).toEqual([
+      'comment_added',
+      'comment_replaced',
+      'comment_status_changed',
+    ]);
+    expect(events.map((entry) => entry.commentId)).toEqual([
+      'rev_facade_1',
+      'rev_facade_1',
+      'rev_facade_2',
+    ]);
+    expect(events.every((entry) => entry.createdAt === now)).toBe(true);
   });
 });

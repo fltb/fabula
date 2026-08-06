@@ -1,6 +1,8 @@
-import type { StoryBoundaries } from '../state/story-boundaries.js';
+import type { RelationshipReplayContext } from '../state/relationship-replay.js';
+import type { NarrativeStateBaseline, StoryBoundaries } from '../state/story-boundaries.js';
 import type { BranchPath } from '../types/branch.js';
 import type { EntityLookup } from '../types/entity.js';
+import type { EntityCatalogContext } from '../types/entity-catalog.js';
 import type {
   ChapterMetadata,
   CharacterDefinition,
@@ -85,4 +87,25 @@ export interface ProjectCompilation {
   readonly entityDeclarations: EntityDeclarationCatalog;
   readonly entities: EntityLookup;
   readonly boundaries: StoryBoundaries;
+  /**
+   * The exact replay context the compiler threaded into this compilation —
+   * the shared catalog pair, relationship declarations/types and the full
+   * non-entity baseline. Detached clones, so a ReplayEngine built from them
+   * reconstructs per-event world states identically to the story boundaries
+   * (plan 8.1 read path: nearest verified snapshot → canonical suffix).
+   */
+  readonly replay: ProjectReplayContext;
+}
+
+/**
+ * Replay inputs for one canonical compilation (plan 8.1). Absent optional
+ * members mean the project compiles without them (no relationships/baseline).
+ */
+export interface ProjectReplayContext {
+  /** The one shared catalog pair threaded to replay and boundary compilation. */
+  readonly catalogContext: EntityCatalogContext;
+  /** Canonical relationship declarations and types for fail-closed replay. */
+  readonly relationshipReplayContext?: RelationshipReplayContext;
+  /** Full non-entity baseline cloned for each replay/boundary reconstruction. */
+  readonly baseline?: NarrativeStateBaseline;
 }

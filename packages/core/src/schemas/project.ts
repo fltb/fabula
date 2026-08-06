@@ -6,6 +6,20 @@ import { z } from 'zod';
 import { ideaIRSchema } from './idea-ir.js';
 import { renderSurfaceConfigSchema } from './render-surface.js';
 
+/**
+ * Project release policy (nova.yaml `releasePolicy`). `warnings` defaults to
+ * `accept-and-record` when the key is absent, so legacy projects without a
+ * policy behave exactly like the canonical default and are NEVER inferred
+ * from historical pending_waiver records. `openBlockingReviews` is a fixed
+ * literal for now.
+ */
+export const releasePolicySchema = z
+  .object({
+    warnings: z.enum(['accept-and-record', 'require-waiver']).default('accept-and-record'),
+    openBlockingReviews: z.literal('block').default('block'),
+  })
+  .strict();
+
 export const projectConfigSchema = z
   .object({
     project: z.string(),
@@ -55,6 +69,7 @@ export const projectConfigSchema = z
       })
       .strict()
       .optional(),
+    releasePolicy: releasePolicySchema.optional(),
     renderSurface: renderSurfaceConfigSchema.optional(),
   })
   .strict();

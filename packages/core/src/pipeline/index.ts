@@ -2,11 +2,23 @@
 // Pipeline barrel
 // ============================================================================
 
-export type { ReleaseDecision } from '../types/render-surface.ts';
+export type {
+  ReleaseDecision,
+  ReleasePolicy,
+  ReleaseWarningPolicy,
+} from '../types/render-surface.ts';
 export type { InteractionGate, WaiverRecord } from './interaction-gate.ts';
 export { InteractionManager } from './interaction-gate.ts';
 export { buildAndWriteOutputs } from './output.ts';
-export { evaluateReleaseDecision } from './release-decision.ts';
+export type {
+  EvaluateReleaseDecisionOptions,
+  ReleaseGateIdentityContext,
+} from './release-decision.ts';
+export {
+  computeReleaseGateId,
+  computeWarningFingerprint,
+  evaluateReleaseDecision,
+} from './release-decision.ts';
 export type {
   EvaluateProseCandidateInput,
   EvaluateProseCandidateResult,

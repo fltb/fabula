@@ -9,7 +9,7 @@ export interface CommentFilter {
   targetId?: string;
 }
 
-/** Time and ID sources injected by the host for review ledger mutations. */
+/** Time and ID sources injected by the host for review event mutations. */
 export type ReviewServices = Pick<CoreRuntimeServices, 'clock' | 'ids'>;
 
 export interface StatusSummary {
@@ -21,3 +21,18 @@ export interface StatusSummary {
   wontfix: number;
   superseded: number;
 }
+
+export type {
+  ReviewCommentAppliedPayloadV1,
+  ReviewCommentDraftV1,
+  ReviewCommentReplacedPayloadV1,
+  ReviewCommentStatusChangedPayloadV1,
+  ReviewEventDraftV1,
+  ReviewEventKindV1,
+  ReviewEventReadResultV1,
+  ReviewEventRecordV1,
+  ReviewGateDecisionV1,
+  ReviewGateInputV1,
+  ReviewGateV1,
+  ReviewProjectionV1,
+} from './events.js';

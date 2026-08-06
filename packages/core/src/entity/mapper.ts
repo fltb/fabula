@@ -827,6 +827,8 @@ export class EntityMapper {
       // Entity introduction + free-form author pass-through
       introduces: eventFile.introduces,
       authorNotes: eventFile.authorNotes,
+      // Read-only plugin extension payloads — never written into WorldState.
+      extensions: eventFile.extensions,
     };
   }
 

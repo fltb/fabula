@@ -4,7 +4,7 @@ import type {
   SourceChangeV1,
   SourceDocumentV1,
 } from '../contracts/source.ts';
-import { analyzeSource } from '../entity/source-analysis.ts';
+import { analyzeSource, type SourceAnalysisOptions } from '../entity/source-analysis.ts';
 import type { CoreExecutionRepository } from '../ports/execution-repository.ts';
 import type { CoreRuntimeServices } from '../ports/runtime-services.ts';
 import type {
@@ -65,8 +65,9 @@ export function getSourceDocument(
 export function previewSourceChange(
   snapshot: ProjectSourceSnapshotV1,
   changes: readonly SourceChangeV1[],
+  options?: SourceAnalysisOptions,
 ): SourceAnalysisV1 {
-  return analyzeSource(snapshot, changes);
+  return analyzeSource(snapshot, changes, options);
 }
 
 /** Read an accepted scene revision through the semantic execution repository. */

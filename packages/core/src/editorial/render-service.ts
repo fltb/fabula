@@ -24,6 +24,7 @@
 import { BatchRenderPipeline } from '../batch-renderer.ts';
 import type { CompiledGameDialogueTree } from '../branch/game-dialogue-tree.ts';
 import { sha256 } from '../cache/pure-sha256.ts';
+import { resolveReleasePolicy } from '../config/defaults.ts';
 import { ContextCompiler } from '../context/compiler.ts';
 import { PromptAssembler } from '../context/prompt-assembler.ts';
 import type { JsonValue } from '../contracts/json.js';
@@ -38,6 +39,7 @@ import type { TypedEventBus } from '../event-bus.ts';
 import { TraceCollector } from '../observability/trace.ts';
 import {
   evaluateReleaseDecision,
+  InteractionManager,
   PASS1_PROMPT_TEMPLATE_NAME,
   type ProviderCallLedgerEntry,
   type RenderJob,
@@ -47,6 +49,7 @@ import {
   SurfaceScheduler,
 } from '../pipeline/index.ts';
 import { appendPlayerChoicesBlock } from '../pipeline/output.ts';
+import type { PluginHooksManager } from '../plugin/hooks-manager.ts';
 import type {
   AcceptedSceneRecord,
   CoreExecutionRepository,
@@ -83,6 +86,7 @@ import type {
   NarrativeEvent,
   ReleaseDecision,
   RevisionContext,
+  Validator,
 } from '../types/index.ts';
 import type {
   AcceptedSceneArtifact,
@@ -90,7 +94,7 @@ import type {
   SurfacePlannerOptions,
   SurfacePlanResult,
 } from '../types/render-surface.ts';
-import type { ReviewComment } from '../types/review.ts';
+import type { ReviewApplicationV1, ReviewComment } from '../types/review.ts';
 import { ResultAggregator } from '../validator/aggregator.ts';
 import { createBuiltInValidators } from '../validator/builtins.ts';
 import {
@@ -100,8 +104,10 @@ import {
   sortReviewFeedback,
 } from './compiler.ts';
 import { EditorialOperationError } from './errors.ts';
+import { reviewServices } from './facade.ts';
 import {
   BUILT_IN_VALIDATOR_IMPLEMENTATION_VERSION,
+  type PluginValidationIdentity,
   type ValidationIdentityInput,
 } from './identity.ts';
 import { preflightSelector, type SceneCatalog } from './selector.ts';
@@ -172,21 +178,66 @@ function requiresProviderByEventId(
   return result;
 }
 
+/**
+ * Deterministic PluginValidationIdentity list from the active hooks manager.
+ * Covers name/version/manifestHash/moduleHash/hook names/validator names so
+ * any plugin change (different moduleHash included) shifts validationIdentity,
+ * planHash, and the render cache key. Empty when no manager is present.
+ */
+function pluginValidationIdentities(
+  manager: PluginHooksManager | undefined,
+): PluginValidationIdentity[] {
+  if (!manager) return [];
+  return manager.getPluginIdentities().map((identity) => {
+    const version = identity.version ?? '';
+    const promptHookIdentity = sha256(
+      canonicalJson({
+        version: identity.version,
+        manifestHash: identity.manifestHash,
+        moduleHash: identity.moduleHash,
+        hooks: identity.hooks,
+      }),
+    );
+    return {
+      name: identity.name,
+      version,
+      manifestHash: identity.manifestHash ?? '',
+      moduleHash: identity.moduleHash ?? '',
+      hookNames: identity.hooks,
+      validators: manager.getPluginValidatorIdentities(identity.name),
+      promptHookIdentity,
+    };
+  });
+}
+
+/**
+ * Plugin validators registered through the hooks manager, merged into the
+ * same validator set the pipeline validates with. Absent manager → built-ins
+ * only (today's exact behavior).
+ */
+function pluginValidators(manager: PluginHooksManager | undefined): readonly Validator[] {
+  return manager?.getValidators() ?? [];
+}
+
 function buildCompileInput(
   init: ProjectInitialization,
   request: Omit<EditorialRenderRequestV1, 'mutation'>,
   reviewComments: readonly ReviewComment[],
   latestRevisions: Record<string, { revisionId: string; proseHash: string } | null>,
+  pluginHooksManager?: PluginHooksManager,
 ): EditorialCompileInput {
   const overrides = { ...(init.data.config?.validatorOverrides ?? {}) };
-  const aggregator = new ResultAggregator([...createBuiltInValidators()], init.entityTypes);
+  const aggregator = new ResultAggregator(
+    [...createBuiltInValidators(), ...pluginValidators(pluginHooksManager)],
+    init.entityTypes,
+  );
   const analysisContract = aggregator.getAnalysisContract(overrides);
   const validation: ValidationIdentityInput = {
     analysisContractHash: analysisContract.hash,
     builtInValidatorImplementationVersion: BUILT_IN_VALIDATOR_IMPLEMENTATION_VERSION,
     effectiveOverrides: overrides,
     validators: aggregator.listValidatorIdentities(BUILT_IN_VALIDATOR_IMPLEMENTATION_VERSION),
-    plugins: [],
+    plugins: pluginValidationIdentities(pluginHooksManager),
   };
   return {
     request: {
@@ -685,88 +736,79 @@ function buildRevisionEnvelope(
   };
 }
 
-type AcceptedPromotion =
-  | {
-      readonly kind: 'committed';
-      readonly revisionId: string;
-      readonly envelope: SceneRevisionEnvelopeV1;
-    }
-  | {
-      readonly kind: 'conflict';
-      readonly revisionId: string;
-      readonly envelope: SceneRevisionEnvelopeV1;
-    };
+/**
+ * One accepted-head CAS payload captured during candidate execution. The
+ * revision envelope is appended to the append-only scene revision archive by
+ * `executeEditorialCandidates`; the accepted head CAS itself is deferred to
+ * `commitEditorialCandidates`, which must match `expectedVersion` (the head
+ * revision read at candidate time) or the candidate is stale.
+ */
+export interface EditorialSceneCommitV1 {
+  readonly eventId: string;
+  readonly revisionId: string;
+  readonly envelope: SceneRevisionEnvelopeV1;
+  readonly expectedVersion: number | null;
+  /** Render errors of the candidate, folded into the blocked decision on conflict. */
+  readonly resultErrors: readonly string[];
+}
 
 /**
- * Promote a released candidate to the accepted head. The scene revision record
- * is appended first (append-only history); the accepted head is then updated
- * with a compare-and-swap against the revision read from
- * {@link CoreExecutionRepository.readAcceptedScene}. A `conflict` means a
- * concurrent writer owns the accepted head — the existing head is never
- * overwritten and the caller must surface the candidate as stale.
+ * Everything a detached commit needs to promote accepted scenes without
+ * provider calls or compilation: per-event commit payloads plus the state
+ * required to assemble the final render result afterwards.
  */
-async function promoteAccepted(
-  execution: CoreExecutionRepository,
-  projectId: string,
-  sourceHash: string,
-  result: RenderSceneResult,
-  job: RenderJob,
-  plan: EditorialCompileOutput,
-  operationId: string,
-  request: EditorialRenderRequestV1,
-  decision: ReleaseDecision,
-  parentRevisionId: string | null,
-  expectedVersion: number | null,
-  clock: Clock,
-  ids: IdGenerator,
-): Promise<AcceptedPromotion> {
-  const envelope = buildRevisionEnvelope(
-    result,
-    job,
-    plan,
-    operationId,
-    request,
-    decision,
-    parentRevisionId,
-    clock,
-    ids,
-  );
-  await execution.compareAndSwapSceneRevision({
-    projectId,
-    eventId: result.eventId,
-    revisionId: envelope.revisionId,
-    expectedVersion: null,
-    value: {
-      version: 1,
-      projectId,
-      eventId: result.eventId,
-      revisionId: envelope.revisionId,
-      parentRevisionId,
-      sourceHash,
-      value: envelope as unknown as JsonValue,
-    },
-  });
-  const accepted: AcceptedSceneRecordLike = {
-    version: 1,
-    projectId,
-    eventId: result.eventId,
-    sourceHash,
-    revisionId: envelope.revisionId,
-    prose: result.prose,
-    proseHash: envelope.proseHash,
-    sceneHash: envelope.sceneHash,
-    value: envelope as unknown as JsonValue,
-  };
-  const commit = await execution.compareAndSwapAcceptedScene({
-    projectId,
-    eventId: result.eventId,
-    expectedVersion,
-    value: accepted,
-  });
-  if (commit.kind === 'conflict') {
-    return { kind: 'conflict', revisionId: envelope.revisionId, envelope };
-  }
-  return { kind: 'committed', revisionId: envelope.revisionId, envelope };
+export interface EditorialCandidateSetV1 {
+  readonly version: 1;
+  readonly operationId: string;
+  readonly projectId: string;
+  readonly sourceHash: string;
+  readonly request: EditorialRenderRequestV1;
+  readonly candidateExecution?: EditorialCandidateExecution;
+  readonly planHash: string;
+  readonly planSummary: EditorialPlanSummaryV1;
+  readonly selectedEventIds: readonly string[];
+  /** Render results in deterministic display order (chapter, narrativeOrder, eventId). */
+  readonly orderedResults: readonly RenderSceneResult[];
+  readonly decisions: ReadonlyMap<string, ReleaseDecision>;
+  readonly sceneDispositions: ReadonlyMap<string, SceneDisposition>;
+  readonly revisionIds: ReadonlyMap<string, string | null>;
+  readonly editorialErrors: readonly EditorialError[];
+  readonly commits: readonly EditorialSceneCommitV1[];
+  readonly trace: TraceCollector;
+  readonly completedScenes: number;
+  readonly totalScenes: number;
+}
+
+/**
+ * Outcome of `executeEditorialCandidates`: a preflight failure that must be
+ * returned as-is (no commit, no operation record), or a commit-ready
+ * candidate set.
+ */
+export type EditorialCandidatesOutcome =
+  | { readonly kind: 'failed'; readonly result: RenderNovelResult }
+  | { readonly kind: 'candidates'; readonly candidateSet: EditorialCandidateSetV1 };
+
+/** Per-event accepted-head CAS outcome from `commitEditorialCandidates`. */
+export interface EditorialHeadCommitOutcomeV1 {
+  readonly eventId: string;
+  readonly status: 'accepted' | 'conflict';
+  readonly revisionId: string;
+}
+
+/**
+ * Result of `commitEditorialCandidates`. `stale` is true when ANY head CAS
+ * conflicted: the whole operation is stale, publication is forbidden, and the
+ * already-appended candidate revisions remain as auditable stale candidates.
+ */
+export interface EditorialCommitResultV1 {
+  readonly version: 1;
+  readonly stale: boolean;
+  readonly outcomes: readonly EditorialHeadCommitOutcomeV1[];
+  readonly publication: PublicationResult;
+  readonly decisions: ReadonlyMap<string, ReleaseDecision>;
+  readonly sceneDispositions: ReadonlyMap<string, SceneDisposition>;
+  readonly revisionIds: ReadonlyMap<string, string | null>;
+  readonly editorialErrors: readonly EditorialError[];
 }
 
 interface AcceptedSceneRecordLike {
@@ -858,19 +900,23 @@ function assertRuntime(runtime: EditorialRuntime): asserts runtime is EditorialR
 
 /**
  * Resolve the current accepted scene head for every event from the semantic
- * execution repository. Only `readAcceptedScene` (`{revision, value}`) records
- * are used — never the render cache. Events without an accepted head are
- * simply absent from the returned map.
+ * execution repository, scoped to the given immutable source hash. Only
+ * `readAcceptedScene` (`{revision, value}`) records are used — never the
+ * render cache. Events without an accepted head for THIS source hash are
+ * simply absent from the returned map, so a stale-source head never acts as
+ * a base (or revision preflight base) for a newer source render.
  */
 async function resolveAcceptedHeads(
   execution: CoreExecutionRepository,
   projectId: string,
   eventIds: readonly string[],
+  sourceHash: string,
 ): Promise<ReadonlyMap<string, AcceptedSceneRecord>> {
   const records = await Promise.all(
     eventIds.map(async (eventId) => {
       const read = await execution.readAcceptedScene({ projectId, eventId });
-      return read ? ([eventId, read.value] as const) : null;
+      if (!read || read.value.sourceHash !== sourceHash) return null;
+      return [eventId, read.value] as const;
     }),
   );
   const accepted = new Map<string, AcceptedSceneRecord>();
@@ -1006,14 +1052,6 @@ export function composeRevisionDirective(
   return parts.join('\n');
 }
 
-export function persistInlineInstructionReview(): string | null {
-  return null;
-}
-
-export function applySceneLineReviews(): void {}
-
-export function applyChapterNovelReviews(): void {}
-
 export interface EditorialCandidateExecution {
   operationKind: 'adopt_scene' | 'rollback_scene';
   eventId: string;
@@ -1032,14 +1070,21 @@ export function computeCandidateOperationRequestHash(
 }
 
 // ============================================================================
-// executeEditorialRender — full orchestration
+// executeEditorialCandidates — compile + provider + validation + archive
+// ----------------------------------------------------------------------------
+// Everything up to but NOT including accepted-scene CAS / publication CAS /
+// operation completion: compile, provider calls, Pass 2, validation, release
+// decision and the append-only scene revision archive. In-run generated
+// scenes feed subsequent surface waves ONLY through the in-memory
+// `acceptedByEventId` map — they never become repository accepted heads until
+// `commitEditorialCandidates` runs.
 // ============================================================================
 
-export async function executeEditorialRender(
+export async function executeEditorialCandidates(
   request: EditorialRenderRequestV1,
   runtime: EditorialRuntime,
   candidateExecution?: EditorialCandidateExecution,
-): Promise<RenderNovelResult> {
+): Promise<EditorialCandidatesOutcome> {
   assertRuntime(runtime);
   const execution = runtime.services.execution;
   const operationId = request.mutation.operationId;
@@ -1049,15 +1094,31 @@ export async function executeEditorialRender(
   // ── 1. COMPILE (immutable snapshot + resolved accepted heads) ─────────
   const init = initialize(request.source);
   const projectId = init.data.config?.project ?? 'default-project';
-  const reviewComments = await new ReviewManager(execution, projectId).getComments();
+  const reviewManager = new ReviewManager(execution, projectId);
+  const reviewComments = await reviewManager.getComments();
+  // Release policy: legacy projects without `releasePolicy` get the canonical
+  // accept-and-record default — never inferred from pending_waiver history.
+  const releasePolicy = resolveReleasePolicy(init.data.config?.releasePolicy);
+  // Pre-granted waivers (request.waivers) seed the gate manager so explicit
+  // waivers are honored under require-waiver policies.
+  const waiverManager = new InteractionManager();
+  for (const waiver of request.waivers ?? []) {
+    waiverManager.recordWaiver(waiver.gateId, waiver.reason, waiver.signedBy);
+  }
   const preflight = preflightSelector(request.selector, init.catalog);
-  const acceptedHeads = await resolveAcceptedHeads(execution, projectId, preflight.eventIds);
+  const acceptedHeads = await resolveAcceptedHeads(
+    execution,
+    projectId,
+    preflight.eventIds,
+    request.source.sourceHash,
+  );
   const plan = compileEditorialRun(
     buildCompileInput(
       init,
       request,
       reviewComments,
       buildLatestRevisions(preflight.eventIds, acceptedHeads),
+      runtime.pluginHooksManager,
     ),
   );
 
@@ -1068,7 +1129,10 @@ export async function executeEditorialRender(
       ...(error.eventId ? { eventId: error.eventId } : {}),
     }));
     emit.emit({ kind: 'operation_failed' });
-    return buildFailedResult(operationId, editorialErrors, plan.planSummary);
+    return {
+      kind: 'failed',
+      result: buildFailedResult(operationId, editorialErrors, plan.planSummary),
+    };
   }
 
   // Revision preflight: every explicitly revised scene must resolve an
@@ -1084,7 +1148,10 @@ export async function executeEditorialRender(
   const noAcceptedBaseErrors = collectNoAcceptedBaseErrors([...revisionStates.values()]);
   if (noAcceptedBaseErrors.length > 0) {
     emit.emit({ kind: 'operation_failed' });
-    return buildFailedResult(operationId, noAcceptedBaseErrors, plan.planSummary);
+    return {
+      kind: 'failed',
+      result: buildFailedResult(operationId, noAcceptedBaseErrors, plan.planSummary),
+    };
   }
 
   // ── 2. Canonical runtime + surface plan ──────────────────────────────
@@ -1166,7 +1233,10 @@ export async function executeEditorialRender(
     }${cycles ? ` cycle participants: ${cycles}` : ''}`;
     const editorialErrors: EditorialError[] = [{ code: 'INVALID_OPERATION', message }];
     emit.emit({ kind: 'operation_failed' });
-    return buildFailedResult(operationId, editorialErrors, plan.planSummary);
+    return {
+      kind: 'failed',
+      result: buildFailedResult(operationId, editorialErrors, plan.planSummary),
+    };
   }
 
   const allResults: RenderSceneResult[] = [...preBlocked];
@@ -1176,6 +1246,7 @@ export async function executeEditorialRender(
   const totalScenes = plan.selectedEventIds.length;
   let completedScenes = preBlocked.length;
   const editorialErrors: EditorialError[] = [];
+  const commits: EditorialSceneCommitV1[] = [];
 
   const scopeHash = plan.planSummary.scopeHash;
   const validationIdentity = plan.planSummary.validationIdentity;
@@ -1241,7 +1312,17 @@ export async function executeEditorialRender(
 
     for (const result of waveResults) {
       completedScenes++;
-      const decision = evaluateReleaseDecision(result, scopeHash, validationIdentity);
+      const proseHash = sha256(result.prose);
+      const decision = evaluateReleaseDecision(
+        result,
+        scopeHash,
+        validationIdentity,
+        waiverManager,
+        {
+          policy: releasePolicy,
+          gateIdentity: { projectId, sourceHash: request.source.sourceHash, proseHash },
+        },
+      );
       decisions.set(result.eventId, decision);
       allResults.push(result);
 
@@ -1271,10 +1352,12 @@ export async function executeEditorialRender(
             });
           }
         } else {
-          const promotion = await promoteAccepted(
-            execution,
-            projectId,
-            request.source.sourceHash,
+          // Append-only scene revision archive: the candidate becomes
+          // auditable immediately. The accepted head itself is NOT touched
+          // here — commitEditorialCandidates performs the CAS later, so
+          // in-run scenes only propagate via the in-memory acceptedByEventId
+          // map and never become repository accepted heads before commit.
+          const envelope = buildRevisionEnvelope(
             result,
             job,
             plan,
@@ -1282,62 +1365,58 @@ export async function executeEditorialRender(
             request,
             decision,
             parentRevisionId,
-            previousAccepted?.revision ?? null,
             runtime.services.clock,
             runtime.services.ids,
           );
-          if (promotion.kind === 'committed') {
-            sceneDispositions.set(result.eventId, 'candidate_promoted');
-            revisionIds.set(result.eventId, promotion.revisionId);
-            acceptedByEventId.set(result.eventId, {
+          await execution.compareAndSwapSceneRevision({
+            projectId,
+            eventId: result.eventId,
+            revisionId: envelope.revisionId,
+            expectedVersion: null,
+            value: {
+              version: 1,
+              projectId,
               eventId: result.eventId,
-              prose: result.prose,
-              proseHash: promotion.envelope.proseHash,
-              sceneHash: promotion.envelope.sceneHash,
-              editorialBasisHash: promotion.envelope.editorialBasisHash,
-              scopeHash: promotion.envelope.scopeHash,
-              releaseDecision: decision,
-              revisionId: promotion.revisionId,
-              createdAt: promotion.envelope.createdAt,
-            });
-            emit.emit({
-              kind: 'candidate_archived',
-              eventId: result.eventId,
-              completedScenes,
-              totalScenes,
-              phase: 'promotion',
-              disposition: 'candidate_promoted',
-            });
-          } else {
-            // The accepted head moved between the read and the CAS: this
-            // candidate is stale. Never report promotion/current and never
-            // feed later surface packets from the contested candidate.
-            const conflictMessage = `ACCEPTED_HEAD_CONFLICT: accepted scene ${result.eventId} changed concurrently; candidate not promoted`;
-            editorialErrors.push({
-              code: 'STORAGE_CONFLICT',
-              message: conflictMessage,
-              eventId: result.eventId,
-            });
-            sceneDispositions.set(result.eventId, 'candidate_stale');
-            revisionIds.set(result.eventId, null);
-            decisions.set(result.eventId, {
-              status: 'blocked',
-              scopeHash,
-              validationIdentity,
-              reasons: [...result.errors, conflictMessage],
-            });
-            emit.emit({
-              kind: 'candidate_archived',
-              eventId: result.eventId,
-              completedScenes,
-              totalScenes,
-              phase: 'promotion',
-              disposition: 'candidate_stale',
-            });
-          }
+              revisionId: envelope.revisionId,
+              parentRevisionId,
+              sourceHash: request.source.sourceHash,
+              value: envelope as unknown as JsonValue,
+            },
+          });
+          commits.push({
+            eventId: result.eventId,
+            revisionId: envelope.revisionId,
+            envelope,
+            expectedVersion: previousAccepted?.revision ?? null,
+            resultErrors: result.errors,
+          });
+          sceneDispositions.set(result.eventId, 'candidate_promoted');
+          revisionIds.set(result.eventId, envelope.revisionId);
+          acceptedByEventId.set(result.eventId, {
+            eventId: result.eventId,
+            prose: result.prose,
+            proseHash: envelope.proseHash,
+            sceneHash: envelope.sceneHash,
+            editorialBasisHash: envelope.editorialBasisHash,
+            scopeHash: envelope.scopeHash,
+            releaseDecision: decision,
+            revisionId: envelope.revisionId,
+            createdAt: envelope.createdAt,
+          });
+          emit.emit({
+            kind: 'candidate_archived',
+            eventId: result.eventId,
+            completedScenes,
+            totalScenes,
+            phase: 'promotion',
+            disposition: 'candidate_promoted',
+          });
         }
       } else {
-        sceneDispositions.set(result.eventId, 'candidate_blocked');
+        sceneDispositions.set(
+          result.eventId,
+          decision.status === 'pending_waiver' ? 'candidate_pending_waiver' : 'candidate_blocked',
+        );
         revisionIds.set(result.eventId, null);
         const blockedEnvelope = buildRevisionEnvelope(
           result,
@@ -1366,11 +1445,33 @@ export async function executeEditorialRender(
             value: blockedEnvelope as unknown as JsonValue,
           },
         });
+        if (decision.status === 'pending_waiver' && decision.gateId) {
+          // Open the release gate in the review stream: the candidate waits
+          // on a maintainer decision (require-waiver policy). The archived
+          // envelope above is the authoritative pending candidate; the gate
+          // record is the review-stream projection.
+          const existingGate = await reviewManager.getGate(decision.gateId);
+          if (!existingGate) {
+            await reviewManager.openGate(
+              {
+                gateId: decision.gateId,
+                sourceHash: request.source.sourceHash,
+                eventId: result.eventId,
+                proseHash,
+                scopeHash,
+                validationIdentity,
+                warningFingerprints: decision.warningFingerprints ?? [],
+                revisionId: blockedEnvelope.revisionId,
+              },
+              request.mutation.actorId,
+            );
+          }
+        }
       }
     }
   }
 
-  // ── 4. Publish summary + operation record ───────────────────────────
+  // ── 4. Deterministic result order + commit-ready candidate set ──────
   const orderedResults = [...allResults].sort(
     (left, right) =>
       (init.chapterByEventId[left.eventId] ?? 0) - (init.chapterByEventId[right.eventId] ?? 0) ||
@@ -1378,36 +1479,251 @@ export async function executeEditorialRender(
         (init.events.find((event) => event.id === right.eventId)?.narrativeOrder ?? 0) ||
       left.eventId.localeCompare(right.eventId),
   );
-  const mappedResults = orderedResults.map((result) =>
+
+  return {
+    kind: 'candidates',
+    candidateSet: {
+      version: 1,
+      operationId,
+      projectId,
+      sourceHash: request.source.sourceHash,
+      request,
+      candidateExecution,
+      planHash: plan.planHash,
+      planSummary: plan.planSummary,
+      selectedEventIds: plan.selectedEventIds,
+      orderedResults,
+      decisions,
+      sceneDispositions,
+      revisionIds,
+      editorialErrors,
+      commits,
+      trace: traceCollector,
+      completedScenes,
+      totalScenes,
+    },
+  };
+}
+
+// ============================================================================
+// commitEditorialCandidates — accepted-scene CAS + publication readiness
+// ----------------------------------------------------------------------------
+// The ONLY repository writes are the per-head accepted-scene CAS
+// (`compareAndSwapAcceptedScene`). No provider calls, no compile, no revision
+// archive. Any head CAS conflict marks the whole operation stale and forbids
+// publication; the already-appended candidate revisions are retained as
+// auditable stale candidates. Review application hooks into this slot (Step 5).
+// ============================================================================
+
+export async function commitEditorialCandidates(
+  candidateSet: EditorialCandidateSetV1,
+  runtime: EditorialRuntime,
+): Promise<EditorialCommitResultV1> {
+  assertRuntime(runtime);
+  const execution = runtime.services.execution;
+  const { projectId, sourceHash } = candidateSet;
+  const emit = createProgressEmitter(
+    runtime.eventBus,
+    candidateSet.operationId,
+    runtime.services.clock,
+  );
+
+  const decisions = new Map(candidateSet.decisions);
+  const sceneDispositions = new Map(candidateSet.sceneDispositions);
+  const revisionIds = new Map(candidateSet.revisionIds);
+  const editorialErrors: EditorialError[] = [...candidateSet.editorialErrors];
+  const outcomes: EditorialHeadCommitOutcomeV1[] = [];
+  let stale = false;
+
+  for (const commit of candidateSet.commits) {
+    const accepted: AcceptedSceneRecordLike = {
+      version: 1,
+      projectId,
+      eventId: commit.eventId,
+      sourceHash,
+      revisionId: commit.revisionId,
+      prose: commit.envelope.prose,
+      proseHash: commit.envelope.proseHash,
+      sceneHash: commit.envelope.sceneHash,
+      value: commit.envelope as unknown as JsonValue,
+    };
+    const cas = await execution.compareAndSwapAcceptedScene({
+      projectId,
+      eventId: commit.eventId,
+      expectedVersion: commit.expectedVersion,
+      value: accepted,
+    });
+    if (cas.kind === 'conflict') {
+      // The accepted head moved between candidate compute and commit: this
+      // candidate is stale. Never report promotion/current and never feed
+      // later surface packets from the contested candidate.
+      stale = true;
+      const conflictMessage = `ACCEPTED_HEAD_CONFLICT: accepted scene ${commit.eventId} changed concurrently; candidate not promoted`;
+      editorialErrors.push({
+        code: 'STORAGE_CONFLICT',
+        message: conflictMessage,
+        eventId: commit.eventId,
+      });
+      decisions.set(commit.eventId, {
+        status: 'blocked',
+        scopeHash: candidateSet.planSummary.scopeHash,
+        validationIdentity: candidateSet.planSummary.validationIdentity,
+        reasons: [...commit.resultErrors, conflictMessage],
+      });
+      sceneDispositions.set(commit.eventId, 'candidate_stale');
+      revisionIds.set(commit.eventId, null);
+      outcomes.push({
+        eventId: commit.eventId,
+        status: 'conflict',
+        revisionId: commit.revisionId,
+      });
+      emit.emit({
+        kind: 'candidate_archived',
+        eventId: commit.eventId,
+        phase: 'promotion',
+        disposition: 'candidate_stale',
+      });
+    } else {
+      outcomes.push({
+        eventId: commit.eventId,
+        status: 'accepted',
+        revisionId: commit.revisionId,
+      });
+    }
+  }
+
+  // Review application: a revision that explicitly names review comments
+  // (`request.revision.reviewIds`) addresses the scene/line-scoped comments
+  // whose target event was successfully committed. Recorded as append-only
+  // `comment_applied` events; skipped when the operation is stale (any
+  // accepted head conflicted) or no revision review ids were supplied.
+  await applyRevisionReviewApplications(candidateSet, runtime, outcomes, stale);
+
+  // Publication readiness derives from the post-commit decisions/errors: any
+  // conflict above blocks publication (status stale).
+  const publication = buildPublication(candidateSet.selectedEventIds, decisions, editorialErrors);
+
+  return {
+    version: 1,
+    stale,
+    outcomes,
+    publication,
+    decisions,
+    sceneDispositions,
+    revisionIds,
+    editorialErrors,
+  };
+}
+
+// ============================================================================
+// executeEditorialRender — facade composing candidates + commit
+// ============================================================================
+
+/**
+ * Append `comment_applied` events for the review comments a completed
+ * revision explicitly names (`request.revision.reviewIds`). A comment is
+ * addressed only when its scene/line target was successfully committed by
+ * this operation; already resolved/wontfix/superseded comments and unknown
+ * ids are left untouched. Never runs on a stale (conflicted) operation.
+ */
+async function applyRevisionReviewApplications(
+  candidateSet: EditorialCandidateSetV1,
+  runtime: EditorialRuntime,
+  outcomes: readonly EditorialHeadCommitOutcomeV1[],
+  stale: boolean,
+): Promise<void> {
+  assertRuntime(runtime);
+  const reviewIds = candidateSet.request.revision?.reviewIds ?? [];
+  if (stale || reviewIds.length === 0) return;
+  const committedEventIds = new Set(
+    outcomes.filter((outcome) => outcome.status === 'accepted').map((outcome) => outcome.eventId),
+  );
+  if (committedEventIds.size === 0) return;
+  const execution = runtime.services.execution;
+  const manager = new ReviewManager(execution, candidateSet.projectId, reviewServices(runtime));
+  const comments = await manager.getComments();
+  const commentsById = new Map(comments.map((comment) => [comment.id, comment] as const));
+  const applications = new Map<
+    string,
+    { readonly application: ReviewApplicationV1; readonly addressed: boolean }
+  >();
+  const now = runtime.services.clock.now();
+  for (const id of new Set(reviewIds)) {
+    const comment = commentsById.get(id);
+    if (!comment) continue;
+    if (
+      comment.status === 'superseded' ||
+      comment.status === 'resolved' ||
+      comment.status === 'wontfix'
+    )
+      continue;
+    if (comment.target.type !== 'scene' && comment.target.type !== 'line') continue;
+    if (!committedEventIds.has(comment.target.id)) continue;
+    const revisionId = candidateSet.revisionIds.get(comment.target.id) ?? null;
+    if (revisionId === null) continue;
+    applications.set(id, {
+      application: {
+        eventId: comment.target.id,
+        revisionId,
+        operationId: candidateSet.operationId,
+        appliedAt: now,
+      },
+      addressed: true,
+    });
+  }
+  if (applications.size > 0) await manager.recordCommentApplications(applications);
+}
+
+export async function executeEditorialRender(
+  request: EditorialRenderRequestV1,
+  runtime: EditorialRuntime,
+  candidateExecution?: EditorialCandidateExecution,
+): Promise<RenderNovelResult> {
+  const outcome = await executeEditorialCandidates(request, runtime, candidateExecution);
+  if (outcome.kind === 'failed') return outcome.result;
+
+  const candidateSet = outcome.candidateSet;
+  const commitResult = await commitEditorialCandidates(candidateSet, runtime);
+
+  assertRuntime(runtime);
+  const execution = runtime.services.execution;
+  const operationId = candidateSet.operationId;
+  const emit = createProgressEmitter(runtime.eventBus, operationId, runtime.services.clock);
+
+  // ── 5. Publish summary + operation record ───────────────────────────
+  const mappedResults = candidateSet.orderedResults.map((result) =>
     mapSceneResult(
       result,
-      decisions.get(result.eventId) ?? null,
-      revisionIds.get(result.eventId) ?? null,
-      sceneDispositions.get(result.eventId) ?? 'candidate_blocked',
+      commitResult.decisions.get(result.eventId) ?? null,
+      commitResult.revisionIds.get(result.eventId) ?? null,
+      commitResult.sceneDispositions.get(result.eventId) ?? 'candidate_blocked',
     ),
   );
-  const publication = buildPublication(plan.selectedEventIds, decisions, editorialErrors);
-  const resultErrors = editorialErrors.map((error) => error.message);
+  const publication = commitResult.publication;
+  const resultErrors = commitResult.editorialErrors.map((error) => error.message);
   const operationSucceeded =
     publication.status === 'current' && mappedResults.every((result) => result.released);
 
   const completedAt = runtime.services.clock.now();
   await execution.compareAndSwapOperation({
-    projectId,
+    projectId: candidateSet.projectId,
     operationId,
     expectedVersion: null,
     value: {
       version: 1,
-      projectId,
+      projectId: candidateSet.projectId,
       operationId,
       value: {
         version: 1,
         operationId,
-        kind: candidateExecution?.operationKind ?? 'render',
-        actorId: request.mutation.actorId,
-        requestHash: candidateExecution
-          ? computeCandidateOperationRequestHash(request, candidateExecution)
-          : plan.planHash,
+        kind: candidateSet.candidateExecution?.operationKind ?? 'render',
+        actorId: candidateSet.request.mutation.actorId,
+        requestHash: candidateSet.candidateExecution
+          ? computeCandidateOperationRequestHash(
+              candidateSet.request,
+              candidateSet.candidateExecution,
+            )
+          : candidateSet.planHash,
         status: operationSucceeded ? 'succeeded' : 'failed',
         startedAt: completedAt,
         heartbeatAt: completedAt,
@@ -1417,18 +1733,18 @@ export async function executeEditorialRender(
       } as unknown as JsonValue,
     },
   });
-  await persistTrace(execution, projectId, operationId, traceCollector);
+  await persistTrace(execution, candidateSet.projectId, operationId, candidateSet.trace);
   emit.emit({
     kind: operationSucceeded ? 'operation_completed' : 'operation_failed',
-    completedScenes,
-    totalScenes,
+    completedScenes: candidateSet.completedScenes,
+    totalScenes: candidateSet.totalScenes,
   });
 
   return {
     operationId,
     results: mappedResults,
     errors: resultErrors,
-    editorialErrors,
+    editorialErrors: [...commitResult.editorialErrors],
     publication,
   };
 }
@@ -1443,7 +1759,10 @@ function buildPipeline(
 ): RenderPipeline {
   assertRuntime(runtime);
   const overrides = { ...(init.data.config?.validatorOverrides ?? {}) };
-  const aggregator = new ResultAggregator([...createBuiltInValidators()], init.entityTypes);
+  const aggregator = new ResultAggregator(
+    [...createBuiltInValidators(), ...pluginValidators(runtime.pluginHooksManager)],
+    init.entityTypes,
+  );
   const options: RenderPipelineOptions = {
     provider: runtime.provider ?? (runtime.providerFactory ? undefined : runtime.services.llm),
     providerFactory: runtime.providerFactory,
@@ -1460,6 +1779,7 @@ function buildPipeline(
     entities: init.registry,
     maxRounds: request.maxRounds,
     validatorPolicyId: plan.planSummary.validationIdentity,
+    pluginHooksManager: runtime.pluginHooksManager,
   };
   return new RenderPipeline(options);
 }
@@ -1528,6 +1848,7 @@ export async function previewEditorialRun(
     runtime.services.execution,
     projectId,
     preflight.eventIds,
+    request.source.sourceHash,
   );
   const plan = compileEditorialRun(
     buildCompileInput(
@@ -1535,6 +1856,7 @@ export async function previewEditorialRun(
       request,
       reviewComments,
       buildLatestRevisions(preflight.eventIds, acceptedHeads),
+      runtime.pluginHooksManager,
     ),
   );
 

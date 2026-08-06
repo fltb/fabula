@@ -18,8 +18,12 @@
 
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { sha256 } from '../../src/cache/pure-sha256.ts';
 import { InteractionManager } from '../../src/pipeline/interaction-gate.ts';
-import { evaluateReleaseDecision } from '../../src/pipeline/release-decision.ts';
+import {
+  computeReleaseGateId,
+  evaluateReleaseDecision,
+} from '../../src/pipeline/release-decision.ts';
 import type {
   AnalysisObservation,
   AnalysisResult,
@@ -564,21 +568,55 @@ describe('evaluateReleaseDecision — waiver/release behavior', () => {
     warnings: [],
     infos: [],
   };
+  const requireWaiver = {
+    warnings: 'require-waiver' as const,
+    openBlockingReviews: 'block' as const,
+  };
+  const gateContext = {
+    projectId: 'proj',
+    sourceHash: 'src',
+    proseHash: sha256(PROSE),
+  };
+  const gateIdFor = (warnings: readonly ValidationIssue[]): string =>
+    computeReleaseGateId({
+      projectId: 'proj',
+      sourceHash: 'src',
+      eventId: 'E0',
+      proseHash: sha256(PROSE),
+      scopeHash: 'scope',
+      validationIdentity: 'identity',
+      warnings,
+    });
 
-  it('default warning uncertainty -> pending_waiver without a waiver', () => {
-    const decision = evaluateReleaseDecision(candidate(warningOnly), 'scope', 'identity');
+  it('require-waiver policy -> pending_waiver without a waiver', () => {
+    const decision = evaluateReleaseDecision(
+      candidate(warningOnly),
+      'scope',
+      'identity',
+      undefined,
+      {
+        policy: requireWaiver,
+        gateIdentity: gateContext,
+      },
+    );
     expect(decision.status).toBe('pending_waiver');
     expect(decision.waiverId).toBeUndefined();
+    expect(decision.gateId).toBe(gateIdFor(warningOnly.warnings));
+    expect(decision.releasePolicy?.warnings).toBe('require-waiver');
   });
 
   it('matching waiver -> accepted with waiverId, observation unchanged', () => {
     const mgr = new InteractionManager();
-    mgr.recordWaiver('gate:E0:validation', 'author reviewed the uncertainty and accepted');
+    const gateId = gateIdFor(warningOnly.warnings);
+    mgr.recordWaiver(gateId, 'author reviewed the uncertainty and accepted');
 
-    const decision = evaluateReleaseDecision(candidate(warningOnly), 'scope', 'identity', mgr);
+    const decision = evaluateReleaseDecision(candidate(warningOnly), 'scope', 'identity', mgr, {
+      policy: requireWaiver,
+      gateIdentity: gateContext,
+    });
 
     expect(decision.status).toBe('accepted');
-    expect(decision.waiverId).toBe('gate:E0:validation');
+    expect(decision.waiverId).toBe(gateId);
     // The waiver only changes the release disposition — never the observation.
     expect(candidate(warningOnly).analysis.observations.pov).toEqual(abstained);
   });
@@ -642,14 +680,20 @@ describe('evaluateReleaseDecision — waiver/release behavior', () => {
       errors: [] as string[],
     };
 
-    const before = evaluateReleaseDecision(base, 'scope', 'identity');
+    const before = evaluateReleaseDecision(base, 'scope', 'identity', undefined, {
+      policy: requireWaiver,
+      gateIdentity: gateContext,
+    });
     expect(before.status).toBe('pending_waiver');
 
     const mgr = new InteractionManager();
-    mgr.recordWaiver('gate:E0:validation', 'accepted');
-    const after = evaluateReleaseDecision(base, 'scope', 'identity', mgr);
+    mgr.recordWaiver(before.gateId ?? '', 'accepted');
+    const after = evaluateReleaseDecision(base, 'scope', 'identity', mgr, {
+      policy: requireWaiver,
+      gateIdentity: gateContext,
+    });
     expect(after.status).toBe('accepted');
-    expect(after.waiverId).toBe('gate:E0:validation');
+    expect(after.waiverId).toBe(before.gateId);
     expect(analysis.observations.pov).toEqual(abstained);
   });
 });

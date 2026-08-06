@@ -1,4 +1,16 @@
 import type { JsonValue } from '../contracts/json.js';
+import type {
+  ReviewEventDraftV1,
+  ReviewEventReadResultV1,
+  ReviewEventRecordV1,
+} from '../review/events.js';
+
+export type {
+  ReviewEventDraftV1,
+  ReviewEventKindV1,
+  ReviewEventReadResultV1,
+  ReviewEventRecordV1,
+} from '../review/events.js';
 
 /** JSON-safe values accepted by semantic Core ports. */
 export interface AcceptedSceneRecord {
@@ -132,6 +144,25 @@ export interface CoreExecutionRepository {
     readonly expectedVersion: number | null;
     readonly value: ReviewRecord;
   }): Promise<CommitResult<ReviewRecord>>;
+
+  /**
+   * Read the append-only review event stream for one project. `version` is
+   * the event count: the `expectedVersion` the next append must pass.
+   * Implementations MUST assign contiguous 1-based `sequence` values.
+   */
+  readReviewEvents(input: {
+    readonly projectId: string;
+    readonly fromSequence?: number;
+  }): Promise<ReviewEventReadResultV1>;
+  /**
+   * Append immutable review events with CAS-on-version semantics. The store
+   * assigns sequences; committed events are returned with them assigned.
+   */
+  appendReviewEvents(input: {
+    readonly projectId: string;
+    readonly expectedVersion: number;
+    readonly events: readonly ReviewEventDraftV1[];
+  }): Promise<CommitResult<readonly ReviewEventRecordV1[]>>;
   compareAndSwapPublication(input: {
     readonly projectId: string;
     readonly expectedVersion: number | null;

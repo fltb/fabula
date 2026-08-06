@@ -536,6 +536,7 @@ export class RenderPipeline {
                 attempt: 1,
                 contractHash: job.contract.promptContractHash,
                 messages: [],
+                extensions: event.extensions,
               });
             } catch (err) {
               errors.push(`Cache reparse decoration hook failed: ${sanitizeError(err)}`);
@@ -774,6 +775,7 @@ export class RenderPipeline {
             attempt: attempts,
             contractHash: job.contract.promptContractHash,
             messages: [],
+            extensions: event.extensions,
           };
           try {
             pass1Decorations = await this.pluginHooksManager.runOnBuildPass1Prompt(buildInput);
@@ -960,6 +962,7 @@ export class RenderPipeline {
             attempt: attempts,
             contractHash: job.contract.promptContractHash,
             messages: [],
+            extensions: event.extensions,
           };
           try {
             pass2Decorations = await this.pluginHooksManager.runOnBuildPass2Prompt(p2Input);

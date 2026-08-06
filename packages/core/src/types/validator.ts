@@ -2,6 +2,7 @@
 // Novalistically — Validator System Types (§7.4.15)
 // ============================================================================
 import type { z } from 'zod';
+import type { SourceDiagnosticV1 } from '../contracts/source.js';
 import type { StoryOrderIndex } from '../state/dag.js';
 import type { AnalysisResult } from './analysis.js';
 import type { ContextPackage } from './context.js';
@@ -203,4 +204,10 @@ export interface NovelValidationResult {
   readonly passed: boolean;
   readonly results: ReadonlyMap<string, ValidationResult>;
   readonly iss: ISSSnapshot;
+  /**
+   * Source-level diagnostics produced by the validation path's optional
+   * enabled-plugin extension gate (`SOURCE_EXTENSION_*`). Present only when a
+   * registrar was supplied; an error-severity entry flips `passed` false.
+   */
+  readonly sourceDiagnostics?: readonly SourceDiagnosticV1[];
 }

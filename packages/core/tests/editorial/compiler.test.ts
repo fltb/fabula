@@ -495,6 +495,9 @@ describe('identity', () => {
       const plugin = {
         name: 'my-plugin',
         version: '1.0.0',
+        manifestHash: opaqueHash(),
+        moduleHash: opaqueHash(),
+        hookNames: ['beforeRender', 'onBuildPass1Prompt'],
         validators: [{ name: 'CustomValidator', version: '1.0.0' }],
         promptHookIdentity: opaqueHash(),
       };
@@ -502,6 +505,18 @@ describe('identity', () => {
       const changedVersion: ValidationIdentityInput = {
         ...base,
         plugins: [{ ...plugin, version: '2.0.0' }],
+      };
+      const changedModule: ValidationIdentityInput = {
+        ...base,
+        plugins: [{ ...plugin, moduleHash: opaqueHash() }],
+      };
+      const changedManifest: ValidationIdentityInput = {
+        ...base,
+        plugins: [{ ...plugin, manifestHash: opaqueHash() }],
+      };
+      const changedHooks: ValidationIdentityInput = {
+        ...base,
+        plugins: [{ ...plugin, hookNames: ['beforeRender'] }],
       };
       const changedValidator: ValidationIdentityInput = {
         ...base,
@@ -518,6 +533,9 @@ describe('identity', () => {
       };
 
       expect(computeValidationIdentity(base)).not.toBe(computeValidationIdentity(changedVersion));
+      expect(computeValidationIdentity(base)).not.toBe(computeValidationIdentity(changedModule));
+      expect(computeValidationIdentity(base)).not.toBe(computeValidationIdentity(changedManifest));
+      expect(computeValidationIdentity(base)).not.toBe(computeValidationIdentity(changedHooks));
       expect(computeValidationIdentity(base)).not.toBe(computeValidationIdentity(changedValidator));
       expect(computeValidationIdentity(base)).not.toBe(computeValidationIdentity(changedHook));
     });
@@ -526,12 +544,18 @@ describe('identity', () => {
       const pluginA = {
         name: 'a-plugin',
         version: '1',
+        manifestHash: opaqueHash(),
+        moduleHash: opaqueHash(),
+        hookNames: ['onBuildPass1Prompt'],
         validators: [{ name: 'AValidator', version: '1' }],
         promptHookIdentity: opaqueHash(),
       };
       const pluginB = {
         name: 'b-plugin',
         version: '1',
+        manifestHash: opaqueHash(),
+        moduleHash: opaqueHash(),
+        hookNames: ['beforeRender'],
         validators: [{ name: 'BValidator', version: '1' }],
         promptHookIdentity: opaqueHash(),
       };

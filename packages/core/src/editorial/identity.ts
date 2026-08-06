@@ -89,6 +89,12 @@ export interface ValidatorIdentity {
 export interface PluginValidationIdentity {
   readonly name: string;
   readonly version: string;
+  /** SHA-256 of the plugin manifest content ('' when the host did not stamp it). */
+  readonly manifestHash: string;
+  /** SHA-256 of the plugin module bytes ('' when the host did not stamp it). */
+  readonly moduleHash: string;
+  /** Sorted names of the hooks the plugin implements. */
+  readonly hookNames: readonly string[];
   readonly validators: readonly ValidatorIdentity[];
   readonly promptHookIdentity: string;
 }
@@ -113,6 +119,9 @@ export function computeValidationIdentity(input: ValidationIdentityInput): strin
     .map((plugin) => ({
       name: plugin.name,
       version: plugin.version,
+      manifestHash: plugin.manifestHash,
+      moduleHash: plugin.moduleHash,
+      hookNames: [...plugin.hookNames],
       validators: [...plugin.validators]
         .map((validator) => ({ ...validator }))
         .sort(

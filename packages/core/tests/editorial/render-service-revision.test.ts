@@ -143,7 +143,9 @@ async function seedAcceptedBase(execution: MemoryExecutionRepository): Promise<v
       version: 1,
       projectId: PROJECT_ID,
       eventId: 'E1',
-      sourceHash: hash('source'),
+      // The accepted head must carry the SAME source hash as the render
+      // request, otherwise resolveAcceptedHeads ignores it as stale-source.
+      sourceHash: source().sourceHash,
       revisionId: 'rev-base-1',
       prose: BASE_PROSE,
       proseHash: hash(BASE_PROSE),
@@ -356,6 +358,10 @@ describe('editorial revision render — resolved accepted bases in Pass 1', () =
     expect(captured.pass1Prompts).toHaveLength(1);
     expect(captured.pass1Prompts[0]).toContain('Write exactly in the custom house style.');
     expect(captured.pass1Prompts[0]).toContain('## Instructions');
+
+    // The successful revision recorded a `comment_applied` event and marked
+    // the review addressed; reopen it so the preview can reference it again.
+    await new ReviewManager(execution, PROJECT_ID).updateReviewComment(reviewId, 'reopen', 'test');
 
     const preview = await previewEditorialRun(
       {

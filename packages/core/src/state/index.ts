@@ -9,6 +9,15 @@ export type {
   NarrativeTechniqueKind,
   ResolvedNarrativeTechniqueContract,
 } from '../types/narrative-techniques.ts';
+export type { SnapshotVerification } from './canonical-snapshot.ts';
+export {
+  CANONICAL_WORLD_SCHEMA,
+  CANONICAL_WORLD_SCHEMA_VERSION,
+  computeSnapshotStateHash,
+  narrativeEventToStateEvent,
+  verifySnapshotRecord,
+  worldStateToSnapshotRecord,
+} from './canonical-snapshot.ts';
 // ——— CORPUS-5: Build Failure, Metric Isolation & Gate ———
 export type { CorpusGateResult, GateCheck } from './corpus-gate.ts';
 export {
@@ -77,14 +86,25 @@ export {
   recordInformationAct,
   validatePropositionCatalog,
 } from './knowledge-replay.ts';
+export type {
+  StateRecoveryInput,
+  StateRecoveryResult,
+} from './manager.ts';
 export { StateManager } from './manager.ts';
 export type {
   CompiledNarrativeRuntime,
   CompileNarrativeRuntimeInput,
 } from './narrative-runtime.ts';
 export { compileNarrativeRuntime } from './narrative-runtime.ts';
-export type { ReplayOptions } from './replay.ts';
+export type {
+  FullReplaySource,
+  ReplayFromNearestResult,
+  ReplayOptions,
+  ReplaySource,
+  SnapshotReplaySource,
+} from './replay.ts';
 export { ReplayEngine } from './replay.ts';
+export type { SnapshotStampOptions } from './snapshot.ts';
 export { SnapshotEngine } from './snapshot.ts';
 export type { StoryBoundaries } from './story-boundaries.ts';
 export { compileStoryBoundaries, compileStoryBoundariesFromGraph } from './story-boundaries.ts';

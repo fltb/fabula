@@ -1,5 +1,14 @@
 // Editorial public contracts and semantic execution primitives.
 
+export { assembleRelease } from '../assembler/release-assembly.ts';
+export type {
+  EvaluateReleaseDecisionOptions,
+  ReleaseGateIdentityContext,
+} from '../pipeline/release-decision.ts';
+export {
+  computeReleaseGateId,
+  computeWarningFingerprint,
+} from '../pipeline/release-decision.ts';
 export {
   branchPathV1Schema,
   branchSetV1Schema,
@@ -18,6 +27,7 @@ export {
   sourceDocumentChangeSchema,
 } from '../schemas/editorial.ts';
 export type * from '../types/editorial.ts';
+export type { ReleasePolicy, ReleaseWarningPolicy } from '../types/render-surface.ts';
 export type {
   BranchContracts,
   CompiledSceneInfo,
@@ -46,7 +56,21 @@ export {
   computeSelectorHash,
   computeValidationIdentity,
 } from './identity.ts';
+export type {
+  ReleaseGateResolutionV1,
+  ResolveReleaseGateInputV1,
+} from './release-gate.ts';
+export { resolveReleaseGate } from './release-gate.ts';
+export type {
+  EditorialCandidateSetV1,
+  EditorialCandidatesOutcome,
+  EditorialCommitResultV1,
+  EditorialHeadCommitOutcomeV1,
+  EditorialSceneCommitV1,
+} from './render-service.ts';
 export {
+  commitEditorialCandidates,
+  executeEditorialCandidates,
   executeEditorialRender,
   executeEditorialTreeRender,
   previewEditorialRun,

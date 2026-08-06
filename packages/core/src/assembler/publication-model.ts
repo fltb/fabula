@@ -5,7 +5,6 @@ import type {
   SceneEditHistoryEntryV1,
   SceneMetadataV1,
   SceneProseSource,
-  SceneRevisionEnvelopeV1,
 } from '../types/editorial.ts';
 import type { GameDialogueChoice } from '../types/game-dialogue.ts';
 import type { DiscourseSceneSequenceEntry } from '../types/graph.ts';
@@ -177,27 +176,6 @@ export function buildSceneMetadataV1(
     edit_history: [...head.editHistory],
     branch_existence: head.branchExistence,
     player_choices: head.playerChoices ? [...head.playerChoices] : undefined,
-  };
-}
-
-export function envelopeToVerifiedHead(
-  envelope: SceneRevisionEnvelopeV1,
-  proseSource: SceneProseSource,
-): VerifiedHeadData {
-  return {
-    revisionId: envelope.revisionId,
-    proseHash: envelope.proseHash,
-    prose: envelope.prose,
-    sceneHash: envelope.sceneHash,
-    editorialBasisHash: envelope.editorialBasisHash,
-    scopeHash: envelope.scopeHash,
-    validationIdentity: envelope.validationIdentity,
-    proseSource,
-    modelUsed: envelope.modelUsed,
-    renderedAt: envelope.createdAt,
-    wordCount: 0,
-    editHistory: [],
-    branchExistence: { type: 'all' },
   };
 }
 

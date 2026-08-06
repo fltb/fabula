@@ -490,6 +490,8 @@ export type {
   LogicalRenderKey,
   PlannerMode,
   ReleaseDecision,
+  ReleasePolicy,
+  ReleaseWarningPolicy,
   RenderGroup,
   RenderGroupManifest,
   RenderSurfaceAutoConfig,

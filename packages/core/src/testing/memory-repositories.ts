@@ -6,6 +6,9 @@ import type {
   OperationRecord,
   PublicationRecord,
   ReadResult,
+  ReviewEventDraftV1,
+  ReviewEventReadResultV1,
+  ReviewEventRecordV1,
   ReviewRecord,
   SceneRevisionRecord,
   TraceRecord,
@@ -46,6 +49,7 @@ export class MemoryExecutionRepository implements CoreExecutionRepository {
   private readonly publications = new Map<string, Stored<PublicationRecord>>();
   private readonly operations = new Map<string, Stored<OperationRecord>>();
   private readonly traces = new Map<string, Stored<TraceRecord>>();
+  private readonly reviewEventStreams = new Map<string, ReviewEventRecordV1[]>();
 
   async readAcceptedScene(input: {
     projectId: string;
@@ -140,6 +144,38 @@ export class MemoryExecutionRepository implements CoreExecutionRepository {
       input.expectedVersion,
       input.value,
     );
+  }
+  async readReviewEvents(input: {
+    projectId: string;
+    fromSequence?: number;
+  }): Promise<ReviewEventReadResultV1> {
+    const events = this.reviewEventStreams.get(input.projectId) ?? [];
+    const from = input.fromSequence ?? 1;
+    return {
+      version: events.length,
+      events: events.filter((event) => event.sequence >= from).map(clone),
+    };
+  }
+  async appendReviewEvents(input: {
+    projectId: string;
+    expectedVersion: number;
+    events: readonly ReviewEventDraftV1[];
+  }): Promise<CommitResult<readonly ReviewEventRecordV1[]>> {
+    const current = this.reviewEventStreams.get(input.projectId) ?? [];
+    if (current.length !== input.expectedVersion)
+      return {
+        kind: 'conflict',
+        expectedVersion: input.expectedVersion,
+        actualVersion: current.length,
+      };
+    let sequence = current.length;
+    const records: ReviewEventRecordV1[] = input.events.map((draft) => {
+      sequence += 1;
+      return { ...clone(draft), sequence, projectId: input.projectId };
+    });
+    current.push(...records);
+    this.reviewEventStreams.set(input.projectId, current);
+    return { kind: 'committed', version: sequence, value: records.map(clone) };
   }
   compareAndSwapPublication(input: {
     projectId: string;

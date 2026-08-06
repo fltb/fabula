@@ -78,7 +78,29 @@ export type {
   ProjectData,
   TemporalContext,
 } from './entity/index.js';
-export type { StoryBoundaries } from './state/index.js';
+export type {
+  FullReplaySource,
+  ReplayFromNearestResult,
+  ReplayOptions,
+  ReplaySource,
+  SnapshotReplaySource,
+  SnapshotStampOptions,
+  SnapshotVerification,
+  StateRecoveryInput,
+  StateRecoveryResult,
+  StoryBoundaries,
+} from './state/index.js';
+export {
+  CANONICAL_WORLD_SCHEMA,
+  CANONICAL_WORLD_SCHEMA_VERSION,
+  computeSnapshotStateHash,
+  narrativeEventToStateEvent,
+  ReplayEngine,
+  SnapshotEngine,
+  StateManager,
+  verifySnapshotRecord,
+  worldStateToSnapshotRecord,
+} from './state/index.js';
 export type {
   ContextPackage,
   EntityDeclarationCatalog,
@@ -126,6 +148,10 @@ export type {
   ReadResult,
   RenderCacheRecord,
   RenderCacheRepository,
+  ReviewEventDraftV1,
+  ReviewEventKindV1,
+  ReviewEventReadResultV1,
+  ReviewEventRecordV1,
   ReviewRecord,
   SceneRevisionRecord,
   StateAppendResult,
@@ -141,6 +167,9 @@ export type {
   TraceRecord,
   VersionConflict,
 } from './ports/index.js';
+
+// ── Review event stream (append-only review state) ──────────────────────────
+
 export type {
   BuildReferencePacketOptionsV1,
   ProjectReferencePacketV1,
@@ -157,6 +186,32 @@ export {
   ReferenceExtractionError,
 } from './reference.ts';
 export type {
+  ReviewGateDecisionV1,
+  ReviewGateInputV1,
+  ReviewGateV1,
+  ReviewProjectionV1,
+} from './review/events.js';
+export {
+  legacyLedgerToReviewEvents,
+  parseLegacyReviewLedger,
+  projectReviewState,
+} from './review/events.js';
+export type {
+  Blocker,
+  WorkflowActionPriority,
+  WorkflowEventExecutionV1,
+  WorkflowExecutionProjectionV1,
+  WorkflowNextActionCode,
+  WorkflowNextActionV1,
+  WorkflowPublicationProjectionV1,
+  WorkflowReviewProjectionV1,
+  WorkflowStatusInputV1,
+  WorkflowStatusV1,
+  WorkflowValidationProjectionV1,
+  WorkflowWorkingProjectionV1,
+} from './status/index.js';
+export { buildWorkflowStatus } from './status/index.js';
+export type {
   AnalysisBlockRequirement,
   AnalysisDisposition,
   AnalysisObservation,
@@ -165,6 +220,7 @@ export type {
   ObservationRef,
   PostRenderInput,
   PreRenderInput,
+  ReviewLedgerV1,
   ValidationIssue,
   ValidationIssueKind,
   ValidationKey,
@@ -172,3 +228,29 @@ export type {
   ValidationRunOptions,
   Validator,
 } from './types/index.js';
+
+// ── Plugin system (trusted host plugins) ────────────────────────────────────
+//
+// Runtime surface for host-owned plugin activation (Node Host). Plugin hooks
+// receive a read-only context; transform hooks hard-fail scenes, observation
+// hooks are non-authoritative. Extensions entry is `@novalistically/core/extensions`.
+
+export type {
+  BuildPromptInput,
+  ConflictReport,
+  PluginContext,
+  PluginExtensionSchema,
+  PluginHooks,
+  PromptDecoration,
+  ProviderRegistry,
+  ResolutionResult,
+  ValidatorRegistrar,
+} from './plugin/index.ts';
+export {
+  detectConflicts,
+  PluginExtensionSchemaRegistrar,
+  PluginHooksManager,
+  PluginLoader,
+  resolveConflict,
+  ValidatorRegistry,
+} from './plugin/index.ts';

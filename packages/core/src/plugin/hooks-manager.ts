@@ -3,6 +3,8 @@
 // ============================================================================
 
 import type { LLMProvider } from '../ai/types.ts';
+import type { ValidatorIdentity } from '../editorial/identity.ts';
+import type { Validator } from '../types/index.js';
 import type {
   BuildPromptInput,
   PluginContext,
@@ -252,16 +254,55 @@ export class PluginHooksManager {
     return this.providers.get(name);
   }
 
+  // ——— Validator Access ———
+
+  /**
+   * All validators registered by plugins (not the built-in set).
+   * Merge these into the pipeline validator set when the manager is active.
+   */
+  getValidators(): readonly Validator[] {
+    return this.validatorRegistry.list();
+  }
+
+  /**
+   * Deterministic name/version identities for one plugin's registered
+   * validators. Version defaults to the validator's own `version` when
+   * declared, else the plugin's manifest version, else '1'.
+   */
+  getPluginValidatorIdentities(pluginName: string): ValidatorIdentity[] {
+    const names = [...(this.validatorNamesByPlugin.get(pluginName) ?? [])];
+    const byName = new Map(this.validatorRegistry.list().map((v) => [v.name, v]));
+    const plugin = this.hooks.find((hook) => hook.name === pluginName);
+    return names.map((name) => {
+      const validator = byName.get(name);
+      const declared = (validator as (Validator & { version?: string }) | undefined)?.version;
+      return { name, version: declared ?? plugin?.version ?? '1' };
+    });
+  }
+
   // ——— Plugin Identity for Cache Scoping ———
 
   /**
    * Returns deterministic identities for all registered plugins.
-   * Used to scope cache keys: plugin name + present hooks impact prompt identity.
+   * Used to scope cache keys: plugin name/version/manifestHash/moduleHash +
+   * present hooks + registered validator names impact prompt identity and
+   * the editorial validation identity. Optional identity fields are omitted
+   * when the host loader did not stamp them (canonicalJson drops undefined).
    */
-  getPluginIdentities(): Array<{ name: string; hooks: string[]; validators: string[] }> {
+  getPluginIdentities(): Array<{
+    name: string;
+    version: string | undefined;
+    manifestHash: string | undefined;
+    moduleHash: string | undefined;
+    hooks: string[];
+    validators: string[];
+  }> {
     return this.hooks
       .map((hook) => ({
         name: hook.name,
+        version: hook.version,
+        manifestHash: hook.manifestHash,
+        moduleHash: hook.moduleHash,
         hooks: (Object.keys(hook) as (keyof PluginHooks)[])
           .filter((key) => key !== 'name' && typeof hook[key] === 'function')
           .sort(),

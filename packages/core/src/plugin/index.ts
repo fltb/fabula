@@ -3,6 +3,8 @@
 // ============================================================================
 
 export { detectConflicts } from './conflicts.js';
+export type { PluginExtensionSchema } from './extension-registrar.js';
+export { PluginExtensionSchemaRegistrar } from './extension-registrar.js';
 export { PluginHooksManager } from './hooks-manager.js';
 export { PluginLoader } from './loader.js';
 export { resolveConflict } from './resolve.js';

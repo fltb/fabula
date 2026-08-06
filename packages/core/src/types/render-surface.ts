@@ -309,7 +309,38 @@ export interface ReleaseDecision {
   validationIdentity: string;
   reasons: string[];
   waiverId?: string;
+  /**
+   * Deterministic release-gate identity:
+   * `sha256({projectId, sourceHash, eventId, proseHash, scopeHash,
+   * validationIdentity, sortedWarningFingerprints})`. Set whenever the
+   * gate identity context is supplied to `evaluateReleaseDecision`; absent
+   * for context-free calls (blocked candidates never carry a gate).
+   */
+  gateId?: string;
+  /** Release policy under which this decision was made. */
+  releasePolicy?: ReleasePolicy;
+  /** Sorted per-warning fingerprints recorded with the decision. */
+  warningFingerprints?: readonly string[];
 }
+
+/**
+ * Project release policy (nova.yaml `releasePolicy`).
+ *
+ * - `warnings: accept-and-record` (DEFAULT): warning-only candidates are
+ *   ACCEPTED and their reasons/fingerprints are recorded with the decision;
+ *   no human waiver is required.
+ * - `warnings: require-waiver`: warning-only candidates stay
+ *   `pending_waiver` until a maintainer decision resolves the gate.
+ *
+ * `openBlockingReviews` is a fixed literal for now: any open blocking review
+ * blocks release.
+ */
+export interface ReleasePolicy {
+  warnings: ReleaseWarningPolicy;
+  openBlockingReviews: 'block';
+}
+
+export type ReleaseWarningPolicy = 'accept-and-record' | 'require-waiver';
 
 // ─── RevisionContext — Editorial Revision Metadata ───────────────────────────
 

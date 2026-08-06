@@ -4,7 +4,7 @@ import type {
   SourceChangeV1,
   SourceDocumentV1,
 } from '../contracts/source.ts';
-import { analyzeSource } from '../entity/source-analysis.ts';
+import { analyzeSource, type SourceAnalysisOptions } from '../entity/source-analysis.ts';
 
 export interface QueryResult<T> {
   readonly ok: boolean;
@@ -28,7 +28,10 @@ export class QueryService {
       : { ok: false, error: { code: 'SOURCE_DOCUMENT_NOT_FOUND', message: logicalPath } };
   }
 
-  analyze(changes: readonly SourceChangeV1[]): QueryResult<SourceAnalysisV1> {
-    return { ok: true, data: analyzeSource(this.snapshot, changes) };
+  analyze(
+    changes: readonly SourceChangeV1[],
+    options?: SourceAnalysisOptions,
+  ): QueryResult<SourceAnalysisV1> {
+    return { ok: true, data: analyzeSource(this.snapshot, changes, options) };
   }
 }

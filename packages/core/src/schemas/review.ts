@@ -90,3 +90,32 @@ export const reviewLedgerV1Schema = z
     patches: z.array(reviewPatchSchema),
   })
   .strict();
+
+export const reviewEventKindSchema = z.enum([
+  'comment_added',
+  'comment_replaced',
+  'comment_status_changed',
+  'comment_applied',
+  'gate_opened',
+  'gate_decided',
+  'gate_superseded',
+]);
+
+/** Event as submitted for append: the store assigns `sequence`. */
+export const reviewEventDraftV1Schema = z
+  .object({
+    version: z.literal(1),
+    projectId: z.string().trim().min(1),
+    kind: reviewEventKindSchema,
+    commentId: z.string().trim().min(1).optional(),
+    gateId: z.string().trim().min(1).optional(),
+    payload: z.unknown(),
+    actorId: z.string().optional(),
+    createdAt: z.string().datetime(),
+  })
+  .strict();
+
+/** Immutable stored event with its store-assigned sequence. */
+export const reviewEventRecordV1Schema = reviewEventDraftV1Schema.extend({
+  sequence: z.number().int().positive(),
+});

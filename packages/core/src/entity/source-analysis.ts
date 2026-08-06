@@ -8,6 +8,7 @@ import type {
   SourceDiagnosticV1,
   SourceDocumentV1,
 } from '../contracts/index.js';
+import type { PluginExtensionSchemaRegistrar } from '../plugin/extension-registrar.ts';
 import {
   chapterMetadataSchema,
   characterDefinitionSchema,
@@ -190,6 +191,50 @@ function topologyDiagnostics(documents: readonly SourceDocumentV1[]): SourceDiag
   return diagnostics;
 }
 
+/**
+ * Validate EventFile `extensions` blocks against the enabled-plugin gate.
+ * Runs over every candidate event document (changed and unchanged) so a
+ * newly activated plugin set re-validates existing extension namespaces.
+ */
+function extensionDiagnostics(
+  documents: readonly SourceDocumentV1[],
+  registrar: PluginExtensionSchemaRegistrar | undefined,
+): SourceDiagnosticV1[] {
+  if (!registrar) return [];
+  const diagnostics: SourceDiagnosticV1[] = [];
+  for (const document of documents) {
+    const rule = ruleFor(document.logicalPath);
+    if (!rule || rule.schema !== eventFileSchema) continue;
+    const schemaAlreadyRejected = document.diagnostics.some(
+      (diagnostic) => diagnostic.code === 'SOURCE_SCHEMA_INVALID',
+    );
+    let parsed: unknown;
+    try {
+      parsed = document.parseResult.value ?? YAML.parse(document.content);
+    } catch {
+      continue; // parseDocument emits the authoritative YAML diagnostic.
+    }
+    if (typeof parsed !== 'object' || parsed === null || !('extensions' in parsed)) continue;
+    const extensions = (parsed as Record<string, unknown>).extensions;
+    diagnostics.push(
+      ...registrar.validateExtensions(extensions, document.logicalPath, schemaAlreadyRejected),
+    );
+  }
+  return diagnostics;
+}
+
+/**
+ * Extension gate over a full snapshot (Host validation-path entry). Reuses
+ * the same candidate scan as {@link analyzeSource} so accepted/working
+ * snapshots get identical enabled-plugin namespace semantics.
+ */
+export function extensionDiagnosticsForSnapshot(
+  snapshot: ProjectSourceSnapshotV1,
+  registrar: PluginExtensionSchemaRegistrar,
+): readonly SourceDiagnosticV1[] {
+  return extensionDiagnostics(snapshot.documents, registrar);
+}
+
 function jsonValue(value: unknown): JsonValue | null {
   if (
     value === null ||
@@ -273,6 +318,12 @@ export interface SourceAnalysisOptions {
   readonly validateOntology?: (
     documents: readonly SourceDocumentV1[],
   ) => readonly SourceDiagnosticV1[];
+  /**
+   * Optional enabled-plugin extension gate for EventFile `extensions` blocks.
+   * Unknown/disabled namespaces and declared-schema violations become
+   * error-severity diagnostics; absent, today's behavior is unchanged.
+   */
+  readonly extensionRegistrar?: PluginExtensionSchemaRegistrar;
 }
 
 /**
@@ -335,6 +386,7 @@ export function analyzeSource(
   };
   diagnostics.push(...topologyDiagnostics(candidateDocuments));
   diagnostics.push(...(options.validateOntology?.(candidateDocuments) ?? []));
+  diagnostics.push(...extensionDiagnostics(candidateDocuments, options.extensionRegistrar));
 
   const affectedEventIds = [
     ...new Set(

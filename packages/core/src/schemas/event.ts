@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { z } from 'zod';
+import type { JsonValue } from '../contracts/json.js';
 import { anachronySchema, voiceProfileSchema } from './discourse.js';
 import { durationProfileSchema } from './duration.js';
 import { frequencyProfileSchema } from './frequency.js';
@@ -32,6 +33,20 @@ import { relationshipEffectSchema } from './relationship.js';
 import { ruleTransactionSchema } from './rule.js';
 import { sourceContextSchema } from './source-context.js';
 import { authoredStoryTimeSchema } from './timestamp.js';
+
+const jsonPrimitiveSchema = z.union([z.string(), z.number().finite(), z.boolean(), z.null()]);
+const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([jsonPrimitiveSchema, z.array(jsonValueSchema), z.record(z.string(), jsonValueSchema)]),
+);
+
+/**
+ * Read-only plugin extension payloads, keyed by enabled plugin name.
+ * Namespace presence/shape is enforced by PluginExtensionSchemaRegistrar
+ * (unknown or disabled namespaces are source errors); this schema only
+ * guarantees structural JsonValue.
+ */
+export const eventExtensionsSchema = z.record(z.string(), jsonValueSchema);
+
 export const eventFileSchema = z
   .object({
     event: z.string(),
@@ -116,5 +131,6 @@ export const eventFileSchema = z
     voiceDissonance: voiceDissonanceSchema.optional(),
     multiplicity: multiplicitySchema.optional(),
     metanarrativeLevel: metanarrativeLevelSchema.optional(),
+    extensions: eventExtensionsSchema.optional(),
   })
   .strict();

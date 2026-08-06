@@ -33,7 +33,8 @@ export type WorkbenchNavigationView =
   | 'source-studio'
   | 'graph-route'
   | 'review-hub'
-  | 'publication';
+  | 'publication'
+  | 'agent-chat';
 
 /**
  * Immutable layout preference snapshot. Every field is `readonly`; consumers
@@ -48,8 +49,6 @@ export interface WorkbenchPreferencesV1 {
   readonly inspectorPinned: boolean;
   /** Operation Center expanded state. */
   readonly operationCenterExpanded: boolean;
-  /** Agent Shelf open state. */
-  readonly agentShelfOpen: boolean;
   /** Selected navigation view. */
   readonly selectedNavigationView: WorkbenchNavigationView;
 }
@@ -60,7 +59,6 @@ export const DEFAULT_WORKBENCH_PREFERENCES: WorkbenchPreferencesV1 = Object.free
   navigatorCollapsed: false,
   inspectorPinned: true,
   operationCenterExpanded: false,
-  agentShelfOpen: false,
   selectedNavigationView: 'project-home',
 });
 
@@ -77,6 +75,7 @@ const NAVIGATION_VIEWS: readonly WorkbenchNavigationView[] = [
   'graph-route',
   'review-hub',
   'publication',
+  'agent-chat',
 ];
 
 /** Static lookup of every key the v1 envelope may contain. */
@@ -85,7 +84,6 @@ const KNOWN_PREFERENCE_KEYS: Record<string, true> = {
   navigatorCollapsed: true,
   inspectorPinned: true,
   operationCenterExpanded: true,
-  agentShelfOpen: true,
   selectedNavigationView: true,
 };
 
@@ -132,9 +130,6 @@ function isWorkbenchPreferencesV1(candidate: unknown): candidate is WorkbenchPre
   ) {
     return false;
   }
-  if (!('agentShelfOpen' in candidate) || typeof candidate.agentShelfOpen !== 'boolean') {
-    return false;
-  }
   if (!('selectedNavigationView' in candidate)) {
     return false;
   }
@@ -173,7 +168,6 @@ export function parseWorkbenchPreferences(raw: string): WorkbenchPreferencesV1 |
     navigatorCollapsed: candidate.navigatorCollapsed,
     inspectorPinned: candidate.inspectorPinned,
     operationCenterExpanded: candidate.operationCenterExpanded,
-    agentShelfOpen: candidate.agentShelfOpen,
     selectedNavigationView: candidate.selectedNavigationView,
   });
 }
@@ -228,7 +222,6 @@ export function saveWorkbenchPreferences(
         navigatorCollapsed: preferences.navigatorCollapsed,
         inspectorPinned: preferences.inspectorPinned,
         operationCenterExpanded: preferences.operationCenterExpanded,
-        agentShelfOpen: preferences.agentShelfOpen,
         selectedNavigationView: preferences.selectedNavigationView,
       }),
     );

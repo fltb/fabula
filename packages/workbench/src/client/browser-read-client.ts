@@ -1,5 +1,6 @@
 import {
   BROWSER_GRAPH_ROUTE_QUERY,
+  BROWSER_PROJECT_CAPABILITIES_PATH,
   BROWSER_PROJECT_GRAPHS_PATH,
   BROWSER_PROJECT_OVERVIEW_PATH,
   BROWSER_PROJECT_REFERENCES_PATH,
@@ -10,6 +11,7 @@ import {
 import type {
   BrowserApiErrorV1,
   BrowserGraphRouteSelectorV1,
+  BrowserProjectCapabilitiesV1,
   BrowserProjectListV1,
   BrowserProjectOverviewV1,
   BrowserProjectReferenceListQueryV1,
@@ -44,6 +46,7 @@ export interface BrowserReadClient {
   getSession(): Promise<BrowserSessionPrincipalV1>;
   listProjects(): Promise<BrowserProjectListV1>;
   getOverview(projectId: string): Promise<BrowserProjectOverviewV1>;
+  loadCapabilities(projectId: string): Promise<BrowserProjectCapabilitiesV1>;
   getSourceStudio(projectId: string): Promise<SourceStudioStateV1>;
   listReferences(
     projectId: string,
@@ -136,6 +139,11 @@ export function createBrowserReadClient(options: BrowserReadClientOptions = {}):
     listProjects: () => request(BROWSER_PROJECTS_PATH),
     getOverview: (projectId) =>
       request(BROWSER_PROJECT_OVERVIEW_PATH.replace(':projectId', encodeURIComponent(projectId))),
+    /** Same safe-read pattern as getOverview, for the Host-derived feature gates. */
+    loadCapabilities: (projectId) =>
+      request(
+        BROWSER_PROJECT_CAPABILITIES_PATH.replace(':projectId', encodeURIComponent(projectId)),
+      ),
     getSourceStudio: (projectId) =>
       request(BROWSER_PROJECT_SOURCE_PATH.replace(':projectId', encodeURIComponent(projectId))),
     listReferences: (projectId, query = {}) => {

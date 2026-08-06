@@ -6,11 +6,13 @@ import {
   type AdminProjectSaveRequestV1,
   type AdminProviderUpdateRequestV1,
   type AdminSetCredentialRequestV1,
+  BROWSER_ADMIN_BASE_PATH,
   BROWSER_ADMIN_DEVICES_PATH,
   BROWSER_ADMIN_INVITES_PATH,
   BROWSER_ADMIN_NETWORK_PATH,
   BROWSER_ADMIN_OPERATIONS_PATH,
   BROWSER_ADMIN_OVERVIEW_PATH,
+  BROWSER_ADMIN_PLUGINS_DISCOVERED_PATH,
   BROWSER_ADMIN_PROJECTS_PATH,
   BROWSER_ADMIN_PROVIDER_PATH,
   type ConfigOperationReceiptV1,
@@ -30,6 +32,9 @@ import {
 const BROWSER_ADMIN_PROJECTS_VALIDATE_PATH = `${BROWSER_ADMIN_PROJECTS_PATH}/validate`;
 const BROWSER_ADMIN_PROVIDER_CREDENTIAL_PATH = `${BROWSER_ADMIN_PROVIDER_PATH}/credential`;
 const BROWSER_ADMIN_PROVIDER_TEST_PATH = `${BROWSER_ADMIN_PROVIDER_PATH}/test`;
+const BROWSER_ADMIN_PROVIDERS_PATH = `${BROWSER_ADMIN_BASE_PATH}/providers`;
+const BROWSER_ADMIN_CONFIG_ADVANCED_PATH = `${BROWSER_ADMIN_BASE_PATH}/config/advanced`;
+const BROWSER_ADMIN_CONFIG_PREVIEW_PATH = `${BROWSER_ADMIN_BASE_PATH}/config/preview`;
 const BROWSER_ADMIN_SESSIONS_PATH = '/api/v1/admin/sessions';
 const BROWSER_ADMIN_DEVICES_ISSUE_PATH = `${BROWSER_ADMIN_DEVICES_PATH}/issue`;
 
@@ -179,6 +184,153 @@ export interface AdminSessionRevokeResponseV1 {
   readonly revoked: true;
 }
 
+// ─── V3 configuration domains (browser-safe DTOs) ───────────────────────────
+
+/** Masked provider profile view; credentials never cross this boundary. */
+export interface AdminProviderProfileViewV1 {
+  readonly profileId: string;
+  readonly kind: 'ai-sdk';
+  readonly configured: boolean;
+  readonly endpoint: string | null;
+  readonly model: string | null;
+  readonly lastValidation: WorkbenchProjectValidationV1;
+  readonly lastValidatedAt: string | null;
+}
+
+/** One trusted plugin allowlist entry; only identity fields, never module code. */
+export interface AdminTrustedPluginViewV1 {
+  readonly name: string;
+  readonly version: string;
+  readonly moduleHash: string;
+  readonly required: boolean;
+}
+
+/** One Host-discovered plugin identity; only hashes/hook names, never paths or code. */
+export interface AdminDiscoveredPluginViewV1 {
+  readonly name: string;
+  readonly version: string;
+  readonly manifestHash: string;
+  readonly moduleHash: string | null;
+  readonly hookNames: readonly string[];
+}
+
+/** Response of the owner-only Host-discovered plugin identity route. */
+export interface AdminDiscoveredPluginsResponseV1 {
+  readonly version: WorkbenchConfigurationVersion;
+  readonly projectId: string;
+  readonly plugins: readonly AdminDiscoveredPluginViewV1[];
+}
+
+/** Per-project V3 binding: provider profile + trusted plugin allowlist. */
+export interface AdminProjectProfileBindingViewV1 {
+  readonly projectId: string;
+  readonly displayName: string;
+  readonly providerProfile: string;
+  readonly trustedPlugins: readonly AdminTrustedPluginViewV1[];
+}
+
+/** Operation limits read view; `maxConcurrentRendersPerProject` is fixed at 1. */
+export interface AdminOperationLimitsViewV1 {
+  readonly maxQueuedPerProject: number;
+  readonly maxConcurrentRendersPerProject: 1;
+  readonly maxConcurrentRendersPerHost: number;
+}
+
+/** Agent settings read view. */
+export interface AdminAgentSettingsViewV1 {
+  readonly enabled: boolean;
+  readonly maxTurns: number;
+  readonly maxToolCalls: number;
+}
+
+/** Aggregate read of every V3 configuration domain (single guarded route). */
+export interface AdminAdvancedConfigResponseV1 {
+  readonly version: WorkbenchConfigurationVersion;
+  readonly providers: readonly AdminProviderProfileViewV1[];
+  readonly projects: readonly AdminProjectProfileBindingViewV1[];
+  readonly operationLimits: AdminOperationLimitsViewV1;
+  readonly agent: AdminAgentSettingsViewV1;
+  readonly generatedAt: string;
+}
+
+/** Non-applying validation result for a V3-domain patch. */
+export interface AdminAdvancedConfigPreviewResponseV1 {
+  readonly version: WorkbenchConfigurationVersion;
+  readonly valid: boolean;
+  readonly diagnostics: readonly { readonly code: string; readonly message: string }[];
+  readonly changedFields: readonly string[];
+  readonly restartRequired: boolean;
+  readonly candidateRevision: string | null;
+}
+
+/** CAS apply result for a V3-domain patch. */
+export interface AdminAdvancedConfigApplyResponseV1 {
+  readonly version: WorkbenchConfigurationVersion;
+  readonly receipt: ConfigOperationReceiptV1;
+}
+
+export interface AdminProviderProfileMutationResponseV1 {
+  readonly version: WorkbenchConfigurationVersion;
+  readonly profile: AdminProviderProfileViewV1;
+  readonly receipt: ConfigOperationReceiptV1;
+}
+
+export interface AdminProviderProfileDeleteResponseV1 {
+  readonly version: WorkbenchConfigurationVersion;
+  readonly profileId: string;
+  readonly removed: true;
+  readonly receipt: ConfigOperationReceiptV1;
+}
+
+export interface AdminProviderProfileCredentialResponseV1 {
+  readonly version: WorkbenchConfigurationVersion;
+  readonly profileId: string;
+  readonly configured: boolean;
+}
+
+export interface AdminProviderProfileTestResponseV1 {
+  readonly version: WorkbenchConfigurationVersion;
+  readonly validation: WorkbenchProjectValidationV1;
+  readonly code?: string;
+  readonly lastValidatedAt: string;
+}
+
+/** Provider profile endpoint/model write; it never includes an API key. */
+export type AdminProviderProfileInput = {
+  readonly kind: 'ai-sdk';
+  readonly baseUrl: string | null;
+  readonly model: string | null;
+};
+
+/** One trusted plugin allowlist write (identity fields only). */
+export type AdminTrustedPluginInput = {
+  readonly name: string;
+  readonly version: string;
+  readonly moduleHash: string;
+  readonly required: boolean;
+};
+
+/**
+ * V3-domain mutation/preview input. Any subset may be present; omitted
+ * domains are left unchanged by the single revision-CAS apply.
+ */
+export interface AdminAdvancedConfigInput {
+  readonly operationLimits?: {
+    readonly maxQueuedPerProject: number;
+    readonly maxConcurrentRendersPerHost: number;
+  };
+  readonly agent?: {
+    readonly enabled: boolean;
+    readonly maxTurns: number;
+    readonly maxToolCalls: number;
+  };
+  readonly projects?: readonly {
+    readonly projectId: string;
+    readonly providerProfile?: string;
+    readonly trustedPlugins?: readonly AdminTrustedPluginInput[];
+  }[];
+}
+
 export interface AdminClient {
   readonly getAuthorization: () => AdminAuthorizationState;
   getOverview(): Promise<WorkbenchAdminOverviewV1>;
@@ -200,6 +352,25 @@ export interface AdminClient {
   issueDevicePairing(input: AdminDevicePairingInput): Promise<AdminDeviceIssueResponseV1>;
   claimDevice(input: AdminDeviceClaimInput): Promise<AdminDeviceClaimResponseV1>;
   revokeDevice(deviceId: string): Promise<AdminDeviceRevokeResponseV1>;
+  getAdvancedConfig(): Promise<AdminAdvancedConfigResponseV1>;
+  getDiscoveredPlugins(projectId: string): Promise<AdminDiscoveredPluginsResponseV1>;
+  previewAdvancedConfig(
+    input: AdminAdvancedConfigInput,
+  ): Promise<AdminAdvancedConfigPreviewResponseV1>;
+  applyAdvancedConfig(input: AdminAdvancedConfigInput): Promise<AdminAdvancedConfigApplyResponseV1>;
+  upsertProviderProfile(
+    profileId: string,
+    input: AdminProviderProfileInput,
+  ): Promise<AdminProviderProfileMutationResponseV1>;
+  deleteProviderProfile(profileId: string): Promise<AdminProviderProfileDeleteResponseV1>;
+  setProviderProfileCredential(
+    profileId: string,
+    apiKey: string,
+  ): Promise<AdminProviderProfileCredentialResponseV1>;
+  clearProviderProfileCredential(
+    profileId: string,
+  ): Promise<AdminProviderProfileCredentialResponseV1>;
+  testProviderProfile(profileId: string): Promise<AdminProviderProfileTestResponseV1>;
 }
 
 export interface AdminClientOptions {
@@ -227,6 +398,7 @@ const ADMIN_ERROR_CODES = new Set<WorkbenchAdminErrorCode>([
   'CONFIG_INVALID',
   'CONFIG_STALE',
   'UNKNOWN_FIELD',
+  'PLUGIN_NOT_DISCOVERED',
   'INTERNAL',
 ]);
 
@@ -265,6 +437,42 @@ function pathSegment(value: string): string {
 
 function fixedVersionBody(fields: Record<string, unknown>): Record<string, unknown> {
   return { version: WORKBENCH_CONFIGURATION_VERSION, ...fields };
+}
+
+/** Versioned body for a V3-domain patch; omitted domains never reach the wire. */
+function advancedConfigBody(input: AdminAdvancedConfigInput): Record<string, unknown> {
+  return fixedVersionBody({
+    ...(input.operationLimits === undefined
+      ? {}
+      : {
+          operationLimits: {
+            maxQueuedPerProject: input.operationLimits.maxQueuedPerProject,
+            maxConcurrentRendersPerHost: input.operationLimits.maxConcurrentRendersPerHost,
+          },
+        }),
+    ...(input.agent === undefined
+      ? {}
+      : {
+          agent: {
+            enabled: input.agent.enabled,
+            maxTurns: input.agent.maxTurns,
+            maxToolCalls: input.agent.maxToolCalls,
+          },
+        }),
+    ...(input.projects === undefined
+      ? {}
+      : {
+          projects: input.projects.map((entry) => ({
+            projectId: entry.projectId,
+            ...(entry.providerProfile === undefined
+              ? {}
+              : { providerProfile: entry.providerProfile }),
+            ...(entry.trustedPlugins === undefined
+              ? {}
+              : { trustedPlugins: entry.trustedPlugins.map((plugin) => ({ ...plugin })) }),
+          })),
+        }),
+  });
 }
 
 function responseHasVersion(
@@ -486,6 +694,74 @@ export function createAdminClient(options: AdminClientOptions = {}): AdminClient
       return request<AdminDeviceRevokeResponseV1>(
         `${BROWSER_ADMIN_DEVICES_PATH}/${pathSegment(deviceId)}`,
         'DELETE',
+      );
+    },
+    getAdvancedConfig: () =>
+      request<AdminAdvancedConfigResponseV1>(BROWSER_ADMIN_CONFIG_ADVANCED_PATH),
+    getDiscoveredPlugins: async (projectId) => {
+      const response = await request<AdminDiscoveredPluginsResponseV1>(
+        `${BROWSER_ADMIN_PLUGINS_DISCOVERED_PATH}/${pathSegment(projectId)}`,
+      );
+      if (!Array.isArray(response.plugins)) {
+        throw new AdminApiError(
+          502,
+          'INTERNAL',
+          'The Host returned an unsupported plugin discovery response.',
+        );
+      }
+      return response;
+    },
+    previewAdvancedConfig: (input) => {
+      assertMutationAllowed();
+      return request<AdminAdvancedConfigPreviewResponseV1>(
+        BROWSER_ADMIN_CONFIG_PREVIEW_PATH,
+        'POST',
+        advancedConfigBody(input),
+      );
+    },
+    applyAdvancedConfig: (input) => {
+      assertMutationAllowed();
+      return request<AdminAdvancedConfigApplyResponseV1>(
+        BROWSER_ADMIN_CONFIG_ADVANCED_PATH,
+        'PUT',
+        advancedConfigBody(input),
+      );
+    },
+    upsertProviderProfile: (profileId, input) => {
+      assertMutationAllowed();
+      return request<AdminProviderProfileMutationResponseV1>(
+        `${BROWSER_ADMIN_PROVIDERS_PATH}/${pathSegment(profileId)}`,
+        'PUT',
+        fixedVersionBody({ kind: input.kind, baseUrl: input.baseUrl, model: input.model }),
+      );
+    },
+    deleteProviderProfile: (profileId) => {
+      assertMutationAllowed();
+      return request<AdminProviderProfileDeleteResponseV1>(
+        `${BROWSER_ADMIN_PROVIDERS_PATH}/${pathSegment(profileId)}`,
+        'DELETE',
+      );
+    },
+    setProviderProfileCredential: (profileId, apiKey) => {
+      assertMutationAllowed();
+      return request<AdminProviderProfileCredentialResponseV1>(
+        `${BROWSER_ADMIN_PROVIDERS_PATH}/${pathSegment(profileId)}/credential`,
+        'POST',
+        fixedVersionBody({ apiKey }),
+      );
+    },
+    clearProviderProfileCredential: (profileId) => {
+      assertMutationAllowed();
+      return request<AdminProviderProfileCredentialResponseV1>(
+        `${BROWSER_ADMIN_PROVIDERS_PATH}/${pathSegment(profileId)}/credential`,
+        'DELETE',
+      );
+    },
+    testProviderProfile: (profileId) => {
+      assertMutationAllowed();
+      return request<AdminProviderProfileTestResponseV1>(
+        `${BROWSER_ADMIN_PROVIDERS_PATH}/${pathSegment(profileId)}/test`,
+        'POST',
       );
     },
   };

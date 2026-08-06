@@ -1,8 +1,11 @@
-import { For, Show } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import type {
   AuthoringOperationReceiptV1,
   AuthoringReconcileChoiceV1,
   AuthoringStateV1,
+  BrowserAuthoringDocumentCreateRequestV1,
+  BrowserAuthoringDocumentDeleteRequestV1,
+  BrowserAuthoringDocumentMoveRequestV1,
   BrowserAuthoringReconcileRequestV1,
   BrowserAuthoringRevisionDiffV1,
   BrowserAuthoringRevisionListV1,
@@ -12,11 +15,8 @@ import type {
   SourceStudioDocumentDescriptorV1,
   SourceStudioStateV1,
 } from '../contracts/index.js';
-import {
-  YjsEditor,
-  type YjsEditorConnectionStatus,
-  type YjsEditorSelection,
-} from './yjs-editor.js';
+import { BrowserAuthoringApiError } from './authoring-client.js';
+import { YjsEditor, type YjsEditorConnectionStatus } from './yjs-editor.js';
 
 /**
  * Browser-local working-layer connection status. It is UI state, never
@@ -58,6 +58,18 @@ export interface SourceStudioProps {
   readonly onReconcileAuthoring?: (
     request: BrowserAuthoringReconcileRequestV1,
   ) => void | Promise<void>;
+  /** Explicit versioned working-document create command; working layer only. */
+  readonly onCreateDocument?: (
+    request: BrowserAuthoringDocumentCreateRequestV1,
+  ) => void | Promise<void>;
+  /** Explicit versioned working-document move command; working layer only. */
+  readonly onMoveDocument?: (
+    request: BrowserAuthoringDocumentMoveRequestV1,
+  ) => void | Promise<void>;
+  /** Explicit versioned working-document delete command; working layer only. */
+  readonly onDeleteDocument?: (
+    request: BrowserAuthoringDocumentDeleteRequestV1,
+  ) => void | Promise<void>;
   readonly selectedDocumentId?: string | null;
   readonly onSelectDocument?: (descriptor: SourceStudioDocumentDescriptorV1) => void;
   /** Transient browser session for the authenticated `/yjs` WebSocket. */
@@ -67,10 +79,15 @@ export interface SourceStudioProps {
     descriptor: SourceStudioDocumentDescriptorV1,
     status: SourceStudioYjsStatus,
   ) => void;
-  readonly onEditorSelection?: (
-    descriptor: SourceStudioDocumentDescriptorV1,
-    selection: YjsEditorSelection,
-  ) => void;
+}
+
+/**
+ * Surface a lifecycle mutation failure with the same typed client error the
+ * submit/reconcile paths throw; unknown failures get a generic message.
+ */
+function lifecycleErrorMessage(error: unknown): string {
+  if (error instanceof BrowserAuthoringApiError) return error.message;
+  return error instanceof Error ? error.message : 'The document mutation was not accepted.';
 }
 
 function submitBlockLabel(authoring: AuthoringStateV1): string {
@@ -163,6 +180,106 @@ export function SourceStudio(props: SourceStudioProps) {
       expectedAcceptedRevisionId: props.authoring?.acceptedRevisionId ?? null,
       expectedSourceHash: props.authoring?.acceptedSourceHash ?? null,
     };
+  };
+
+  // ─── Working-document lifecycle (create/move/delete) ───────────────────────
+  const [creating, setCreating] = createSignal(false);
+  const [newPath, setNewPath] = createSignal('');
+  const [newKind, setNewKind] = createSignal<'prose' | 'raw-yaml'>('raw-yaml');
+  const [movingId, setMovingId] = createSignal<string | null>(null);
+  const [movePath, setMovePath] = createSignal('');
+  const [confirmingDeleteId, setConfirmingDeleteId] = createSignal<string | null>(null);
+  const [mutationBusy, setMutationBusy] = createSignal(false);
+  const [mutationError, setMutationError] = createSignal<string | null>(null);
+
+  /** Shared working-layer CAS base; null when the Host identity is unknown. */
+  const lifecycleBase = (): {
+    readonly projectId: string;
+    readonly expectedAcceptedSourceHash: string | null;
+    readonly expectedWorkspaceDigest: string;
+  } | null => {
+    const state = props.state;
+    const authoring = props.authoring;
+    if (state === null || authoring === null || authoring === undefined) return null;
+    if (authoring.workspaceDigest === null) return null;
+    return {
+      projectId: state.projectId,
+      expectedAcceptedSourceHash: authoring.acceptedSourceHash,
+      expectedWorkspaceDigest: authoring.workspaceDigest,
+    };
+  };
+
+  const canMutate = (): boolean => lifecycleBase() !== null;
+
+  const runCreate = async (): Promise<void> => {
+    const base = lifecycleBase();
+    if (base === null || props.onCreateDocument === undefined) return;
+    const logicalPath = newPath().trim();
+    if (logicalPath.length === 0) return;
+    setMutationBusy(true);
+    setMutationError(null);
+    try {
+      await props.onCreateDocument({
+        version: 2,
+        projectId: base.projectId,
+        logicalPath,
+        kind: newKind(),
+        expectedAcceptedSourceHash: base.expectedAcceptedSourceHash,
+        expectedWorkspaceDigest: base.expectedWorkspaceDigest,
+      });
+      setCreating(false);
+      setNewPath('');
+    } catch (error) {
+      setMutationError(lifecycleErrorMessage(error));
+    } finally {
+      setMutationBusy(false);
+    }
+  };
+
+  const runMove = async (documentId: string): Promise<void> => {
+    const base = lifecycleBase();
+    if (base === null || props.onMoveDocument === undefined) return;
+    const logicalPath = movePath().trim();
+    if (logicalPath.length === 0) return;
+    setMutationBusy(true);
+    setMutationError(null);
+    try {
+      await props.onMoveDocument({
+        version: 2,
+        projectId: base.projectId,
+        documentId,
+        logicalPath,
+        expectedAcceptedSourceHash: base.expectedAcceptedSourceHash,
+        expectedWorkspaceDigest: base.expectedWorkspaceDigest,
+      });
+      setMovingId(null);
+      setMovePath('');
+    } catch (error) {
+      setMutationError(lifecycleErrorMessage(error));
+    } finally {
+      setMutationBusy(false);
+    }
+  };
+
+  const runDelete = async (documentId: string): Promise<void> => {
+    const base = lifecycleBase();
+    if (base === null || props.onDeleteDocument === undefined) return;
+    setMutationBusy(true);
+    setMutationError(null);
+    try {
+      await props.onDeleteDocument({
+        version: 2,
+        projectId: base.projectId,
+        documentId,
+        expectedAcceptedSourceHash: base.expectedAcceptedSourceHash,
+        expectedWorkspaceDigest: base.expectedWorkspaceDigest,
+      });
+      setConfirmingDeleteId(null);
+    } catch (error) {
+      setMutationError(lifecycleErrorMessage(error));
+    } finally {
+      setMutationBusy(false);
+    }
   };
 
   return (
@@ -333,15 +450,87 @@ export function SourceStudio(props: SourceStudioProps) {
               class="working-layer flex min-h-0 flex-col gap-4"
               aria-labelledby="working-layer-heading"
             >
-              <header>
-                <h3 id="working-layer-heading">
-                  Working layer (Yjs) — online-only, not accepted source
-                </h3>
-                <p class="screen-note">
-                  Working-layer edits are noncanonical and are never adopted as accepted source
-                  until the Host validates and submits them.
-                </p>
+              <header class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 id="working-layer-heading">
+                    Working layer (Yjs) — online-only, not accepted source
+                  </h3>
+                  <p class="screen-note">
+                    Working-layer edits are noncanonical and are never adopted as accepted source
+                    until the Host validates and submits them. Create, move and delete only touch
+                    this layer; the accepted layer changes exclusively via submit.
+                  </p>
+                </div>
+                <Show when={props.onCreateDocument !== undefined && canMutate()}>
+                  <button
+                    type="button"
+                    class="view-button"
+                    disabled={mutationBusy()}
+                    onClick={() => {
+                      setCreating(true);
+                      setNewPath('');
+                      setNewKind('raw-yaml');
+                      setMutationError(null);
+                    }}
+                  >
+                    New working document
+                  </button>
+                </Show>
               </header>
+              <Show when={creating()}>
+                <div
+                  class="grid gap-2 border border-[var(--wb-border)] p-3"
+                  aria-label="Create working document"
+                >
+                  <label class="screen-note" for="new-document-path">
+                    Manifest-relative logical path
+                  </label>
+                  <input
+                    id="new-document-path"
+                    value={newPath()}
+                    onInput={(event) => setNewPath(event.currentTarget.value)}
+                    placeholder="scenes/my_new_scene.md"
+                  />
+                  <label class="screen-note" for="new-document-kind">
+                    Document kind
+                  </label>
+                  <select
+                    id="new-document-kind"
+                    value={newKind()}
+                    onChange={(event) =>
+                      setNewKind(event.currentTarget.value === 'prose' ? 'prose' : 'raw-yaml')
+                    }
+                  >
+                    <option value="raw-yaml">raw-yaml</option>
+                    <option value="prose">prose</option>
+                  </select>
+                  <div class="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={mutationBusy() || newPath().trim().length === 0}
+                      onClick={() => void runCreate()}
+                    >
+                      Create working document
+                    </button>
+                    <button
+                      type="button"
+                      disabled={mutationBusy()}
+                      onClick={() => {
+                        setCreating(false);
+                        setNewPath('');
+                        setMutationError(null);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </Show>
+              <Show when={mutationError() !== null}>
+                <p class="diagnostic diagnostic-error" role="alert" data-mutation-error>
+                  {mutationError()}
+                </p>
+              </Show>
               <Show
                 when={state().working.documents.length > 0}
                 fallback={
@@ -412,6 +601,89 @@ export function SourceStudio(props: SourceStudioProps) {
                               Submit working document to Host
                             </button>
                           </Show>
+                          <Show when={props.onMoveDocument !== undefined}>
+                            <button
+                              type="button"
+                              disabled={!descriptor.available || !canMutate()}
+                              onClick={() => {
+                                setMovingId(descriptor.documentId);
+                                setMovePath(descriptor.documentId);
+                                setMutationError(null);
+                              }}
+                            >
+                              Rename/Move
+                            </button>
+                          </Show>
+                          <Show when={movingId() === descriptor.documentId}>
+                            <div
+                              class="grid gap-2 border border-[var(--wb-border)] p-3"
+                              aria-label={`Move ${descriptor.documentId}`}
+                            >
+                              <label class="screen-note" for={`move-path-${descriptor.documentId}`}>
+                                New manifest-relative logical path
+                              </label>
+                              <input
+                                id={`move-path-${descriptor.documentId}`}
+                                value={movePath()}
+                                onInput={(event) => setMovePath(event.currentTarget.value)}
+                              />
+                              <div class="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  disabled={mutationBusy() || movePath().trim().length === 0}
+                                  onClick={() => void runMove(descriptor.documentId)}
+                                >
+                                  Move document
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={mutationBusy()}
+                                  onClick={() => {
+                                    setMovingId(null);
+                                    setMutationError(null);
+                                  }}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          </Show>
+                          <Show when={props.onDeleteDocument !== undefined}>
+                            <button
+                              type="button"
+                              disabled={!descriptor.available || !canMutate()}
+                              onClick={() => {
+                                setConfirmingDeleteId(descriptor.documentId);
+                                setMutationError(null);
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </Show>
+                          <Show when={confirmingDeleteId() === descriptor.documentId}>
+                            <div
+                              class="flex flex-wrap items-center gap-2 border border-[var(--wb-border)] p-3"
+                              aria-label={`Delete ${descriptor.documentId}`}
+                            >
+                              <span class="screen-note">
+                                Delete this working document? The accepted layer is unaffected.
+                              </span>
+                              <button
+                                type="button"
+                                disabled={mutationBusy()}
+                                onClick={() => void runDelete(descriptor.documentId)}
+                              >
+                                Confirm delete
+                              </button>
+                              <button
+                                type="button"
+                                disabled={mutationBusy()}
+                                onClick={() => setConfirmingDeleteId(null)}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </Show>
                         </li>
                       )}
                     </For>
@@ -437,9 +709,6 @@ export function SourceStudio(props: SourceStudioProps) {
                           sessionId={props.sessionId}
                           baseUrl={props.baseUrl}
                           onStatusChange={(next) => props.onYjsStatusChange?.(descriptor(), next)}
-                          onSelectionChange={(selection) =>
-                            props.onEditorSelection?.(descriptor(), selection)
-                          }
                         />
                       </section>
                     )}

@@ -4,7 +4,11 @@ import {
   type AuthoringFailureV1,
   type AuthoringOperationReceiptV1,
   type AuthoringStateV1,
+  BROWSER_AUTHORING_DOCUMENT_CREATE_PATH,
+  BROWSER_AUTHORING_DOCUMENT_DELETE_PATH,
+  BROWSER_AUTHORING_DOCUMENT_MOVE_PATH,
   BROWSER_AUTHORING_EVENTS_PATH,
+  BROWSER_AUTHORING_OPERATION_CANCEL_PATH,
   BROWSER_AUTHORING_OPERATION_PATH,
   BROWSER_AUTHORING_OPERATIONS_PATH,
   BROWSER_AUTHORING_RECONCILE_PATH,
@@ -14,6 +18,10 @@ import {
   BROWSER_AUTHORING_REVISIONS_PATH,
   BROWSER_AUTHORING_STATE_PATH,
   BROWSER_AUTHORING_SUBMIT_PATH,
+  type BrowserAuthoringDocumentCreateRequestV1,
+  type BrowserAuthoringDocumentDeleteRequestV1,
+  type BrowserAuthoringDocumentMoveRequestV1,
+  type BrowserAuthoringDocumentMutationResultV1,
   type BrowserAuthoringReconcileRequestV1,
   type BrowserAuthoringReconcileResultV1,
   type BrowserAuthoringRevisionDiffV1,
@@ -57,6 +65,8 @@ export interface BrowserAuthoringClient {
   getState(projectId: string): Promise<AuthoringStateV1>;
   listOperations(projectId: string): Promise<BrowserAuthoringOperationsV1>;
   getOperation(projectId: string, operationId: string): Promise<AuthoringOperationReceiptV1>;
+  /** Cancel one durable operation; rejects with OPERATION_TERMINAL when already terminal. */
+  cancelOperation(projectId: string, operationId: string): Promise<AuthoringOperationReceiptV1>;
   listRevisions(projectId: string, cursor?: string): Promise<BrowserAuthoringRevisionListV1>;
   getRevision(
     projectId: string,
@@ -79,6 +89,15 @@ export interface BrowserAuthoringClient {
   reconcile(
     request: BrowserAuthoringReconcileRequestV1,
   ): Promise<BrowserAuthoringReconcileResultV1>;
+  createDocument(
+    request: BrowserAuthoringDocumentCreateRequestV1,
+  ): Promise<BrowserAuthoringDocumentMutationResultV1>;
+  moveDocument(
+    request: BrowserAuthoringDocumentMoveRequestV1,
+  ): Promise<BrowserAuthoringDocumentMutationResultV1>;
+  deleteDocument(
+    request: BrowserAuthoringDocumentDeleteRequestV1,
+  ): Promise<BrowserAuthoringDocumentMutationResultV1>;
   subscribeEvents(
     projectId: string,
     handlers: {
@@ -96,7 +115,8 @@ export interface BrowserAuthoringClientOptions {
   readonly baseUrl?: string;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+/** Shared JSON-object guard for browser client response parsing. */
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
@@ -225,6 +245,14 @@ export function createBrowserAuthoringClient(
           encodeURIComponent(operationId),
         ),
       ),
+    cancelOperation: (projectId, operationId) =>
+      post<AuthoringOperationReceiptV1>(
+        pathFor(BROWSER_AUTHORING_OPERATION_CANCEL_PATH, projectId).replace(
+          ':operationId',
+          encodeURIComponent(operationId),
+        ),
+        {},
+      ),
     listRevisions: (projectId, cursor) => {
       const path = pathFor(BROWSER_AUTHORING_REVISIONS_PATH, projectId);
       return get<BrowserAuthoringRevisionListV1>(
@@ -262,6 +290,21 @@ export function createBrowserAuthoringClient(
     reconcile: (request) =>
       post<BrowserAuthoringReconcileResultV1>(
         pathFor(BROWSER_AUTHORING_RECONCILE_PATH, request.projectId),
+        request,
+      ),
+    createDocument: (request) =>
+      post<BrowserAuthoringDocumentMutationResultV1>(
+        pathFor(BROWSER_AUTHORING_DOCUMENT_CREATE_PATH, request.projectId),
+        request,
+      ),
+    moveDocument: (request) =>
+      post<BrowserAuthoringDocumentMutationResultV1>(
+        pathFor(BROWSER_AUTHORING_DOCUMENT_MOVE_PATH, request.projectId),
+        request,
+      ),
+    deleteDocument: (request) =>
+      post<BrowserAuthoringDocumentMutationResultV1>(
+        pathFor(BROWSER_AUTHORING_DOCUMENT_DELETE_PATH, request.projectId),
         request,
       ),
     subscribeEvents(projectId, handlers) {
@@ -369,6 +412,10 @@ export type {
   AuthoringFailureV1,
   AuthoringOperationReceiptV1,
   AuthoringStateV1,
+  BrowserAuthoringDocumentCreateRequestV1,
+  BrowserAuthoringDocumentDeleteRequestV1,
+  BrowserAuthoringDocumentMoveRequestV1,
+  BrowserAuthoringDocumentMutationResultV1,
   BrowserAuthoringReconcileRequestV1,
   BrowserAuthoringReconcileResultV1,
   BrowserAuthoringRevisionDiffV1,

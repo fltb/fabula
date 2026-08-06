@@ -3,6 +3,9 @@ import type { JSX } from 'solid-js';
 import { createSignal, Match, onCleanup, onMount, Show, Switch } from 'solid-js';
 import { render } from 'solid-js/web';
 import type {
+  BrowserAuthoringDocumentCreateRequestV1,
+  BrowserAuthoringDocumentDeleteRequestV1,
+  BrowserAuthoringDocumentMoveRequestV1,
   BrowserAuthoringReconcileRequestV1,
   BrowserAuthoringRevisionDiffV1,
   BrowserAuthoringRevisionListV1,
@@ -11,6 +14,16 @@ import type {
   BrowserAuthoringSubmitRequestV1,
   BrowserGraphRouteSelectorV1,
   BrowserProjectSummaryV1,
+  BrowserPublicationListV1,
+  BrowserPublicationReadQueryV1,
+  BrowserPublicationReadResultV1,
+  BrowserPublishRequestV1,
+  BrowserReviewAddRequestV1,
+  BrowserReviewGateDecideRequestV1,
+  BrowserReviewGateListV1,
+  BrowserReviewHistoryV1,
+  BrowserReviewListV1,
+  BrowserReviewUpdateRequestV1,
   BrowserSessionPrincipalV1,
   ConfigOperationReceiptV1,
   SourceStudioDocumentDescriptorV1,
@@ -328,6 +341,10 @@ function WorkspaceRoute(props: {
     null,
   );
   const [revisionDiff, setRevisionDiff] = createSignal<BrowserAuthoringRevisionDiffV1 | null>(null);
+  const [reviewState, setReviewState] = createSignal<BrowserReviewListV1 | null>(null);
+  const [reviewGates, setReviewGates] = createSignal<BrowserReviewGateListV1 | null>(null);
+  const [reviewHistory, setReviewHistory] = createSignal<BrowserReviewHistoryV1 | null>(null);
+  const [publications, setPublications] = createSignal<BrowserPublicationListV1 | null>(null);
   const [yjsStatus, setYjsStatus] = createSignal<
     Record<string, 'idle' | 'connecting' | 'connected' | 'disconnected' | 'unavailable'>
   >({});
@@ -364,6 +381,11 @@ function WorkspaceRoute(props: {
       setRevisionHistory(nextHistory);
       setSelectedRevision(null);
       setRevisionDiff(null);
+      await refreshReview(nextWorkspace.capabilities?.features?.includes('review-hub') === true);
+      await refreshPublication(
+        nextWorkspace.capabilities?.features?.includes('publication') === true,
+      );
+      if (generation !== loadGeneration) return;
       const nextEvents = createProjectEventClient({
         projectId,
         client: props.client.authoring,
@@ -389,8 +411,27 @@ function WorkspaceRoute(props: {
   const submitAuthoring = async (request: BrowserAuthoringSubmitRequestV1): Promise<void> => {
     await props.client.authoring.submit(request);
   };
+  const cancelOperation = async (operationId: string): Promise<void> => {
+    await props.client.authoring.cancelOperation(props.projectId, operationId);
+  };
   const reconcileAuthoring = async (request: BrowserAuthoringReconcileRequestV1): Promise<void> => {
     await props.client.authoring.reconcile(request);
+  };
+  const createDocument = async (
+    request: BrowserAuthoringDocumentCreateRequestV1,
+  ): Promise<void> => {
+    await props.client.authoring.createDocument(request);
+    await load();
+  };
+  const moveDocument = async (request: BrowserAuthoringDocumentMoveRequestV1): Promise<void> => {
+    await props.client.authoring.moveDocument(request);
+    await load();
+  };
+  const deleteDocument = async (
+    request: BrowserAuthoringDocumentDeleteRequestV1,
+  ): Promise<void> => {
+    await props.client.authoring.deleteDocument(request);
+    await load();
   };
   const listAuthoringRevisions = async (): Promise<void> => {
     setRevisionHistory(await props.client.authoring.listRevisions(props.projectId));
@@ -420,6 +461,59 @@ function WorkspaceRoute(props: {
     setYjsStatus((current) => ({ ...current, [descriptor.documentId]: status }));
   };
 
+  /**
+   * Load the Review Hub projections. When the feature is absent (or the read
+   * fails) the signals stay null and the view renders an honest empty state;
+   * the workspace load itself never depends on the review surface.
+   */
+  const refreshReview = async (enabled: boolean): Promise<void> => {
+    if (!enabled) {
+      setReviewState(null);
+      setReviewGates(null);
+      setReviewHistory(null);
+      return;
+    }
+    const [nextReview, nextGates, nextHistory] = await Promise.all([
+      props.client.review.list(props.projectId).catch(() => null),
+      props.client.review.gateList(props.projectId).catch(() => null),
+      props.client.review.history(props.projectId).catch(() => null),
+    ]);
+    setReviewState(nextReview);
+    setReviewGates(nextGates);
+    setReviewHistory(nextHistory);
+  };
+  const addReviewComment = async (request: BrowserReviewAddRequestV1): Promise<void> => {
+    await props.client.review.add(request);
+  };
+  const updateReviewComment = async (request: BrowserReviewUpdateRequestV1): Promise<void> => {
+    await props.client.review.update(request);
+  };
+  const decideReviewGate = async (request: BrowserReviewGateDecideRequestV1): Promise<void> => {
+    await props.client.review.gateDecide(request);
+  };
+
+  /**
+   * Load the publication catalog. When the feature is absent (or the read
+   * fails) the signal stays null and the view renders an honest empty state;
+   * the workspace load itself never depends on the publication surface.
+   */
+  const refreshPublication = async (enabled: boolean): Promise<void> => {
+    if (!enabled) {
+      setPublications(null);
+      return;
+    }
+    setPublications(await props.client.publication.list(props.projectId).catch(() => null));
+  };
+  const publish = async (request: BrowserPublishRequestV1): Promise<void> => {
+    await props.client.publication.publish(request);
+  };
+  const readPublication = async (
+    projectId: string,
+    publicationId: string,
+    query?: BrowserPublicationReadQueryV1,
+  ): Promise<BrowserPublicationReadResultV1> =>
+    props.client.publication.read(projectId, publicationId, query);
+
   return (
     <Show
       when={!pending() && workspace()}
@@ -436,11 +530,18 @@ function WorkspaceRoute(props: {
       {(current) => (
         <App
           hostStatus="ready"
+          features={current().capabilities?.features ?? null}
+          agentChat={
+            current().capabilities?.features?.includes('agent-chat') === true
+              ? { projectId: props.projectId, client: props.client.agentChat }
+              : null
+          }
           overview={current().overview}
           graphProjection={current().graph}
           sourceStudio={current().source}
           authoringState={authoring()?.state}
           authoringOperations={authoring()?.operations}
+          onCancelOperation={cancelOperation}
           authoringRevisionHistory={revisionHistory()}
           authoringRevision={selectedRevision()}
           authoringRevisionDiff={revisionDiff()}
@@ -452,9 +553,27 @@ function WorkspaceRoute(props: {
           sourceYjsStatus={yjsStatus()}
           onSubmitAuthoring={submitAuthoring}
           onReconcileAuthoring={reconcileAuthoring}
+          onCreateDocument={createDocument}
+          onMoveDocument={moveDocument}
+          onDeleteDocument={deleteDocument}
           onGraphRouteChange={(selector) => void load(selector)}
           onSourceYjsStatusChange={updateYjsStatus}
-          agentClient={props.client.agent}
+          reviewState={reviewState()}
+          reviewGates={reviewGates()}
+          reviewHistory={reviewHistory()}
+          sessionProjectRole={null}
+          onAddReviewComment={addReviewComment}
+          onUpdateReviewComment={updateReviewComment}
+          onDecideReviewGate={decideReviewGate}
+          onRefreshReview={() =>
+            refreshReview(current().capabilities?.features?.includes('review-hub') === true)
+          }
+          publications={publications()}
+          onPublish={publish}
+          onRefreshPublication={() =>
+            refreshPublication(current().capabilities?.features?.includes('publication') === true)
+          }
+          onReadPublication={readPublication}
         />
       )}
     </Show>

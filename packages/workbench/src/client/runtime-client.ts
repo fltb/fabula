@@ -1,5 +1,6 @@
 import type {
   BrowserGraphRouteSelectorV1,
+  BrowserProjectCapabilitiesV1,
   BrowserProjectListV1,
   BrowserProjectOverviewV1,
   BrowserSessionPrincipalV1,
@@ -7,14 +8,19 @@ import type {
   WorkbenchGraphProjectionV1,
 } from '../contracts/index.js';
 import { type AdminClient, createAdminClient } from './admin/admin-client.js';
-import { type AgentClient, createAgentClient } from './agent-client.js';
+import { type AgentChatClient, createAgentChatClient } from './agent-chat-client.js';
 import { type BrowserAuthoringClient, createBrowserAuthoringClient } from './authoring-client.js';
+import {
+  type BrowserPublicationClient,
+  createBrowserPublicationClient,
+} from './browser-publication-api.js';
 import {
   type BrowserFetch,
   BrowserReadApiError,
   type BrowserReadClient,
   createBrowserReadClient,
 } from './browser-read-client.js';
+import { type BrowserReviewClient, createBrowserReviewClient } from './browser-review-api.js';
 import { createSetupClient, type SetupClient } from './setup-client.js';
 
 export const AUTH_ENDPOINTS = Object.freeze({
@@ -88,6 +94,8 @@ export interface RuntimeWorkspace {
   readonly overview: BrowserProjectOverviewV1;
   readonly source: SourceStudioStateV1;
   readonly graph: WorkbenchGraphProjectionV1;
+  /** Host-derived feature gates; null only if the capabilities read failed. */
+  readonly capabilities: BrowserProjectCapabilitiesV1 | null;
 }
 
 export interface ProjectClient {
@@ -104,8 +112,11 @@ export interface RuntimeClient {
   readonly projects: ProjectClient;
   readonly read: BrowserReadClient;
   readonly admin: AdminClient;
-  readonly agent: AgentClient;
   readonly authoring: BrowserAuthoringClient;
+  readonly review: BrowserReviewClient;
+  readonly publication: BrowserPublicationClient;
+  /** Built-in Agent chat surface; the view renders only under the feature gate. */
+  readonly agentChat: AgentChatClient;
 }
 
 const RUNTIME_ERROR_MESSAGES: Readonly<Record<RuntimeErrorCode, string>> = {
@@ -185,8 +196,22 @@ export function createRuntimeClient(
   const setup = createSetupClient({ fetch: execute, baseUrl: prefix });
   const session = () => sessionId;
   const admin = createAdminClient({ fetch: execute, baseUrl: prefix, getSessionId: session });
-  const agent = createAgentClient({ fetch: execute, baseUrl: prefix, getSessionId: session });
   const authoring = createBrowserAuthoringClient({
+    fetch: execute,
+    baseUrl: prefix,
+    getSessionId: session,
+  });
+  const review = createBrowserReviewClient({
+    fetch: execute,
+    baseUrl: prefix,
+    getSessionId: session,
+  });
+  const publication = createBrowserPublicationClient({
+    fetch: execute,
+    baseUrl: prefix,
+    getSessionId: session,
+  });
+  const agentChat = createAgentChatClient({
     fetch: execute,
     baseUrl: prefix,
     getSessionId: session,
@@ -255,12 +280,13 @@ export function createRuntimeClient(
     },
     async loadWorkspace(projectId, selector = { version: 1, branchPath: { decisions: [] } }) {
       try {
-        const [overview, source, graph] = await Promise.all([
+        const [overview, source, graph, capabilities] = await Promise.all([
           read.getOverview(projectId),
           read.getSourceStudio(projectId),
           read.getGraphs(projectId, selector),
+          read.loadCapabilities(projectId).catch(() => null),
         ]);
-        return { overview, source, graph };
+        return { overview, source, graph, capabilities };
       } catch (error) {
         if (error instanceof BrowserReadApiError) {
           if (error.status === 401) sessionId = null;
@@ -271,7 +297,7 @@ export function createRuntimeClient(
     },
   };
 
-  return { setup, auth, projects, read, admin, agent, authoring };
+  return { setup, auth, projects, read, admin, authoring, review, publication, agentChat };
 }
 
 export function runtimeErrorMessage(error: unknown): string {

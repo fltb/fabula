@@ -49,11 +49,27 @@ function sortOperations(
  * no source bytes and performs no mutation itself; all effects originate from
  * the Host's versioned event stream or an explicit authoring-client command.
  */
-export function createProjectEventClient(options: {
+export interface ProjectEventClientOptions {
   readonly projectId: string;
   readonly client: BrowserAuthoringClient;
   readonly onChange?: (snapshot: ProjectEventClientSnapshot) => void;
-}): ProjectEventClient {
+  /**
+   * Consecutive failed connect attempts before the client gives up and stays
+   * disconnected, relying on store-first reads and explicit refresh actions.
+   * Defaults to 5 (one initial attempt plus five bounded retries).
+   */
+  readonly maxReconnectAttempts?: number;
+  /** First reconnect delay in ms; each attempt doubles until the cap. Default 500. */
+  readonly reconnectBaseDelayMs?: number;
+  /** Backoff cap in ms. Default 8000. */
+  readonly reconnectMaxDelayMs?: number;
+}
+
+export function createProjectEventClient(options: ProjectEventClientOptions): ProjectEventClient {
+  const maxReconnectAttempts = options.maxReconnectAttempts ?? 5;
+  const reconnectBaseDelayMs = options.reconnectBaseDelayMs ?? 500;
+  const reconnectMaxDelayMs = options.reconnectMaxDelayMs ?? 8000;
+
   let state: AuthoringStateV1 | null = null;
   let operations: readonly AuthoringOperationReceiptV1[] = [];
   let lastSubmitReceipt: AuthoringSubmitReceiptV1 | null = null;
@@ -63,6 +79,13 @@ export function createProjectEventClient(options: {
   let error: BrowserAuthoringApiError | null = null;
   let stream: AuthoringEventSubscription | null = null;
   let started = false;
+  // Reconnect state: `active` gates retries while the workspace is live,
+  // `connecting` guards re-entrancy from the stream error callback, and the
+  // timer owns one pending retry at a time.
+  let active = false;
+  let connecting = false;
+  let reconnectAttempt = 0;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   const listeners = new Set<(snapshot: ProjectEventClientSnapshot) => void>();
 
   const snapshot = (): ProjectEventClientSnapshot => ({
@@ -119,7 +142,83 @@ export function createProjectEventClient(options: {
     emit();
   };
 
+  /**
+   * Schedule one bounded retry. The stream error callback and the connect
+   * failure path both land here; the single-timer guard collapses the initial
+   * failure's duplicate notifications into one backoff cycle.
+   */
+  const scheduleReconnect = (nextError: BrowserAuthoringApiError): void => {
+    if (!active || connecting || reconnectTimer !== null) return;
+    if (reconnectAttempt >= maxReconnectAttempts) {
+      // Permanent failure: stay disconnected and rely on store-first reads
+      // plus the explicit refresh actions; retrying would only spin.
+      error = nextError;
+      connected = false;
+      emit();
+      return;
+    }
+    reconnectAttempt += 1;
+    const delay = Math.min(reconnectBaseDelayMs * 2 ** (reconnectAttempt - 1), reconnectMaxDelayMs);
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      void attemptConnect();
+    }, delay);
+  };
+
+  const attemptConnect = async (): Promise<void> => {
+    connecting = true;
+    try {
+      // Store-first read: rehydrate from the durable store before resuming
+      // the live stream, so a dropped SSE connection never resumes from a
+      // stale in-memory view.
+      const [nextState, nextOperations] = await Promise.all([
+        options.client.getState(options.projectId),
+        options.client.listOperations(options.projectId),
+      ]);
+      if (!active) return;
+      state = nextState;
+      operations = sortOperations(nextOperations.operations);
+      presence = [];
+      presenceGeneration = 0;
+      const nextStream = options.client.subscribeEvents(options.projectId, {
+        onEvent: apply,
+        onError: (nextError) => {
+          error = nextError;
+          connected = false;
+          emit();
+          scheduleReconnect(nextError);
+        },
+      });
+      stream = nextStream;
+      await nextStream.ready;
+      if (!active) {
+        nextStream.close();
+        return;
+      }
+      connected = true;
+      error = null;
+      reconnectAttempt = 0;
+      emit();
+    } catch (nextError) {
+      if (!active) return;
+      error = nextError as BrowserAuthoringApiError;
+      connected = false;
+      // The stream error callback fires while this attempt is still marked
+      // connecting (it cannot schedule); the failure path owns the retry.
+      connecting = false;
+      emit();
+      scheduleReconnect(nextError as BrowserAuthoringApiError);
+    } finally {
+      connecting = false;
+    }
+  };
+
   const stop = (): void => {
+    active = false;
+    if (reconnectTimer !== null) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
     stream?.close();
     stream = null;
     if (connected) {
@@ -131,34 +230,11 @@ export function createProjectEventClient(options: {
   const start = async (): Promise<ProjectEventClientSnapshot> => {
     if (started) return snapshot();
     started = true;
-    try {
-      const [nextState, nextOperations] = await Promise.all([
-        options.client.getState(options.projectId),
-        options.client.listOperations(options.projectId),
-      ]);
-      state = nextState;
-      operations = sortOperations(nextOperations.operations);
-      presence = [];
-      presenceGeneration = 0;
-      stream = options.client.subscribeEvents(options.projectId, {
-        onEvent: apply,
-        onError: (nextError) => {
-          error = nextError;
-          connected = false;
-          emit();
-        },
-      });
-      await stream.ready;
-      connected = true;
-      error = null;
-      emit();
-      return snapshot();
-    } catch (nextError) {
-      error = nextError as BrowserAuthoringApiError;
-      connected = false;
-      emit();
-      throw nextError;
-    }
+    active = true;
+    // Resolves once the first attempt settles (connected or not); bounded
+    // background retries continue while the client stays active.
+    await attemptConnect();
+    return snapshot();
   };
 
   return {

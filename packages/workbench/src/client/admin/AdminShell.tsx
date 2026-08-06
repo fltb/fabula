@@ -2,6 +2,7 @@ import { Tabs } from '@kobalte/core/tabs';
 import { createSignal, For, onMount, Show } from 'solid-js';
 import type { WorkbenchAdminOverviewV1 } from '../../contracts/index.js';
 import { AccessDevicesPage } from './AccessDevicesPage';
+import { AdvancedPage } from './AdvancedPage';
 import type {
   AdminAuthorizationState,
   AdminClient,
@@ -19,6 +20,7 @@ const ADMIN_SECTIONS = [
   { id: 'system', label: 'System', glyph: '◌' },
   { id: 'projects', label: 'Projects', glyph: '◇' },
   { id: 'provider', label: 'Provider', glyph: '∿' },
+  { id: 'advanced', label: 'Advanced', glyph: '⚙' },
   { id: 'access-devices', label: 'Access & Devices', glyph: '⌁' },
   { id: 'network', label: 'Network', glyph: '↗' },
   { id: 'operations', label: 'Operations', glyph: '✓' },
@@ -230,6 +232,13 @@ export function AdminShell(props: AdminShellProps) {
             <Tabs.Content value="provider">
               <ProviderPage
                 overview={overview()}
+                client={props.client}
+                authorization={authorization()}
+                onChanged={refreshOverview}
+              />
+            </Tabs.Content>
+            <Tabs.Content value="advanced">
+              <AdvancedPage
                 client={props.client}
                 authorization={authorization()}
                 onChanged={refreshOverview}

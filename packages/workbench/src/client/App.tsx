@@ -4,6 +4,9 @@ import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import type {
   AuthoringOperationReceiptV1,
   AuthoringStateV1,
+  BrowserAuthoringDocumentCreateRequestV1,
+  BrowserAuthoringDocumentDeleteRequestV1,
+  BrowserAuthoringDocumentMoveRequestV1,
   BrowserAuthoringReconcileRequestV1,
   BrowserAuthoringRevisionDiffV1,
   BrowserAuthoringRevisionListV1,
@@ -11,38 +14,87 @@ import type {
   BrowserAuthoringRevisionV1,
   BrowserAuthoringSubmitRequestV1,
   BrowserProjectOverviewV1,
+  BrowserPublicationListV1,
+  BrowserPublicationReadQueryV1,
+  BrowserPublicationReadResultV1,
+  BrowserPublishRequestV1,
+  BrowserReviewAddRequestV1,
+  BrowserReviewGateDecideRequestV1,
+  BrowserReviewGateListV1,
+  BrowserReviewHistoryV1,
+  BrowserReviewListV1,
+  BrowserReviewUpdateRequestV1,
+  ProjectAccessRole,
   SceneAdoptionViewV1,
   SourceStudioDocumentDescriptorV1,
   SourceStudioStateV1,
   WorkbenchGraphProjectionV1,
+  WorkbenchProjectFeatureV1,
   WorkbenchRouteSelectorV1,
 } from '../contracts/index.js';
-import type { AgentClient } from './agent-client';
-import { createEditorAssistantContext, EditorAssistantProvider } from './editor-assistant-context';
+import { AgentChat } from './AgentChat';
+import type { AgentChatClient } from './agent-chat-client.js';
+import { PublicationView } from './PublicationView';
 import {
   loadWorkbenchPreferences,
   saveWorkbenchPreferences,
   type WorkbenchPreferencesV1,
 } from './preferences';
 import { GraphRoute, ProjectHome } from './projection-views';
+import { ReviewHub } from './ReviewHub';
 import { SceneCanvas } from './scene-canvas';
 import { SourceStudio, type SourceStudioYjsStatus } from './source-studio';
-import { AgentDrawer } from './ui/AgentDrawer';
-import type { YjsEditorSelection } from './yjs-editor';
 
-export const WORKBENCH_VIEWS = [
+/**
+ * Full catalog of every Workbench view. The visible list is derived from the
+ * Host-supplied `features` (see {@link viewsFor}); a view that is not in the
+ * current feature set is never rendered, never offered, and never used as a
+ * fallback target.
+ */
+const WORKBENCH_VIEW_CATALOG = [
   { id: 'project-home', label: 'Project Home', glyph: '⌂' },
   { id: 'scene-canvas', label: 'Scene Canvas', glyph: '◇' },
   { id: 'source-studio', label: 'Source Studio', glyph: '≋' },
   { id: 'graph-route', label: 'Graph / Route', glyph: '↗' },
   { id: 'review-hub', label: 'Review Hub', glyph: '✓' },
   { id: 'publication', label: 'Publication', glyph: '◫' },
+  { id: 'agent-chat', label: 'Agent Chat', glyph: '✳' },
 ] as const;
 
-export type WorkbenchViewId = (typeof WORKBENCH_VIEWS)[number]['id'];
+export type WorkbenchViewId = (typeof WORKBENCH_VIEW_CATALOG)[number]['id'];
 export type HostStatus = 'unavailable' | 'loading' | 'empty' | 'error' | 'ready';
 
-type ViewDefinition = (typeof WORKBENCH_VIEWS)[number];
+type ViewDefinition = (typeof WORKBENCH_VIEW_CATALOG)[number];
+
+/**
+ * Features shown whenever the Host has not supplied capabilities (null,
+ * undefined, or an empty set): the four always-on views whose Host routes are
+ * unconditionally registered by the composition root.
+ */
+const DEFAULT_FEATURES: readonly WorkbenchProjectFeatureV1[] = [
+  'project-home',
+  'source-studio',
+  'scene-canvas',
+  'graph-route',
+];
+
+const DEFAULT_VIEWS: ViewDefinition[] = WORKBENCH_VIEW_CATALOG.filter((view) =>
+  DEFAULT_FEATURES.includes(view.id),
+);
+
+/**
+ * Derive the visible view list from Host-supplied feature gates. Features
+ * without a view in the catalog (e.g. `agent-chat`) are ignored and catalog
+ * order is preserved, so the navigation order never depends on Host array
+ * ordering.
+ */
+function viewsFor(
+  features: readonly WorkbenchProjectFeatureV1[] | null | undefined,
+): ViewDefinition[] {
+  const visible = new Set(features ?? DEFAULT_FEATURES);
+  const derived = WORKBENCH_VIEW_CATALOG.filter((view) => visible.has(view.id));
+  return derived.length > 0 ? derived : DEFAULT_VIEWS;
+}
 
 export interface AppProps {
   /** The initial view is a local UI choice; it never identifies a project. */
@@ -52,8 +104,13 @@ export interface AppProps {
   readonly initialNavigatorCollapsed?: boolean;
   readonly initialInspectorPinned?: boolean;
   readonly initialOperationCenterExpanded?: boolean;
-  readonly initialAgentShelfOpen?: boolean;
   readonly onViewChange?: (view: WorkbenchViewId) => void;
+  /**
+   * Host-derived capability gates for the open project (null = no Host). The
+   * visible navigation is derived from these features; a hidden view is never
+   * rendered, never offered, and never used as a fallback target.
+   */
+  readonly features?: readonly WorkbenchProjectFeatureV1[] | null;
   /** Accepted project view supplied only by the authenticated Host read client. */
   readonly overview?: BrowserProjectOverviewV1 | null;
   /** Canonical graph view supplied only by the authenticated Host read client. */
@@ -74,6 +131,8 @@ export interface AppProps {
   readonly sourceStudio?: SourceStudioStateV1 | null;
   readonly authoringState?: AuthoringStateV1 | null;
   readonly authoringOperations?: readonly AuthoringOperationReceiptV1[];
+  /** Cancel one durable operation from the Operation Center (queued/running). */
+  readonly onCancelOperation?: (operationId: string) => void | Promise<void>;
   readonly sourceSessionId?: string | null;
   readonly sourceYjsStatus?: Readonly<Record<string, SourceStudioYjsStatus>>;
   readonly onConnectSourceYjs?: (descriptor: SourceStudioDocumentDescriptorV1) => void;
@@ -82,19 +141,56 @@ export interface AppProps {
   readonly onReconcileAuthoring?: (
     request: BrowserAuthoringReconcileRequestV1,
   ) => void | Promise<void>;
+  readonly onCreateDocument?: (
+    request: BrowserAuthoringDocumentCreateRequestV1,
+  ) => void | Promise<void>;
+  readonly onMoveDocument?: (
+    request: BrowserAuthoringDocumentMoveRequestV1,
+  ) => void | Promise<void>;
+  readonly onDeleteDocument?: (
+    request: BrowserAuthoringDocumentDeleteRequestV1,
+  ) => void | Promise<void>;
   readonly onGraphRouteChange?: (selector: WorkbenchRouteSelectorV1) => void;
   readonly onSourceYjsStatusChange?: (
     descriptor: SourceStudioDocumentDescriptorV1,
     status: SourceStudioYjsStatus,
   ) => void;
-  readonly agentClient?: AgentClient;
   /** Explicit, Host-derived adoption preview for the selected Scene Canvas. */
   readonly sceneAdoption?: SceneAdoptionViewV1 | null;
   readonly onRequestAdoption?: (candidate: SceneAdoptionViewV1) => void;
+  /** Host review projection for the Review Hub surface. */
+  readonly reviewState?: BrowserReviewListV1 | null;
+  readonly reviewGates?: BrowserReviewGateListV1 | null;
+  readonly reviewHistory?: BrowserReviewHistoryV1 | null;
+  /** Project membership role; mutations are offered only when grants allow. */
+  readonly sessionProjectRole?: ProjectAccessRole | null;
+  readonly onAddReviewComment?: (request: BrowserReviewAddRequestV1) => void | Promise<void>;
+  readonly onUpdateReviewComment?: (request: BrowserReviewUpdateRequestV1) => void | Promise<void>;
+  readonly onDecideReviewGate?: (request: BrowserReviewGateDecideRequestV1) => void | Promise<void>;
+  readonly onRefreshReview?: () => void | Promise<void>;
+  /** Host publication catalog for the Publication surface. */
+  readonly publications?: BrowserPublicationListV1 | null;
+  /** Publish the canonical novel or a custom branch artifact. */
+  readonly onPublish?: (request: BrowserPublishRequestV1) => void | Promise<void>;
+  /** Re-requests the Host publication catalog after a publish. */
+  readonly onRefreshPublication?: () => void | Promise<void>;
+  /** Reads one bounded slice of a publication artifact (download flow). */
+  readonly onReadPublication?: (
+    projectId: string,
+    publicationId: string,
+    query?: BrowserPublicationReadQueryV1,
+  ) => Promise<BrowserPublicationReadResultV1>;
+  /**
+   * Agent chat surface (plan 9.5): supplied only when the Host feature set
+   * includes `agent-chat`; absent here the view is never rendered.
+   */
+  readonly agentChat?: { readonly projectId: string; readonly client: AgentChatClient } | null;
 }
 
 export interface NavigatorProps {
   readonly activeView: WorkbenchViewId;
+  /** Visible views derived from the Host-supplied feature gates. */
+  readonly views: readonly ViewDefinition[];
   readonly collapsed: boolean;
   readonly onCollapseToggle: () => void;
   readonly onViewChange: (view: WorkbenchViewId) => void;
@@ -109,15 +205,14 @@ export interface OperationCenterProps {
   readonly expanded: boolean;
   readonly operations?: readonly AuthoringOperationReceiptV1[];
   readonly onExpandedToggle: () => void;
-}
-
-export interface AgentShelfProps {
-  readonly open: boolean;
-  readonly onClose: () => void;
+  /** Cancel one durable operation (queued/running only); absent hides the action. */
+  readonly onCancelOperation?: (operationId: string) => void | Promise<void>;
 }
 
 interface WorkspaceProps {
   readonly activeView: WorkbenchViewId;
+  /** Visible views derived from the Host-supplied feature gates. */
+  readonly views: readonly ViewDefinition[];
   readonly hostStatus: HostStatus;
   readonly overview?: BrowserProjectOverviewV1 | null;
   readonly graphProjection?: WorkbenchGraphProjectionV1 | null;
@@ -145,17 +240,39 @@ interface WorkspaceProps {
   readonly onReconcileAuthoring?: (
     request: BrowserAuthoringReconcileRequestV1,
   ) => void | Promise<void>;
+  readonly onCreateDocument?: (
+    request: BrowserAuthoringDocumentCreateRequestV1,
+  ) => void | Promise<void>;
+  readonly onMoveDocument?: (
+    request: BrowserAuthoringDocumentMoveRequestV1,
+  ) => void | Promise<void>;
+  readonly onDeleteDocument?: (
+    request: BrowserAuthoringDocumentDeleteRequestV1,
+  ) => void | Promise<void>;
   readonly onGraphRouteChange?: (selector: WorkbenchRouteSelectorV1) => void;
   readonly onSourceYjsStatusChange?: (
     descriptor: SourceStudioDocumentDescriptorV1,
     status: SourceStudioYjsStatus,
   ) => void;
-  readonly onSourceSelection?: (
-    descriptor: SourceStudioDocumentDescriptorV1,
-    selection: YjsEditorSelection,
-  ) => void;
   readonly sceneAdoption?: SceneAdoptionViewV1 | null;
   readonly onRequestAdoption?: (candidate: SceneAdoptionViewV1) => void;
+  readonly reviewState?: BrowserReviewListV1 | null;
+  readonly reviewGates?: BrowserReviewGateListV1 | null;
+  readonly reviewHistory?: BrowserReviewHistoryV1 | null;
+  readonly sessionProjectRole?: ProjectAccessRole | null;
+  readonly onAddReviewComment?: (request: BrowserReviewAddRequestV1) => void | Promise<void>;
+  readonly onUpdateReviewComment?: (request: BrowserReviewUpdateRequestV1) => void | Promise<void>;
+  readonly onDecideReviewGate?: (request: BrowserReviewGateDecideRequestV1) => void | Promise<void>;
+  readonly onRefreshReview?: () => void | Promise<void>;
+  readonly publications?: BrowserPublicationListV1 | null;
+  readonly onPublish?: (request: BrowserPublishRequestV1) => void | Promise<void>;
+  readonly onRefreshPublication?: () => void | Promise<void>;
+  readonly onReadPublication?: (
+    projectId: string,
+    publicationId: string,
+    query?: BrowserPublicationReadQueryV1,
+  ) => Promise<BrowserPublicationReadResultV1>;
+  readonly agentChat?: { readonly projectId: string; readonly client: AgentChatClient } | null;
 }
 
 const STATUS_COPY: Record<
@@ -204,8 +321,8 @@ const STATUS_COPY: Record<
   },
 };
 
-function viewById(viewId: WorkbenchViewId): ViewDefinition {
-  return WORKBENCH_VIEWS.find((view) => view.id === viewId) ?? WORKBENCH_VIEWS[0];
+function viewById(viewId: WorkbenchViewId, available: readonly ViewDefinition[]): ViewDefinition {
+  return available.find((view) => view.id === viewId) ?? available[0];
 }
 
 function statusCopy(status: HostStatus) {
@@ -237,7 +354,7 @@ export function Navigator(props: NavigatorProps) {
       </div>
 
       <nav aria-label="Workbench views" class="view-navigation">
-        <For each={WORKBENCH_VIEWS}>
+        <For each={props.views}>
           {(view) => (
             <button
               class={`view-button${props.activeView === view.id ? ' is-active' : ''}`}
@@ -265,7 +382,7 @@ export function Navigator(props: NavigatorProps) {
 }
 
 export function Workspace(props: WorkspaceProps) {
-  const view = () => viewById(props.activeView);
+  const view = () => viewById(props.activeView, props.views);
   const copy = () => statusCopy(props.hostStatus);
 
   return (
@@ -325,8 +442,10 @@ export function Workspace(props: WorkspaceProps) {
           onSubmit={props.onSubmitSource}
           onSubmitAuthoring={props.onSubmitAuthoring}
           onReconcileAuthoring={props.onReconcileAuthoring}
+          onCreateDocument={props.onCreateDocument}
+          onMoveDocument={props.onMoveDocument}
+          onDeleteDocument={props.onDeleteDocument}
           onYjsStatusChange={props.onSourceYjsStatusChange}
-          onEditorSelection={props.onSourceSelection}
         />
       </Show>
       <Show when={props.hostStatus === 'ready' && props.activeView === 'scene-canvas'}>
@@ -334,6 +453,39 @@ export function Workspace(props: WorkspaceProps) {
           adoption={props.sceneAdoption ?? null}
           onRequestAdoption={props.onRequestAdoption}
         />
+      </Show>
+      <Show when={props.hostStatus === 'ready' && props.activeView === 'review-hub'}>
+        <ReviewHub
+          projectId={props.overview?.projectId ?? null}
+          review={props.reviewState ?? null}
+          gates={props.reviewGates ?? null}
+          history={props.reviewHistory ?? null}
+          sessionRole={props.sessionProjectRole ?? null}
+          onAddComment={props.onAddReviewComment}
+          onUpdateComment={props.onUpdateReviewComment}
+          onDecideGate={props.onDecideReviewGate}
+          onRefresh={props.onRefreshReview}
+        />
+      </Show>
+      <Show when={props.hostStatus === 'ready' && props.activeView === 'publication'}>
+        <PublicationView
+          projectId={props.overview?.projectId ?? null}
+          publications={props.publications ?? null}
+          sessionRole={props.sessionProjectRole ?? null}
+          onPublish={props.onPublish}
+          onRefresh={props.onRefreshPublication}
+          onReadPublication={props.onReadPublication}
+        />
+      </Show>
+      <Show
+        when={
+          props.hostStatus === 'ready' &&
+          props.activeView === 'agent-chat' &&
+          props.agentChat !== undefined &&
+          props.agentChat !== null
+        }
+      >
+        <AgentChat projectId={props.agentChat!.projectId} client={props.agentChat!.client} />
       </Show>
     </main>
   );
@@ -372,6 +524,22 @@ export function Inspector(props: InspectorProps) {
         <p>Selection details will appear after the Host supplies a canonical projection.</p>
       </div>
     </aside>
+  );
+}
+
+function OperationStatus(props: { readonly operation: AuthoringOperationReceiptV1 }) {
+  const { operation } = props;
+  return (
+    <span class="flex min-w-0 flex-col items-end gap-[var(--wb-space-1)]">
+      <span class="operation-status" data-status={operation.status}>
+        {operation.status}
+      </span>
+      <Show when={operation.progress !== undefined && operation.progress !== null}>
+        <span class="text-xs text-[var(--wb-text-muted)]" data-testid="operation-progress">
+          {operation.progress?.completed}/{operation.progress?.total}
+        </span>
+      </Show>
+    </span>
   );
 }
 
@@ -420,10 +588,25 @@ export function OperationCenter(props: OperationCenterProps) {
             <For each={props.operations ?? []}>
               {(operation) => (
                 <li class="flex flex-wrap items-center justify-between gap-[var(--wb-space-3)] rounded-[var(--wb-radius-sm)] border border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-[var(--wb-space-3)] py-[var(--wb-space-2)] text-sm">
-                  <span>
+                  <span class="min-w-0">
                     <strong>{operation.kind}</strong> <code>{operation.operationId}</code>
                   </span>
-                  <span>{operation.status}</span>
+                  <Show when={operation.errorCode !== null}>
+                    <span class="text-xs text-[var(--wb-text-muted)]" data-testid="operation-error">
+                      {operation.errorCode}
+                    </span>
+                  </Show>
+                  <OperationStatus operation={operation} />
+                  <Show when={operation.status === 'queued' || operation.status === 'running'}>
+                    <button
+                      class="text-button"
+                      type="button"
+                      data-testid={`cancel-operation-${operation.operationId}`}
+                      onClick={() => void props.onCancelOperation?.(operation.operationId)}
+                    >
+                      Cancel
+                    </button>
+                  </Show>
                 </li>
               )}
             </For>
@@ -431,47 +614,6 @@ export function OperationCenter(props: OperationCenterProps) {
         </Show>
       </Show>
     </section>
-  );
-}
-
-export function AgentShelf(props: AgentShelfProps) {
-  return (
-    <Show when={props.open}>
-      <button
-        class="agent-shelf-backdrop"
-        type="button"
-        aria-label="Dismiss Agent Shelf"
-        onClick={props.onClose}
-      />
-      <aside
-        class="agent-shelf"
-        id="agent-shelf"
-        aria-label="Agent Shelf"
-        data-testid="agent-shelf"
-      >
-        <div class="region-heading">
-          <div>
-            <p class="region-kicker">Assistants</p>
-            <h2>Agent Shelf</h2>
-          </div>
-          <button
-            class="icon-button"
-            type="button"
-            aria-label="Close Agent Shelf drawer"
-            onClick={props.onClose}
-          >
-            <span aria-hidden="true">×</span>
-          </button>
-        </div>
-        <div class="agent-shelf-empty">
-          <div class="empty-mark" aria-hidden="true">
-            ·
-          </div>
-          <h3>No agent activity</h3>
-          <p>Agents appear only after the Host grants a scoped, expiring capability.</p>
-        </div>
-      </aside>
-    </Show>
   );
 }
 
@@ -510,18 +652,17 @@ function ResponsiveDrawer(props: {
 
 interface TopbarProps {
   readonly activeView: WorkbenchViewId;
+  readonly views: readonly ViewDefinition[];
   readonly hostStatus: HostStatus;
   readonly layoutMode: WorkbenchLayoutMode;
   readonly navigatorOpen: boolean;
   readonly inspectorOpen: boolean;
-  readonly agentShelfOpen: boolean;
   readonly onNavigatorToggle: () => void;
   readonly onInspectorToggle: () => void;
-  readonly onAgentShelfToggle: () => void;
 }
 
 function Topbar(props: TopbarProps) {
-  const view = () => viewById(props.activeView);
+  const view = () => viewById(props.activeView, props.views);
   const copy = () => STATUS_COPY[props.hostStatus];
 
   return (
@@ -569,27 +710,22 @@ function Topbar(props: TopbarProps) {
           </button>
         </fieldset>
       </Show>
-
-      <button
-        class="agent-toggle"
-        type="button"
-        aria-expanded={props.agentShelfOpen}
-        aria-controls="agent-shelf"
-        onClick={props.onAgentShelfToggle}
-      >
-        <span class="agent-toggle-mark" aria-hidden="true">
-          ✦
-        </span>
-        {props.agentShelfOpen ? 'Close Agent Shelf' : 'Open Agent Shelf'}
-      </button>
     </header>
   );
 }
 
 export function WorkbenchShell(props: AppProps = {}) {
   const stored = loadWorkbenchPreferences();
+  const views = () => viewsFor(props.features);
   const initialView = props.initialView ?? stored.selectedNavigationView;
-  const [activeView, setActiveView] = createSignal<WorkbenchViewId>(initialView);
+  // A stored or requested view that is not in the current feature set is
+  // never activated: the shell starts on the first available view instead of
+  // rendering an empty shell for a hidden one.
+  const available = views();
+  const initialVisibleView = available.some((view) => view.id === initialView)
+    ? initialView
+    : available[0].id;
+  const [activeView, setActiveView] = createSignal<WorkbenchViewId>(initialVisibleView);
   const [navigatorCollapsed, setNavigatorCollapsed] = createSignal(
     props.initialNavigatorCollapsed ?? stored.navigatorCollapsed,
   );
@@ -598,9 +734,6 @@ export function WorkbenchShell(props: AppProps = {}) {
   );
   const [operationCenterExpanded, setOperationCenterExpanded] = createSignal(
     props.initialOperationCenterExpanded ?? stored.operationCenterExpanded,
-  );
-  const [agentShelfOpen, setAgentShelfOpen] = createSignal(
-    props.initialAgentShelfOpen ?? stored.agentShelfOpen,
   );
   const [layoutMode, setLayoutMode] = createSignal<WorkbenchLayoutMode>('desktop');
   const [navigatorDrawerOpen, setNavigatorDrawerOpen] = createSignal(false);
@@ -614,31 +747,11 @@ export function WorkbenchShell(props: AppProps = {}) {
     window.addEventListener('resize', updateLayout);
     onCleanup(() => window.removeEventListener('resize', updateLayout));
   });
-  const assistant = createEditorAssistantContext();
   const [selectedSourceDocumentId, setSelectedSourceDocumentId] = createSignal<string | null>(null);
 
   const selectSourceDocument = (descriptor: SourceStudioDocumentDescriptorV1): void => {
     setSelectedSourceDocumentId(descriptor.documentId);
-    assistant.clearSelection();
     props.onConnectSourceYjs?.(descriptor);
-  };
-
-  const publishSourceSelection = (
-    descriptor: SourceStudioDocumentDescriptorV1,
-    selection: YjsEditorSelection,
-  ): void => {
-    const baseVector = props.authoringState?.workspaceDigest;
-    if (baseVector === null || baseVector === undefined) {
-      assistant.clearSelection();
-      return;
-    }
-    assistant.setSelection({
-      version: 1,
-      projectId: descriptor.projectId,
-      documentId: descriptor.documentId,
-      selection,
-      baseVector,
-    });
   };
 
   const hostStatus = () => props.hostStatus ?? 'unavailable';
@@ -649,7 +762,6 @@ export function WorkbenchShell(props: AppProps = {}) {
       navigatorCollapsed: navigatorCollapsed(),
       inspectorPinned: inspectorPinned(),
       operationCenterExpanded: operationCenterExpanded(),
-      agentShelfOpen: agentShelfOpen(),
       selectedNavigationView: activeView(),
       ...patch,
     });
@@ -680,125 +792,127 @@ export function WorkbenchShell(props: AppProps = {}) {
     persistPreferences({ operationCenterExpanded: expanded });
   };
 
-  const toggleAgentShelf = () => {
-    const open = !agentShelfOpen();
-    setAgentShelfOpen(open);
-    persistPreferences({ agentShelfOpen: open });
-  };
-
   const toggleNavigatorDrawer = () => setNavigatorDrawerOpen((open) => !open);
   const toggleInspectorDrawer = () => setInspectorDrawerOpen((open) => !open);
 
   return (
-    <EditorAssistantProvider value={assistant}>
-      <div
-        class={`workbench-shell${navigatorCollapsed() ? ' navigator-is-collapsed' : ''}`}
-        data-testid="workbench-shell"
-        data-view={activeView()}
-      >
-        <Topbar
-          activeView={activeView()}
-          hostStatus={hostStatus()}
-          layoutMode={layoutMode()}
-          navigatorOpen={navigatorDrawerOpen()}
-          inspectorOpen={inspectorDrawerOpen()}
-          agentShelfOpen={agentShelfOpen()}
-          onNavigatorToggle={toggleNavigatorDrawer}
-          onInspectorToggle={toggleInspectorDrawer}
-          onAgentShelfToggle={toggleAgentShelf}
-        />
+    <div
+      class={`workbench-shell${navigatorCollapsed() ? ' navigator-is-collapsed' : ''}`}
+      data-testid="workbench-shell"
+      data-view={activeView()}
+    >
+      <Topbar
+        activeView={activeView()}
+        views={views()}
+        hostStatus={hostStatus()}
+        layoutMode={layoutMode()}
+        navigatorOpen={navigatorDrawerOpen()}
+        inspectorOpen={inspectorDrawerOpen()}
+        onNavigatorToggle={toggleNavigatorDrawer}
+        onInspectorToggle={toggleInspectorDrawer}
+      />
 
-        <div class="workbench-body">
-          <Show when={layoutMode() !== 'mobile'}>
-            <Navigator
-              activeView={activeView()}
-              collapsed={navigatorCollapsed()}
-              onCollapseToggle={toggleNavigator}
-              onViewChange={chooseView}
-            />
-          </Show>
+      <div class="workbench-body">
+        <Show when={layoutMode() !== 'mobile'}>
+          <Navigator
+            activeView={activeView()}
+            views={views()}
+            collapsed={navigatorCollapsed()}
+            onCollapseToggle={toggleNavigator}
+            onViewChange={chooseView}
+          />
+        </Show>
 
-          <div class="workspace-column">
-            <Workspace
-              activeView={activeView()}
-              hostStatus={hostStatus()}
-              overview={props.overview}
-              graphProjection={props.graphProjection}
-              sourceStudio={props.sourceStudio}
-              authoringState={props.authoringState}
-              authoringOperations={props.authoringOperations}
-              sourceSessionId={props.sourceSessionId}
-              sourceYjsStatus={props.sourceYjsStatus}
-              onConnectSourceYjs={selectSourceDocument}
-              onSubmitSource={props.onSubmitSource}
-              onSubmitAuthoring={props.onSubmitAuthoring}
-              onReconcileAuthoring={props.onReconcileAuthoring}
-              onGraphRouteChange={props.onGraphRouteChange}
-              selectedSourceDocumentId={selectedSourceDocumentId()}
-              onSourceYjsStatusChange={props.onSourceYjsStatusChange}
-              onSourceSelection={publishSourceSelection}
-              sceneAdoption={props.sceneAdoption}
-              onRequestAdoption={props.onRequestAdoption}
-            />
-            <OperationCenter
-              expanded={operationCenterExpanded()}
-              operations={props.authoringOperations}
-              onExpandedToggle={toggleOperationCenter}
-            />
-          </div>
-
-          <Show when={layoutMode() === 'desktop'}>
-            <Inspector pinned={inspectorPinned()} onPinToggle={toggleInspector} />
-          </Show>
+        <div class="workspace-column">
+          <Workspace
+            activeView={activeView()}
+            views={views()}
+            hostStatus={hostStatus()}
+            overview={props.overview}
+            graphProjection={props.graphProjection}
+            sourceStudio={props.sourceStudio}
+            authoringState={props.authoringState}
+            authoringOperations={props.authoringOperations}
+            authoringRevisionHistory={props.authoringRevisionHistory}
+            authoringRevision={props.authoringRevision}
+            authoringRevisionDiff={props.authoringRevisionDiff}
+            onListAuthoringRevisions={props.onListAuthoringRevisions}
+            onGetAuthoringRevision={props.onGetAuthoringRevision}
+            onDiffAuthoringRevisions={props.onDiffAuthoringRevisions}
+            onRestoreAuthoringRevision={props.onRestoreAuthoringRevision}
+            sourceSessionId={props.sourceSessionId}
+            sourceYjsStatus={props.sourceYjsStatus}
+            onConnectSourceYjs={selectSourceDocument}
+            onSubmitSource={props.onSubmitSource}
+            onSubmitAuthoring={props.onSubmitAuthoring}
+            onReconcileAuthoring={props.onReconcileAuthoring}
+            onCreateDocument={props.onCreateDocument}
+            onMoveDocument={props.onMoveDocument}
+            onDeleteDocument={props.onDeleteDocument}
+            onGraphRouteChange={props.onGraphRouteChange}
+            selectedSourceDocumentId={selectedSourceDocumentId()}
+            onSourceYjsStatusChange={props.onSourceYjsStatusChange}
+            sceneAdoption={props.sceneAdoption}
+            onRequestAdoption={props.onRequestAdoption}
+            reviewState={props.reviewState}
+            reviewGates={props.reviewGates}
+            reviewHistory={props.reviewHistory}
+            sessionProjectRole={props.sessionProjectRole}
+            onAddReviewComment={props.onAddReviewComment}
+            onUpdateReviewComment={props.onUpdateReviewComment}
+            onDecideReviewGate={props.onDecideReviewGate}
+            onRefreshReview={props.onRefreshReview}
+            publications={props.publications}
+            onPublish={props.onPublish}
+            onRefreshPublication={props.onRefreshPublication}
+            onReadPublication={props.onReadPublication}
+            agentChat={props.agentChat}
+          />
+          <OperationCenter
+            expanded={operationCenterExpanded()}
+            operations={props.authoringOperations}
+            onCancelOperation={props.onCancelOperation}
+            onExpandedToggle={toggleOperationCenter}
+          />
         </div>
 
-        <Show when={layoutMode() === 'tablet'}>
-          <ResponsiveDrawer
-            open={inspectorDrawerOpen()}
-            label="Inspector"
-            onClose={() => setInspectorDrawerOpen(false)}
-          >
-            <Inspector pinned={inspectorPinned()} onPinToggle={toggleInspector} />
-          </ResponsiveDrawer>
-        </Show>
-        <Show when={layoutMode() === 'mobile'}>
-          <ResponsiveDrawer
-            open={navigatorDrawerOpen()}
-            label="Navigation"
-            onClose={() => setNavigatorDrawerOpen(false)}
-          >
-            <Navigator
-              activeView={activeView()}
-              collapsed={false}
-              onCollapseToggle={() => setNavigatorDrawerOpen(false)}
-              onViewChange={chooseView}
-            />
-          </ResponsiveDrawer>
-          <ResponsiveDrawer
-            open={inspectorDrawerOpen()}
-            label="Inspector"
-            onClose={() => setInspectorDrawerOpen(false)}
-          >
-            <Inspector pinned={inspectorPinned()} onPinToggle={toggleInspector} />
-          </ResponsiveDrawer>
-        </Show>
-
-        <Show
-          when={props.agentClient}
-          fallback={<AgentShelf open={agentShelfOpen()} onClose={toggleAgentShelf} />}
-        >
-          {(client) => (
-            <AgentDrawer
-              open={agentShelfOpen()}
-              context={assistant.selection()}
-              client={client()}
-              onClose={toggleAgentShelf}
-              onApplied={() => assistant.clearSelection()}
-            />
-          )}
+        <Show when={layoutMode() === 'desktop'}>
+          <Inspector pinned={inspectorPinned()} onPinToggle={toggleInspector} />
         </Show>
       </div>
-    </EditorAssistantProvider>
+
+      <Show when={layoutMode() === 'tablet'}>
+        <ResponsiveDrawer
+          open={inspectorDrawerOpen()}
+          label="Inspector"
+          onClose={() => setInspectorDrawerOpen(false)}
+        >
+          <Inspector pinned={inspectorPinned()} onPinToggle={toggleInspector} />
+        </ResponsiveDrawer>
+      </Show>
+      <Show when={layoutMode() === 'mobile'}>
+        <ResponsiveDrawer
+          open={navigatorDrawerOpen()}
+          label="Navigation"
+          onClose={() => setNavigatorDrawerOpen(false)}
+        >
+          <Navigator
+            activeView={activeView()}
+            views={views()}
+            collapsed={false}
+            onCollapseToggle={() => setNavigatorDrawerOpen(false)}
+            onViewChange={chooseView}
+          />
+        </ResponsiveDrawer>
+        <ResponsiveDrawer
+          open={inspectorDrawerOpen()}
+          label="Inspector"
+          onClose={() => setInspectorDrawerOpen(false)}
+        >
+          <Inspector pinned={inspectorPinned()} onPinToggle={toggleInspector} />
+        </ResponsiveDrawer>
+      </Show>
+    </div>
   );
 }
 

@@ -199,6 +199,92 @@ export type SessionOperationResult<T = unknown> =
       readonly message: string;
     };
 
+// ─── Detached (two-phase) operations ─────────────────────────────────────────
+
+/**
+ * Run context of a detached operation phase. Extends the serial operation
+ * context with the caller-owned cancellation signal: aborting it revokes the
+ * commit token, so a late/cancelled execute result can never be promoted.
+ */
+export interface SessionDetachedOperationRunContext extends SessionOperationRunContext {
+  /** Caller-owned cancellation signal; aborting invalidates the commit token. */
+  readonly signal: AbortSignal;
+}
+
+/**
+ * Outcome of the commit phase. The commit callback decides staleness (its
+ * captured identities moved, or the Core accepted-head CAS conflicted); a
+ * `stale` outcome archives the candidate and never updates accepted heads.
+ */
+export type SessionDetachedCommitResult<TResult = unknown> =
+  | { readonly status: 'completed'; readonly result: TResult }
+  | { readonly status: 'stale'; readonly reason: string };
+
+/**
+ * Two-phase operation: `prepare` and `commit` run INSIDE the existing
+ * authoring `#tail` (serialized, capability-gated, audit-recorded like
+ * `enqueueOperation`); `execute` runs OUTSIDE the tail so a long provider
+ * call never blocks authoring. `prepare` captures the identities the commit
+ * re-verifies (source hash, projection revision, scene-head CAS versions,
+ * provider/plugin/reference identity); when they moved, commit archives the
+ * candidate and returns `stale` instead of promoting it.
+ */
+export interface SessionDetachedOperation<TCapture, TCandidate, TResult> {
+  /** Operation kind; included in audit metadata (`operation.<kind>.<phase>.<outcome>`). */
+  readonly kind: string;
+  /** Opaque server-side grant id; the actor and permissions are never client-chosen. */
+  readonly capabilityId: string;
+  /** Capability scope required for this effect; validated against the grant before every phase. */
+  readonly scope: readonly string[];
+  /** When set, a persisted grant version different from this fails the gate. */
+  readonly expectedVersion?: number;
+  /**
+   * Caller-owned operation id (e.g. the durable queue's handle). When set it
+   * seeds the session operation id so the durable record, the render request
+   * mutation, the audit trail and the result share one identity; otherwise
+   * the session id generator is used.
+   */
+  readonly operationId?: string;
+  /** JSON-safe command payload; never a host handle and never audited. */
+  readonly payload?: JsonValue;
+  /**
+   * Caller-owned cancellation signal. The service owns the AbortController;
+   * aborting it before commit revokes the commit token (the candidate is
+   * archived, never promoted) even when the provider ignores the signal.
+   */
+  readonly signal?: AbortSignal;
+  /** Runs inside the serialized lane: captures identity for the commit re-check. */
+  prepare(context: SessionDetachedOperationRunContext): TCapture | Promise<TCapture>;
+  /** Runs outside the lane; the caller/service owns its concurrency. */
+  execute(
+    context: SessionDetachedOperationRunContext,
+    capture: TCapture,
+    signal: AbortSignal,
+  ): Promise<TCandidate>;
+  /** Runs inside the serialized lane: re-verifies identities, then commits or archives. */
+  commit(
+    context: SessionDetachedOperationRunContext,
+    capture: TCapture,
+    candidate: TCandidate,
+  ): Promise<SessionDetachedCommitResult<TResult>>;
+}
+
+export type SessionDetachedOperationResult<T = unknown> =
+  | {
+      readonly status: 'denied';
+      readonly operationId: string;
+      readonly reason: AgentCapabilityFailureCode;
+    }
+  | { readonly status: 'completed'; readonly operationId: string; readonly result: T }
+  | { readonly status: 'stale'; readonly operationId: string; readonly reason: string }
+  | { readonly status: 'cancelled'; readonly operationId: string }
+  | {
+      readonly status: 'failed';
+      readonly operationId: string;
+      readonly errorCode: string;
+      readonly message: string;
+    };
+
 // ─── Source refresh ──────────────────────────────────────────────────────────
 
 export type SourceRefreshResult =
@@ -281,6 +367,16 @@ export interface ProjectSession {
   enqueueOperation<TPayload extends JsonValue = JsonValue, TResult = unknown>(
     operation: SessionOperation<TPayload, TResult>,
   ): Promise<SessionOperationResult<TResult>>;
+  /**
+   * Enqueue a two-phase detached operation (plan Step 4): `prepare` and
+   * `commit` run inside the serialized, capability-gated authoring lane
+   * while `execute` runs outside it, so a long provider render never blocks
+   * authoring. The caller owns the `AbortSignal`; aborting it revokes the
+   * commit token and a late execute result is archived, never promoted.
+   */
+  enqueueDetachedOperation<TCapture, TCandidate, TResult>(
+    operation: SessionDetachedOperation<TCapture, TCandidate, TResult>,
+  ): Promise<SessionDetachedOperationResult<TResult>>;
 }
 
 /** Maximum characters retained from a failed-operation message. */
@@ -601,7 +697,54 @@ class ProjectSessionImpl implements ProjectSession {
     operation: SessionOperation<TPayload, TResult>,
     operationId: string,
   ): Promise<SessionOperationResult<TResult>> {
-    const at = (): string => this.#now();
+    const gate = await this.#grantGate(operation, operationId);
+    if (!gate.allowed) {
+      return { status: 'denied', operationId, reason: gate.reason };
+    }
+    const context: SessionOperationRunContext = gate.context;
+    try {
+      this.#inQueue = true;
+      let result: TResult;
+      try {
+        result = await operation.run(context);
+      } finally {
+        this.#inQueue = false;
+      }
+      await this.#recordAudit(
+        this.#effectAudit(operation, gate.grant, operationId, 'completed', this.#now()),
+      );
+      return { status: 'completed', operationId, result };
+    } catch (error) {
+      this.#inQueue = false;
+      const errorCode = errorCodeOf(error);
+      await this.#recordAudit(
+        this.#effectAudit(operation, gate.grant, operationId, 'failed', this.#now(), errorCode),
+      );
+      return { status: 'failed', operationId, errorCode, message: errorMessageOf(error) };
+    }
+  }
+
+  /**
+   * Shared capability gate for every serialized phase (plain operations and
+   * the prepare/commit phases of detached operations). The persisted grant is
+   * re-loaded for EVERY phase, so revocation/version bumps between prepare
+   * and commit stop the commit at its own safe checkpoint.
+   */
+  async #grantGate(
+    operation: {
+      readonly capabilityId: string;
+      readonly scope: readonly string[];
+      readonly expectedVersion?: number;
+    },
+    operationId: string,
+  ): Promise<
+    | {
+        readonly allowed: true;
+        readonly grant: AgentCapabilityGrant;
+        readonly context: SessionOperationRunContext;
+      }
+    | { readonly allowed: false; readonly reason: AgentCapabilityFailureCode }
+  > {
     const check = await this.#capabilities.checkGrant({
       capabilityId: operation.capabilityId,
       projectId: this.projectId,
@@ -615,36 +758,217 @@ class ProjectSessionImpl implements ProjectSession {
         projectId: this.projectId,
         capabilityId: operation.capabilityId,
         reason: check.reason,
-        at: at(),
+        at: this.#now(),
       });
-      return { status: 'denied', operationId, reason: check.reason };
+      return { allowed: false, reason: check.reason };
     }
-    const context: SessionOperationRunContext = {
-      projectId: this.projectId,
-      operationId,
-      actorId: check.grant.userId,
-      capabilityVersion: check.grant.version,
-      scopes: check.grant.scopes,
+    return {
+      allowed: true,
+      grant: check.grant,
+      context: {
+        projectId: this.projectId,
+        operationId,
+        actorId: check.grant.userId,
+        capabilityVersion: check.grant.version,
+        scopes: check.grant.scopes,
+      },
     };
+  }
+
+  enqueueDetachedOperation<TCapture, TCandidate, TResult>(
+    operation: SessionDetachedOperation<TCapture, TCandidate, TResult>,
+  ): Promise<SessionDetachedOperationResult<TResult>> {
+    const operationId =
+      operation.operationId ?? this.runtime.services.ids.next({ kind: 'operation' });
+    const signal = operation.signal ?? new AbortController().signal;
+    this.#inFlight += 1;
+
+    // Stage 1 — prepare: a normal serialized lane slot (gate + audit).
+    const prepareSlot = this.#tail.then(() =>
+      this.#runDetachedPrepare(operation, operationId, signal),
+    );
+    this.#tail = prepareSlot.then(
+      () => undefined,
+      () => undefined,
+    );
+
+    // Stage 2 — execute: OFF the lane. The tail is never blocked by it — the
+    // commit slot is NOT yet part of the tail chain, so authoring operations
+    // enqueued while the long render runs execute normally.
+    const executeStage = prepareSlot.then((prepared) =>
+      prepared.status === 'prepared'
+        ? this.#runDetachedExecute(operation, prepared.context, prepared.capture, signal)
+        : prepared,
+    );
+
+    // Stage 3 — commit: scheduled only after execute settles, appended to the
+    // CURRENT tail (which already contains any authoring work enqueued during
+    // the render), then gate + audit like any serialized slot.
+    const commitSlot = executeStage.then(async (executed) => {
+      const slot = this.#tail.then(() =>
+        executed.status === 'executed'
+          ? this.#runDetachedCommit(
+              operation,
+              executed.context,
+              executed.capture,
+              executed.candidate,
+              signal,
+            )
+          : executed,
+      );
+      this.#tail = slot.then(
+        () => undefined,
+        () => undefined,
+      );
+      return slot;
+    });
+
+    return commitSlot.finally(() => {
+      this.#inFlight -= 1;
+    });
+  }
+
+  async #runDetachedPrepare<TCapture, TResult>(
+    operation: SessionDetachedOperation<TCapture, unknown, TResult>,
+    operationId: string,
+    signal: AbortSignal,
+  ): Promise<
+    | {
+        readonly status: 'prepared';
+        readonly context: SessionDetachedOperationRunContext;
+        readonly capture: TCapture;
+      }
+    | SessionDetachedOperationResult<never>
+  > {
+    const gate = await this.#grantGate(operation, operationId);
+    if (!gate.allowed) {
+      return { status: 'denied', operationId, reason: gate.reason };
+    }
+    const context: SessionDetachedOperationRunContext = { ...gate.context, signal };
     try {
       this.#inQueue = true;
-      let result: TResult;
+      let capture: TCapture;
       try {
-        result = await operation.run(context);
+        capture = await operation.prepare(context);
       } finally {
         this.#inQueue = false;
       }
       await this.#recordAudit(
-        this.#effectAudit(operation, check.grant, operationId, 'completed', at()),
+        this.#effectAudit(
+          operation,
+          gate.grant,
+          operationId,
+          'completed',
+          this.#now(),
+          undefined,
+          'prepare',
+        ),
       );
-      return { status: 'completed', operationId, result };
+      return { status: 'prepared', context, capture };
     } catch (error) {
       this.#inQueue = false;
       const errorCode = errorCodeOf(error);
       await this.#recordAudit(
-        this.#effectAudit(operation, check.grant, operationId, 'failed', at(), errorCode),
+        this.#effectAudit(
+          operation,
+          gate.grant,
+          operationId,
+          'failed',
+          this.#now(),
+          errorCode,
+          'prepare',
+        ),
       );
       return { status: 'failed', operationId, errorCode, message: errorMessageOf(error) };
+    }
+  }
+
+  async #runDetachedExecute<TCapture, TCandidate, TResult>(
+    operation: SessionDetachedOperation<TCapture, TCandidate, TResult>,
+    context: SessionDetachedOperationRunContext,
+    capture: TCapture,
+    signal: AbortSignal,
+  ): Promise<
+    | {
+        readonly status: 'executed';
+        readonly context: SessionDetachedOperationRunContext;
+        readonly capture: TCapture;
+        readonly candidate: TCandidate;
+      }
+    | SessionDetachedOperationResult<never>
+  > {
+    try {
+      const candidate = await operation.execute(context, capture, signal);
+      return { status: 'executed', context, capture, candidate };
+    } catch (error) {
+      return {
+        status: 'failed',
+        operationId: context.operationId,
+        errorCode: errorCodeOf(error),
+        message: errorMessageOf(error),
+      };
+    }
+  }
+
+  async #runDetachedCommit<TCapture, TCandidate, TResult>(
+    operation: SessionDetachedOperation<TCapture, TCandidate, TResult>,
+    context: SessionDetachedOperationRunContext,
+    capture: TCapture,
+    candidate: TCandidate,
+    signal: AbortSignal,
+  ): Promise<SessionDetachedOperationResult<TResult>> {
+    // The commit token is revoked on cancellation: a late execute result is
+    // archived (the operation is reported cancelled) and never promoted,
+    // even when the provider ignored the signal.
+    if (signal.aborted) {
+      return { status: 'cancelled', operationId: context.operationId };
+    }
+    const gate = await this.#grantGate(operation, context.operationId);
+    if (!gate.allowed) {
+      return { status: 'denied', operationId: context.operationId, reason: gate.reason };
+    }
+    try {
+      this.#inQueue = true;
+      let committed: SessionDetachedCommitResult<TResult>;
+      try {
+        committed = await operation.commit(context, capture, candidate);
+      } finally {
+        this.#inQueue = false;
+      }
+      await this.#recordAudit(
+        this.#effectAudit(
+          operation,
+          gate.grant,
+          context.operationId,
+          'completed',
+          this.#now(),
+          undefined,
+          'commit',
+        ),
+      );
+      return committed.status === 'completed'
+        ? { status: 'completed', operationId: context.operationId, result: committed.result }
+        : { status: 'stale', operationId: context.operationId, reason: committed.reason };
+    } catch (error) {
+      this.#inQueue = false;
+      const errorCode = errorCodeOf(error);
+      await this.#recordAudit(
+        this.#effectAudit(
+          operation,
+          gate.grant,
+          context.operationId,
+          'failed',
+          this.#now(),
+          errorCode,
+          'commit',
+        ),
+      );
+      return {
+        status: 'failed',
+        operationId: context.operationId,
+        errorCode,
+        message: errorMessageOf(error),
+      };
     }
   }
 
@@ -655,9 +979,11 @@ class ProjectSessionImpl implements ProjectSession {
     outcome: 'completed' | 'failed',
     at: string,
     detail?: string,
+    phase?: 'prepare' | 'commit',
   ): SessionAuditRecord {
+    const kind = phase === undefined ? operation.kind : `${operation.kind}.${phase}`;
     return {
-      ...buildAuditEffect({ grant, kind: `operation.${operation.kind}.${outcome}`, detail, at }),
+      ...buildAuditEffect({ grant, kind: `operation.${kind}.${outcome}`, detail, at }),
       operationId,
       outcome,
     };

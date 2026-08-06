@@ -27,6 +27,7 @@ import {
   WORKBENCH_CONFIGURATION_VERSION,
   type WorkbenchAdminOverviewV1,
   type WorkbenchConfigurationV1,
+  type WorkbenchConfigurationV3,
   type WorkbenchNetworkReadViewV1,
   type WorkbenchProjectSafeViewV1,
   type WorkbenchProviderReadViewV1,
@@ -38,7 +39,11 @@ import type { LocalAuthService } from './auth/index.js';
 import type { ConfigurationChangeService } from './configuration-service.js';
 import type { HostListenerMode, SetupHttpMethod } from './listener.js';
 import type { ProviderCredentialStore } from './providers/credential-store.js';
-import { isValidProviderId } from './providers/credential-store.js';
+import {
+  DEFAULT_PROVIDER_PROFILE,
+  isValidProviderId,
+  providerCredentialKey,
+} from './providers/credential-store.js';
 import type { HostListenerEnv, HostServer } from './server.js';
 import type { RuntimeAdminPort } from './workbench-runtime.js';
 
@@ -194,7 +199,7 @@ export function createSetupStatusBuilder(options: SetupStatusBuilderOptions): Se
     const active = await options.configuration.readActive();
     const configurationPresent = active !== null;
     const ownerCreated = (await options.auth.getAuthState()).ownerExists;
-    const effective =
+    const effective: WorkbenchConfigurationV1 | WorkbenchConfigurationV3 | null =
       draft !== null && draft !== undefined ? draft.configuration : (active?.configuration ?? null);
 
     const projects: WorkbenchProjectSafeViewV1[] =
@@ -208,16 +213,23 @@ export function createSetupStatusBuilder(options: SetupStatusBuilderOptions): Se
             defaultProject: project.projectId === effective.defaultProjectId,
           }));
 
+    const providerConfiguration =
+      effective === null
+        ? null
+        : effective.version === 3
+          ? (effective.providers.default ?? null)
+          : effective.provider;
     const providerConfigured =
-      effective?.provider != null && (await options.credentials.get('ai-sdk')) !== null;
+      providerConfiguration != null &&
+      (await options.credentials.get(providerCredentialKey(DEFAULT_PROVIDER_PROFILE))) !== null;
     const provider: WorkbenchProviderReadViewV1 | null =
-      effective?.provider == null
+      providerConfiguration == null
         ? null
         : {
             kind: 'ai-sdk',
             configured: providerConfigured,
-            endpoint: maskEndpoint(effective.provider.baseUrl),
-            model: maskModel(effective.provider.model),
+            endpoint: maskEndpoint(providerConfiguration.baseUrl),
+            model: maskModel(providerConfiguration.model),
             lastValidation: providerConfigured ? 'valid' : 'unvalidated',
             lastValidatedAt: null,
           };
@@ -568,7 +580,11 @@ export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
         );
       }
       try {
-        await options.credentials.set(providerId, apiKey);
+        // The setup wizard configures the default provider profile; the legacy
+        // `ai-sdk` wire id maps to the canonical `ai-sdk:default` key.
+        const credentialKey =
+          providerId === 'ai-sdk' ? providerCredentialKey(DEFAULT_PROVIDER_PROFILE) : providerId;
+        await options.credentials.set(credentialKey, apiKey);
       } catch {
         return setupError('CREDENTIAL_INVALID', 'The credential could not be stored.', 400);
       }

@@ -17,6 +17,7 @@ import {
   type CompileProjectOptions,
   type CoreRuntimeServices,
   compileProject,
+  type PluginHooksManager,
   type ProjectCompilation,
   type ProjectSourceSnapshotV1,
 } from '@novalistically/core';
@@ -44,6 +45,13 @@ export interface ProjectCoreRuntimeOptions {
   ) => ProjectCompilation;
   /** Maximum memoized snapshots; default {@link MAX_MEMOIZED_SNAPSHOTS}. */
   readonly maxMemoizedSnapshots?: number;
+  /**
+   * Optional active plugin hooks manager (trusted node plugins). When
+   * present, plugin identities feed validationIdentity/planHash/render cache
+   * keys, plugin validators join the pipeline validator set and observation
+   * hooks run around scenes — the same contract `EditorialRuntime` exposes.
+   */
+  readonly pluginHooksManager?: PluginHooksManager;
 }
 
 export interface ProjectCoreRuntime {
@@ -51,11 +59,28 @@ export interface ProjectCoreRuntime {
   /** The injected Core semantic ports; shared by every session consumer. */
   readonly services: CoreRuntimeServices;
   /**
+   * The active plugin hooks manager, when plugins are enabled and trusted
+   * for this project. Render consumers read it from the runtime the same
+   * way they read `EditorialRuntime.pluginHooksManager`.
+   */
+  readonly pluginHooksManager?: PluginHooksManager;
+  /**
    * Memoized deterministic compile of a snapshot. A snapshot identity
    * (sourceHash) compiles at most once; a compile that throws is never
-   * memoized.
+   * memoized. Options MUST be constant per session: the memo key is the
+   * sourceHash only, so route-varying compiles belong on
+   * {@link compileDetached}.
    */
   compile(snapshot: ProjectSourceSnapshotV1, options?: CompileProjectOptions): ProjectCompilation;
+  /**
+   * Deterministic compile that bypasses the sourceHash memo. Route-specific
+   * compiles (per-source/route derived streams, plan 8.1) must use this so
+   * they can never collide with the session's no-options memo entry.
+   */
+  compileDetached(
+    snapshot: ProjectSourceSnapshotV1,
+    options?: CompileProjectOptions,
+  ): ProjectCompilation;
   /** True when this exact snapshot identity is already compiled here. */
   has(sourceHash: string): boolean;
   /** Source hashes currently held in the memo, most-recently-used first. */
@@ -103,6 +128,9 @@ export function createProjectCoreRuntime(options: ProjectCoreRuntimeOptions): Pr
   return {
     projectId,
     services,
+    ...(options.pluginHooksManager === undefined
+      ? {}
+      : { pluginHooksManager: options.pluginHooksManager }),
     compile(snapshot, compileOptions) {
       const hash = snapshot.sourceHash;
       const existing = memo.get(hash);
@@ -116,6 +144,9 @@ export function createProjectCoreRuntime(options: ProjectCoreRuntimeOptions): Pr
         memo.delete(oldest);
       }
       return compiled;
+    },
+    compileDetached(snapshot, compileOptions) {
+      return compile(snapshot, compileOptions);
     },
     has(hash) {
       return memo.has(hash);

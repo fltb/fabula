@@ -30,7 +30,11 @@
 
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { ProjectAccessRole } from '../../contracts/configuration.js';
-import { PROJECT_ACCESS_ROLE_GRANTS, PROJECT_ACCESS_ROLES } from '../../contracts/configuration.js';
+import {
+  MCP_ADMIN_SCOPE,
+  PROJECT_ACCESS_ROLE_GRANTS,
+  PROJECT_ACCESS_ROLES,
+} from '../../contracts/configuration.js';
 import type {
   McpDeviceVerifierReadState,
   McpDeviceVerifierRecord,
@@ -52,13 +56,19 @@ export const MAX_DEVICE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 /** Maximum length of the client label shown in device listings. */
 export const MAX_DEVICE_LABEL_LENGTH = 120;
 
-/** The finite MCP scope vocabulary a pairing may request. */
+/**
+ * The finite MCP scope vocabulary a pairing may request: every project-role
+ * grant from {@link PROJECT_ACCESS_ROLE_GRANTS} plus the owner-only admin
+ * scope. Derived from the single grants constant so the vocabulary never
+ * diverges from the role rules.
+ */
 export const KNOWN_MCP_SCOPES = [
-  'mcp:read',
-  'mcp:render',
-  'mcp:author',
-  'mcp:submit',
-  'mcp:admin',
+  ...new Set([
+    ...PROJECT_ACCESS_ROLE_GRANTS.reader.scopes,
+    ...PROJECT_ACCESS_ROLE_GRANTS.author.scopes,
+    ...PROJECT_ACCESS_ROLE_GRANTS.maintainer.scopes,
+    MCP_ADMIN_SCOPE,
+  ]),
 ] as const;
 export type KnownMcpScope = (typeof KNOWN_MCP_SCOPES)[number];
 

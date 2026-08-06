@@ -18,7 +18,11 @@
  * in for another.
  */
 
-import type { AuthoringOperationReceiptV1, AuthoringStateV1 } from '../../contracts/authoring.js';
+import type {
+  AuthoringOperationReceiptV1,
+  AuthoringStateV1,
+  WorkingValidationResultV1,
+} from '../../contracts/authoring.js';
 import type { YjsDocumentKey } from '../../contracts/persistence.js';
 
 // ─── Document materialization ───────────────────────────────────────────────
@@ -366,6 +370,12 @@ export interface AuthoringEventPublisher {
 
 /** Explicit submit request into the coordinator. */
 export interface AuthoringSubmitInput {
+  /**
+   * CAS on the accepted native revision; verified against the coordinator's
+   * accepted revision when present (the browser always sends it, null on a
+   * fresh project). A moved revision rejects with `ACCEPTED_HASH_MISMATCH`.
+   */
+  readonly expectedAcceptedRevisionId?: string | null;
   /** CAS on the accepted source; a moved projection rejects before any work. */
   readonly expectedAcceptedSourceHash: string | null;
   /** CAS on the working layer; a changed digest is `WORKSPACE_STALE`. */
@@ -377,6 +387,11 @@ export interface AuthoringSubmitInput {
   readonly capabilityId: string;
   /** Capability scopes required for this submit; validated by the session gate. */
   readonly capabilityScopes: readonly string[];
+  /**
+   * Grant generation binding; a persisted capability version different from
+   * this fails the session gate (same recheck the render path performs).
+   */
+  readonly expectedVersion?: number;
 }
 
 /** Reconcile/resolution request into the coordinator. */
@@ -384,10 +399,14 @@ export interface AuthoringReconcileInput {
   readonly choice: 'keep-working' | 'accept-external' | 'apply-proposed-disjoint-merge';
   /** Required for accept-external/apply-proposed-disjoint-merge. */
   readonly candidateHash: string | null;
+  /** CAS on the accepted native revision; verified when present (see submit). */
+  readonly expectedAcceptedRevisionId?: string | null;
   readonly expectedAcceptedSourceHash: string | null;
   readonly actorId: string;
   readonly capabilityId: string;
   readonly capabilityScopes: readonly string[];
+  /** Grant generation binding; a different persisted version fails the session gate. */
+  readonly expectedVersion?: number;
 }
 
 /**
@@ -401,9 +420,9 @@ export interface AuthoringCoordinator {
   /** Current browser-safe authoring state. */
   getState(): AuthoringStateV1;
   /** Recent operation receipts for the browser/MCP operation center. */
-  listOperations(): readonly AuthoringOperationReceiptV1[];
+  listOperations(): Promise<readonly AuthoringOperationReceiptV1[]>;
   /** One operation receipt, or null when the id is unknown. */
-  getOperation(operationId: string): AuthoringOperationReceiptV1 | null;
+  getOperation(operationId: string): Promise<AuthoringOperationReceiptV1 | null>;
   /** Whether authoring conflicts/recovery require agents to pause. */
   isAgentPaused(): boolean;
   /** Refresh the browser-safe dirty/digest projection after a Yjs persist. */
@@ -418,6 +437,16 @@ export interface AuthoringCoordinator {
   submit(input: AuthoringSubmitInput): Promise<AuthoringOperationReceiptV1>;
   /** Reconcile an external candidate or resolve a conflict. */
   reconcileExternal(input: AuthoringReconcileInput): Promise<AuthoringOperationReceiptV1>;
+  /**
+   * Validate the materialized working layer without accepting it. Runs inside
+   * the coordinator lock and reuses the submit path's materialize + snapshot
+   * build + validation; it never freezes, submits, materializes the accepted
+   * tree, or changes phase. CAS mismatches fail closed with a typed error.
+   */
+  validateWorking(input: {
+    readonly expectedWorkspaceDigest: string;
+    readonly expectedAcceptedSourceHash: string | null;
+  }): Promise<WorkingValidationResultV1>;
   /**
    * Serial adoption hook: after a Git receipt the coordinator reloads the
    * source, verifies the resulting hash equals `expectedSourceHash`, and

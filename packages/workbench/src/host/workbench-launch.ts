@@ -23,19 +23,37 @@
  * setup/admin API and runtime registry stay with the configuration slice.
  */
 
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { mkdir, readFile, stat } from 'node:fs/promises';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
-import type { LLMProvider } from '@novalistically/core';
-import { MockProvider } from '@novalistically/core/testing';
-import { createFileCoreRuntimeServices, FileProjectSourceLoader } from '@novalistically/node-host';
 import {
+  type LLMProvider,
+  PluginExtensionSchemaRegistrar,
+  type ProjectSourceSnapshotV1,
+} from '@novalistically/core';
+import {
+  activateNodePlugins,
+  createDeterministicMockProvider,
+  createFileCoreRuntimeServices,
+  createWorkbenchAgentModelAdapter,
+  FileProjectSourceLoader,
+  FileProjectStatusReporter,
+  type NodePluginActivationResult,
+  PluginIdentityMismatchError,
+  type ProjectAuthorityTokenV1,
+  ProjectWriteCoordinator,
+  shutdownNodePlugins,
+  type WorkbenchAgentModelPort,
+} from '@novalistically/node-host';
+import {
+  DEFAULT_WORKBENCH_OPERATION_LIMITS_V3,
   DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
   normalizeWorkbenchConfiguration,
   type WorkbenchConfigurationInput,
-  type WorkbenchProjectConfigurationV2,
+  type WorkbenchProjectConfigurationV3,
 } from '@novalistically/workbench-protocol';
 import {
   AUTHORING_CONTRACT_VERSION,
@@ -44,6 +62,7 @@ import {
 import type {
   BrowserProjectSummaryV1,
   BrowserSessionPrincipalV1,
+  WorkbenchProjectFeatureV1,
 } from '../contracts/browser-api.js';
 import type {
   ConfigChangeRequestV1,
@@ -54,7 +73,9 @@ import type {
   WorkbenchProjectConfigurationV1,
   WorkbenchProjectSafeViewV1,
 } from '../contracts/configuration.js';
+import { PROJECT_ACCESS_ROLE_GRANTS } from '../contracts/configuration.js';
 import type {
+  CapabilityState,
   InviteState,
   McpDeviceVerifierReadState,
   PersistenceOperation,
@@ -62,20 +83,29 @@ import type {
   PersistenceResults,
 } from '../contracts/persistence.js';
 import type { SourceStudioStateV1 } from '../contracts/source-studio.js';
+import { createAgentStore } from '../persistence/agent-store.js';
 import type { PersistenceMessagePort, PersistenceResponse } from '../persistence/messages.js';
+import { createProjectOperationStore } from '../persistence/project-operation-store.js';
+import { createProjectPublicationStore } from '../persistence/project-publication-store.js';
 import { PersistenceWorkerClient } from '../persistence/worker-client.js';
-import { createAdminApi } from './admin-api.js';
+import { createAdminApi, type PluginDiscoveryAdminPort } from './admin-api.js';
 import {
   AgentCapabilityService,
-  AgentTaskService,
-  createAgentCommandService,
   createAgentDurableAudit,
-  createAgentSuggestionService,
   createCapabilityPersistence,
   createDurableAuditSink,
 } from './agent/index.js';
-import { createAuthPersistence, LocalAuthService } from './auth/index.js';
-import { createMcpAuthoringCoordinatorPort } from './authoring/mcp-adapter.js';
+import { createProjectToolExecutor } from './agent/project-tool-executor.js';
+import {
+  createWorkbenchAgentRunService,
+  type WorkbenchAgentRunService,
+} from './agent/run-service.js';
+import { createAuthPersistence, DEFAULT_SESSION_TTL_MS, LocalAuthService } from './auth/index.js';
+import { receiptFromRecord } from './authoring/coordinator.js';
+import {
+  createBrowserAuthoringMutationPort,
+  createMcpAuthoringCoordinatorPort,
+} from './authoring/mcp-adapter.js';
 import {
   createProjectAuthoringRuntime,
   type ProjectAuthoringRuntime,
@@ -85,12 +115,14 @@ import {
   type ProjectAuthoringTreeWatcher,
 } from './authoring/project-tree-watcher.js';
 import type { AuthoringCoordinatorEvent } from './authoring/types.js';
-import { type BrowserAgentProject, createBrowserAgentApi } from './browser-agent-api.js';
+import { createBrowserAgentChatApi } from './browser-agent-chat-api.js';
 import {
   type BrowserAuthoringEventSource,
   createBrowserAuthoringApi,
 } from './browser-authoring-api.js';
+import { createBrowserPublicationApi } from './browser-publication-api.js';
 import { createBrowserPrincipalResolver } from './browser-read-api.js';
+import { createBrowserReviewApi } from './browser-review-api.js';
 import { ConfigurationFileStore } from './configuration-file-store.js';
 import { type ActiveConfiguration, ConfigurationChangeService } from './configuration-service.js';
 import { createProjectCoreRuntime } from './core-runtime.js';
@@ -114,6 +146,12 @@ import {
 } from './mcp/index.js';
 import { createWorkbenchReferencePort } from './mcp/reference-port.js';
 import {
+  createProjectOperationService,
+  createRenderConcurrencyLimiter,
+  type ProjectOperationService,
+} from './operation-service.js';
+import { createPluginDiscoveryPort } from './plugins/plugin-discovery.js';
+import {
   createProjectAccessService,
   type ProjectAccessRequiredRole,
 } from './project-access-service.js';
@@ -122,10 +160,25 @@ import {
   type DurableProjectMembershipService,
 } from './project-membership-service.js';
 import { createProjectSession, createProjectSessionRegistry } from './project-session.js';
-import { HostProviderError, HostProviderFactory } from './provider-factory.js';
-import { createProviderCredentialStore } from './providers/index.js';
+import {
+  DEFAULT_AI_SDK_BASE_URL,
+  DEFAULT_AI_SDK_MODEL,
+  HostProviderError,
+  HostProviderFactory,
+} from './provider-factory.js';
+import { createProviderCredentialStore, providerCredentialKey } from './providers/index.js';
+import {
+  createProjectPublicationService,
+  type ProjectPublicationService,
+} from './publication/publication-service.js';
+import { createHostReviewService, type HostReviewService } from './review/review-service.js';
 import { createHostServer, type HostServer, type HostServerOptions } from './server.js';
 import { createSetupApi, createSetupStatusBuilder, type SetupStatusBuilder } from './setup-api.js';
+import {
+  type CanonicalStateProjectionService,
+  createCanonicalStateProjectionService,
+  DEFAULT_SNAPSHOT_INTERVAL,
+} from './state/canonical-state-projection.js';
 import { createWorkbenchRuntime, type WorkbenchRuntime } from './workbench-runtime.js';
 import {
   createSessionAuthPort,
@@ -157,6 +210,28 @@ export interface WorkbenchLaunchConfig extends HostServerOptions {
   readonly configurationService?: WorkbenchConfigurationSeam;
   /** Test/dev-only provider override injected past the credential store (e.g. `MockProvider`). */
   readonly providerOverride?: LLMProvider;
+  /**
+   * Test/dev-only built-in Agent model port injection (e.g. a deterministic
+   * tool-calling port for the parity fixture). Absent = production
+   * construction from the project profile configuration + credential.
+   */
+  readonly agentModel?: WorkbenchAgentModelPort;
+  /**
+  /** Test-only provider factory injection. Production composes the
+   * credential-backed {@link HostProviderFactory}; a double injected here
+   * replaces it entirely (including the default-profile admin validation
+   * surface exposed on the launch handle).
+   */
+  readonly providerFactory?: HostProviderFactory;
+  /**
+   * Built-in Agent parity gate (plan 9.6). The deterministic parity matrix
+   * test toggles this; it is NEVER hardcoded true in production. The
+   * `agent-chat` capability is exposed only when V3 `agent.enabled` is true
+   * AND the project provider's model adapter reports tool-call support AND
+   * this flag is true. Defaults to false, so the Agent surface stays fully
+   * hidden until the parity matrix passes.
+   */
+  readonly agentReady?: boolean | (() => boolean | Promise<boolean>);
   /** Absolute path to the built persistence worker entry; defaults to the bundled `dist/host/persistence/worker.js`. */
   readonly persistenceWorkerEntry?: string;
   /** Bound on persistence worker termination during close; default 5s. */
@@ -198,6 +273,37 @@ const MIME_TYPES: Record<string, string> = {
 
 /** Default bound on persistence worker termination during close. */
 export const DEFAULT_WORKER_TERMINATION_TIMEOUT_MS = 5_000;
+
+/**
+ * Project authority lease heartbeat TTL. Matches the coordinator default;
+ * the launch passes it explicitly so the heartbeat interval stays in lockstep
+ * with the lease expiry window.
+ */
+export const AUTHORITY_HEARTBEAT_TTL_MS = 30_000;
+
+/**
+ * Build identity recorded in each project's authority lease after the Host
+ * listener is ready. Public routing/health data only — never a credential.
+ */
+const AUTHORITY_LEASE_BUILD = {
+  version: 1 as const,
+  packageId: '@novalistically/workbench',
+  buildId: 'workbench',
+  protocolVersion: 1,
+};
+
+/**
+ * Health probe used to reclaim an expired lease: probe the recorded endpoint
+ * of the *previous* authority holder. An unrecorded or unreachable endpoint
+ * counts as a failed probe so a stale lease can be reclaimed instead of
+ * wedging the project forever.
+ */
+function authorityHealthProbe(lease: { readonly endpoint?: string }): Promise<boolean> {
+  if (lease.endpoint === undefined || lease.endpoint === '') return Promise.resolve(false);
+  return fetch(`${lease.endpoint}/health`)
+    .then((response) => response.ok)
+    .catch(() => false);
+}
 
 function json(value: unknown, status = 200): Response {
   return new Response(JSON.stringify(value), { status, headers: JSON_HEADERS });
@@ -290,6 +396,62 @@ async function staticHandler(request: Request, assetsRoot: string): Promise<Resp
 /** Treat empty env values as unset so a copied template cannot break startup. */
 function opt(value: string | undefined): string | undefined {
   return value === undefined || value.trim() === '' ? undefined : value;
+}
+
+/**
+ * Mock-mode reference fixture dirs for one project root, in lookup order.
+ * The canonical fixture layout is `<root>/reference/data/<eventId>.json`;
+ * a bare `<root>/reference/` layout is supported as a fallback. Missing
+ * dirs are skipped by the deterministic mock (generated fallback only).
+ */
+function mockReferenceDirs(projectRoot: string): readonly string[] {
+  return [join(projectRoot, 'reference', 'data'), join(projectRoot, 'reference')];
+}
+
+/**
+ * Resolve the built-in Agent parity flag (plan 9.6). The parity matrix test
+ * toggles the injection point; production keeps the default `false` so the
+ * Agent surface stays fully hidden until parity passes. Never hardcoded true.
+ */
+async function resolveAgentReady(
+  agentReady: boolean | (() => boolean | Promise<boolean>) | undefined,
+): Promise<boolean> {
+  if (agentReady === undefined) return false;
+  if (typeof agentReady === 'boolean') return agentReady;
+  const resolved = await agentReady();
+  return resolved === true;
+}
+
+/**
+ * Project intent flag `nova.yaml.plugins.enabled` (plan 7.1). Plugins are
+ * only ever activated when the project explicitly enables them AND the V3
+ * trustedPlugins allowlist matches the discovered identity exactly;
+ * `enabled` is the gate, trust matching is the filter. A missing, unparsed
+ * or non-boolean flag reads as disabled (fail closed).
+ */
+function pluginsEnabledIn(source: ProjectSourceSnapshotV1): boolean {
+  const nova = source.documents.find((document) => document.logicalPath === 'nova.yaml');
+  const parsed = nova?.parseResult.status === 'parsed' ? nova.parseResult.value : null;
+  if (typeof parsed !== 'object' || parsed === null) return false;
+  const plugins = (parsed as Record<string, unknown>).plugins;
+  if (typeof plugins !== 'object' || plugins === null) return false;
+  return (plugins as Record<string, unknown>).enabled === true;
+}
+
+/**
+ * Project snapshot cadence from `nova.yaml.snapshotInterval` (plan 8.1). The
+ * value must be a positive integer when present; absent projects fall back to
+ * the canonical default of 10 events per snapshot.
+ */
+function readSnapshotInterval(source: ProjectSourceSnapshotV1): number {
+  const nova = source.documents.find((document) => document.logicalPath === 'nova.yaml');
+  const parsed = nova?.parseResult.status === 'parsed' ? nova.parseResult.value : null;
+  if (typeof parsed !== 'object' || parsed === null) return DEFAULT_SNAPSHOT_INTERVAL;
+  const value = (parsed as Record<string, unknown>).snapshotInterval;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
+    return DEFAULT_SNAPSHOT_INTERVAL;
+  }
+  return value;
 }
 
 /**
@@ -585,6 +747,80 @@ export async function startWorkbench(
 
   let host: HostServer | undefined;
   let disposeAuthoringRuntimes: (() => Promise<void>) | undefined;
+  // Project write authority: one lease per project root, acquired before the
+  // session bundle opens and heartbeat every TTL/3 once the listener is
+  // ready. A second Host opening the same root is rejected while this lease
+  // is authoritative, so the same project root can never be written by two
+  // authorities even across different WORKBENCH_HOME directories. The state
+  // and helpers live outside the try because the startup-failure path must
+  // clear timers and release every acquired lease before rethrow (a catch
+  // block cannot see try-local bindings).
+  const instanceNonce = randomUUID();
+  const coordinators = new Map<string, ProjectWriteCoordinator>();
+  const authorityTokens = new Map<string, ProjectAuthorityTokenV1>();
+  const heartbeatTimers = new Map<string, ReturnType<typeof setInterval>>();
+  /** Public Host endpoint; null until the listener has started. */
+  let hostEndpoint: string | null = null;
+
+  /** One coordinator per project root, cached for the life of the Host. */
+  const coordinatorFor = (project: {
+    readonly projectId: string;
+    readonly root: string;
+  }): ProjectWriteCoordinator => {
+    const existing = coordinators.get(project.projectId);
+    if (existing !== undefined) return existing;
+    const created = new ProjectWriteCoordinator(project.root, {
+      projectId: project.projectId,
+      heartbeatTtlMs: AUTHORITY_HEARTBEAT_TTL_MS,
+      healthProbe: authorityHealthProbe,
+    });
+    coordinators.set(project.projectId, created);
+    return created;
+  };
+
+  /** Refresh the lease every TTL/3 so it can never expire under a live Host. */
+  const startHeartbeat = (
+    projectId: string,
+    coordinator: ProjectWriteCoordinator,
+    token: ProjectAuthorityTokenV1,
+  ): void => {
+    if (heartbeatTimers.has(projectId)) return;
+    const timer = setInterval(() => {
+      void coordinator.heartbeat(token).catch(() => undefined);
+    }, AUTHORITY_HEARTBEAT_TTL_MS / 3);
+    heartbeatTimers.set(projectId, timer);
+  };
+
+  const stopHeartbeat = (projectId: string): void => {
+    const timer = heartbeatTimers.get(projectId);
+    if (timer === undefined) return;
+    clearInterval(timer);
+    heartbeatTimers.delete(projectId);
+  };
+
+  /**
+   * Promote a project lease to `ready` and start its heartbeat. No-op before
+   * the listener has an endpoint, and again after a project was already
+   * marked (reopen path).
+   */
+  const markProjectReady = async (projectId: string): Promise<void> => {
+    if (hostEndpoint === null) return;
+    const coordinator = coordinators.get(projectId);
+    const token = authorityTokens.get(projectId);
+    if (coordinator === undefined || token === undefined) return;
+    await coordinator.markReady(token, {
+      endpoint: hostEndpoint,
+      build: AUTHORITY_LEASE_BUILD,
+    });
+    startHeartbeat(projectId, coordinator, token);
+  };
+
+  /** Instance-CAS release; safe to call twice and for unacquired projects. */
+  const releaseProjectAuthority = async (projectId: string): Promise<void> => {
+    const coordinator = coordinators.get(projectId);
+    if (coordinator === undefined) return;
+    await coordinator.release(instanceNonce);
+  };
   try {
     const auth = new LocalAuthService({ persistence: createAuthPersistence(persistence.client) });
     const capabilities = new AgentCapabilityService({
@@ -615,17 +851,38 @@ export async function startWorkbench(
         ? null
         : normalizeWorkbenchConfiguration(activeConfigurationInput as WorkbenchConfigurationInput);
 
+    // Built-in Agent parity gate (plan 9.6): the deterministic parity matrix
+    // test toggles `agentReady`; production never hardcodes it true. The
+    // `agent-chat` capability is derived only when V3 agent.enabled is true
+    // AND the tool-calling model port reports support AND the parity flag.
+    const agentReadyValue = await resolveAgentReady(config.agentReady);
+    const agentChatEnabled =
+      activeConfiguration?.agent.enabled === true && agentReadyValue === true;
+
     // Host-only provider construction: the API key is read exclusively from
     // the credential store and passed as an explicit AI SDK option; the
-    // factory never consults process environment keys.
+    // factory never consults process environment keys. One factory instance
+    // serves the whole Host; runtime providers are built per project session
+    // from that project's V3 `providerProfile`, so no two sessions share one
+    // runtime provider instance. Mock mode (`WORKBENCH_PROVIDER=mock`, no
+    // injected override) builds a fresh deterministic mock PER PROJECT with
+    // that project's `reference/` fixtures, so Pass-2 analysis is resolved
+    // per event instead of the old bare shared MockProvider (whose default
+    // echo is non-JSON and blocked every release).
     const credentialStore = createProviderCredentialStore();
-    const provider = new HostProviderFactory({
-      store: credentialStore,
-      configuration: activeConfiguration?.provider ?? null,
-      override:
-        config.providerOverride ?? (config.provider === 'mock' ? new MockProvider() : undefined),
-    });
-    const configuredProjects: readonly WorkbenchProjectConfigurationV2[] =
+    const provider =
+      config.providerFactory ??
+      new HostProviderFactory({
+        store: credentialStore,
+        configuration: activeConfiguration?.providers.default ?? null,
+        override: config.providerOverride,
+        overrideForProject:
+          config.providerOverride === undefined && config.provider === 'mock'
+            ? (projectRoot) =>
+                createDeterministicMockProvider({ referenceDirs: mockReferenceDirs(projectRoot) })
+            : undefined,
+      });
+    const configuredProjects: readonly WorkbenchProjectConfigurationV3[] =
       activeConfiguration?.projects ??
       (config.projectRoot === undefined
         ? []
@@ -635,6 +892,8 @@ export async function startWorkbench(
               displayName: config.displayName ?? basename(config.projectRoot),
               root: config.projectRoot,
               revisionMirror: { mode: 'disabled' },
+              providerProfile: 'default',
+              trustedPlugins: [],
             },
           ]);
     // Reference routes are mounted only after a durable Host-owned job/chunk
@@ -654,10 +913,45 @@ export async function startWorkbench(
       isOpen: (projectId) => sessions.get(projectId) !== null,
     });
 
-    const providerReady =
-      config.providerOverride !== undefined ||
-      config.provider === 'mock' ||
-      (activeConfiguration?.provider !== null && (await provider.hasCredential()));
+    // Built-in Agent principal grant (plan 9.6): the builtin caller's
+    // capabilityId (`builtin:<projectId>:<userId>`, project-tool-executor
+    // callerForRole) is validated by the session gate through the DURABLE
+    // capability row on every phase. The parity-matrix harness persists the
+    // identical row via `createCapabilityPersistence().upsertCapability`;
+    // the launch issues it here for every owner/maintainer principal when
+    // the `agent-chat` gate passes, so render prepare/commit (and every
+    // capability-checked effect) is not DENIED for the built-in caller. The
+    // version mirrors the user's durable `capabilityVersion` (the browser
+    // principal binding) and the expiry mirrors the browser-session horizon.
+    const capabilityPersistence = createCapabilityPersistence(persistence.client);
+    const ensureBuiltinAgentGrants = async (projectId: string): Promise<void> => {
+      const owner = await persistence.client.request('loadOwner', undefined).catch(() => null);
+      const principals = new Map<string, number>();
+      if (owner !== null) principals.set(owner.userId, owner.capabilityVersion);
+      const members = await memberships.list({ projectId }).catch(() => []);
+      for (const member of members) {
+        if (member.role !== 'maintainer') continue;
+        const user = await persistence.client
+          .request('loadUser', { userId: member.userId })
+          .catch(() => null);
+        if (user !== null) principals.set(user.userId, user.capabilityVersion);
+      }
+      if (principals.size === 0) return;
+      const scope = [...PROJECT_ACCESS_ROLE_GRANTS.maintainer.scopes];
+      const expiresAt = new Date(Date.now() + DEFAULT_SESSION_TTL_MS).toISOString();
+      for (const [userId, capabilityVersion] of principals) {
+        const state: CapabilityState = {
+          capabilityId: `builtin:${projectId}:${userId}`,
+          userId,
+          projectId,
+          scope,
+          version: capabilityVersion,
+          expiresAt,
+        };
+        await capabilityPersistence.upsertCapability(state);
+      }
+    };
+
     const unavailableProvider: LLMProvider = {
       name: 'workbench-provider-unavailable',
       complete: async () => {
@@ -667,7 +961,6 @@ export async function startWorkbench(
         );
       },
     };
-    const runtimeProvider = providerReady ? await provider.create() : unavailableProvider;
     const audit = createAgentDurableAudit({ client: persistence.client });
     const projectConfiguration = new Map<string, WorkbenchProjectConfigurationV1>();
     const revisionMirrors = new Map(
@@ -677,13 +970,74 @@ export async function startWorkbench(
     const yjsCore = createYjsWorkingDocumentCore({ persistence: yjsPersistence });
     const authoring = new Map<string, ProjectAuthoringRuntime>();
     const authoringWatchers = new Map<string, ProjectAuthoringTreeWatcher>();
+    const statusReporters = new Map<string, FileProjectStatusReporter>();
+    // Per-project trusted-plugin activation health (plan 7.3): the activation
+    // result snapshot (hooks manager + active/blocked/disabled records) is
+    // captured at open time, injected into the project Core runtime and
+    // surfaced through `nova_status` blockers/guidance. Shutdown runs in
+    // reverse registration order per project (the hooks manager's own
+    // `shutdown()` reverses onUnload order).
+    const pluginActivations = new Map<string, NodePluginActivationResult>();
+    // Per-project enabled-plugin extension gate (plan 7.5): derived from the
+    // activation's ACTIVE set only — disabled/unknown namespaces are source
+    // errors, enabled namespaces validate structurally. Absent activation
+    // (plugins never enabled) → no registrar → no extension diagnostics.
+    const extensionRegistrarFor = (
+      projectId: string,
+    ): PluginExtensionSchemaRegistrar | undefined => {
+      const activation = pluginActivations.get(projectId);
+      if (activation === undefined || activation.active.length === 0) return undefined;
+      return new PluginExtensionSchemaRegistrar(
+        activation.active.map((plugin) => ({ name: plugin.name })),
+      );
+    };
+    // Per-project durable operation service: FIFO render queue + cancel. The
+    // host-wide render concurrency gate is shared by every project service so
+    // `maxConcurrentRendersPerHost` is enforced across projects while each
+    // project's own concurrency stays 1.
+    const operationServices = new Map<string, ProjectOperationService>();
+    // Per-project review/gate service over the append-only Core review stream.
+    // One per project, constructed with the session + the durable operation
+    // store so every review/gate mutation writes a ProjectOperationRecordV1.
+    const reviewServices = new Map<string, HostReviewService>();
+    // Per-project canonical state projection service (plan 8.1): one derived
+    // per-source/route state stream + durable snapshots per project session;
+    // disposed on close.
+    const stateProjections = new Map<string, CanonicalStateProjectionService>();
+    // Per-project publication service over the durable publication repository.
+    // Publish runs as a `publish` operation through the project operation
+    // service; the canonical refresh (plan 6.5) fires from the operation
+    // completion and release-gate hooks below.
+    const publicationServices = new Map<string, ProjectPublicationService>();
+    // Per-project built-in Agent run service (plan 9.4): created only when
+    // the `agent-chat` gate passes (V3 agent.enabled + model tool-call
+    // support + parity flag); absent projects have no Agent route at all.
+    const agentRunServices = new Map<string, WorkbenchAgentRunService>();
+    const operationLimits =
+      activeConfiguration?.operationLimits ?? DEFAULT_WORKBENCH_OPERATION_LIMITS_V3;
+    const renderConcurrencyLimiter = createRenderConcurrencyLimiter(
+      operationLimits.maxConcurrentRendersPerHost,
+    );
     disposeAuthoringRuntimes = async () => {
+      for (const service of operationServices.values()) await service.close();
+      for (const service of agentRunServices.values()) service.close();
+      agentRunServices.clear();
+      operationServices.clear();
+      reviewServices.clear();
+      publicationServices.clear();
       for (const watcher of authoringWatchers.values()) watcher.dispose();
       authoringWatchers.clear();
       for (const runtime of authoring.values()) await runtime.dispose();
       authoring.clear();
+      statusReporters.clear();
+      // Shut down any activation whose session was never closed (e.g. a
+      // mid-sync failure); per-project closeSession already shut down and
+      // removed its own activation.
+      for (const activation of pluginActivations.values()) {
+        await shutdownNodePlugins(activation.hooksManager).catch(() => undefined);
+      }
+      pluginActivations.clear();
     };
-    const agentProjects = new Map<string, BrowserAgentProject>();
     const listeners = new Map<string, Set<(event: AuthoringActivityEventV1) => void>>();
     const referencePortFor = async (projectId: string) => {
       const project = projectConfiguration.get(projectId);
@@ -711,6 +1065,14 @@ export async function startWorkbench(
           if (current.size === 0) listeners.delete(projectId);
         };
       },
+      publish(projectId, event) {
+        // Post-persist broadcast (e.g. the browser cancel route after the
+        // durable transition was written): listeners never see a state the
+        // store does not already have.
+        const subscribers = listeners.get(projectId);
+        if (subscribers === undefined) return;
+        for (const listener of subscribers) listener(event);
+      },
     };
     const publishAuthoringEvent = (event: AuthoringCoordinatorEvent): void => {
       const subscribers = listeners.get(event.projectId);
@@ -718,23 +1080,94 @@ export async function startWorkbench(
       const safe: AuthoringActivityEventV1 = { ...event, version: AUTHORING_CONTRACT_VERSION };
       for (const listener of subscribers) listener(safe);
     };
-    const agentTasks = providerReady ? new AgentTaskService({ provider: runtimeProvider }) : null;
 
     /**
-     * One lifecycle owns each project's session, Yjs working store, observer,
-     * controlled Git submission service and optional Agent service. Browser,
-     * MCP and Yjs resolve these maps only after this factory resolves.
+     * One lifecycle owns each project's session, Yjs working store and
+     * observer. Browser, MCP and Yjs resolve these maps only after this
+     * factory resolves.
      */
     const runtimeLifecycle = createWorkbenchRuntime({
       registry: sessions,
       createSession: async (project) => {
+        // The project authority lease must be held before the session bundle
+        // (session, Core runtime, authoring runtime) is constructed: every
+        // accepted source materialization runs under this token. A live or
+        // healthy lease owned by another Host fails the open with the typed
+        // authority-unavailable error and the project stays unopened.
+        const coordinator = coordinatorFor(project);
+        const authorityToken = await coordinator.acquireWorkbenchAuthority(instanceNonce);
+        authorityTokens.set(project.projectId, authorityToken);
+        // Per-project provider: V3 `providerProfile` selects the profile; the
+        // factory builds a fresh instance per session. Legacy projects
+        // normalize to the default profile. A construction failure (missing
+        // profile or credential) degrades to the unavailable provider so the
+        // project still opens read-only and renders fail with the typed
+        // provider error.
+        const profileId =
+          configuredProjects.find((entry) => entry.projectId === project.projectId)
+            ?.providerProfile ?? 'default';
+        const sessionProvider = await provider
+          .createForProfile(profileId, activeConfiguration?.providers[profileId], project.root)
+          .catch(() => unavailableProvider);
         const source = new FileProjectSourceLoader().load(project.root);
+        // Trusted-plugin activation (plan 7.1-7.2): only when the project
+        // intent flag `nova.yaml.plugins.enabled` is true do we attempt
+        // activation, and only exact V3 trustedPlugins name/version/moduleHash
+        // matches load. A required identity mismatch keeps the project open
+        // but records a blocking diagnostic: render/status report it and the
+        // admin surface can fix the allowlist without a failed open.
+        const trustedPlugins =
+          configuredProjects.find((entry) => entry.projectId === project.projectId)
+            ?.trustedPlugins ?? [];
+        let pluginActivation: NodePluginActivationResult | null = null;
+        if (pluginsEnabledIn(source)) {
+          try {
+            pluginActivation = await activateNodePlugins({
+              projectRoot: project.root,
+              trustedPlugins: trustedPlugins.map((entry) => ({
+                name: entry.name,
+                version: entry.version,
+                moduleHash: entry.moduleHash,
+                required: entry.required,
+              })),
+            });
+          } catch (error) {
+            if (error instanceof PluginIdentityMismatchError) {
+              // Required allowlist entry failed identity verification: the
+              // project stays open, render/status carry the blocking
+              // diagnostic (plan 7.3), and no hooks manager exists.
+              pluginActivation = {
+                hooksManager: null,
+                active: [],
+                blocked: trustedPlugins.map((entry) => ({
+                  name: entry.name,
+                  reason: error.message,
+                })),
+                disabled: [],
+              };
+            } else {
+              throw error;
+            }
+          }
+          if (pluginActivation !== null) {
+            pluginActivations.set(project.projectId, pluginActivation);
+          }
+        }
+        // The project-private runtime artifact tree (execution repo, render
+        // cache, state log) lives under the Host home; create it before the
+        // file repositories realpath their root on first access.
+        await mkdir(join(config.hostHome, 'projects', project.projectId, 'runtime'), {
+          recursive: true,
+        });
         const coreRuntime = createProjectCoreRuntime({
           projectId: project.projectId,
           services: createFileCoreRuntimeServices(project.root, {
-            provider: runtimeProvider,
+            provider: sessionProvider,
             artifactRoot: join(config.hostHome, 'projects', project.projectId, 'runtime'),
           }),
+          // Null (no hooks manager, e.g. a blocked activation) and undefined
+          // (plugins never activated) both mean “no plugin runtime”.
+          pluginHooksManager: pluginActivation?.hooksManager ?? undefined,
         });
         const session = createProjectSession({
           projectId: project.projectId,
@@ -743,6 +1176,71 @@ export async function startWorkbench(
           audit: createDurableAuditSink(audit),
           initialSource: source,
         });
+        // Per-project canonical state projection service (plan 8.1): one
+        // derived per-source/route stream per session, honoring the project
+        // config's `nova.yaml.snapshotInterval`. Lazy: the first status/diff
+        // query builds the stream and saves the durable snapshots through the
+        // injected Core state repositories (the Host's derived runtime area).
+        stateProjections.set(
+          project.projectId,
+          createCanonicalStateProjectionService({
+            projectId: project.projectId,
+            runtime: coreRuntime,
+            snapshotInterval: readSnapshotInterval(source),
+          }),
+        );
+        // Durable operation queue for this project (render/revise/render-tree
+        // and publish/agent runs). The restart sweep marks queued/running
+        // rows interrupted; LLM work is never auto-replayed. Accepted-scene
+        // commits (render/revise/render-tree success) trigger the best-effort
+        // canonical publication refresh (plan 6.5); a failing refresh degrades
+        // the publication service without rolling back the accepted revision.
+        const operationService = createProjectOperationService({
+          projectId: project.projectId,
+          store: createProjectOperationStore(persistence.client),
+          session,
+          limits: operationLimits,
+          concurrencyLimiter: renderConcurrencyLimiter,
+          onStatusChange: (record) => {
+            // Store-first SSE (plan 4.7): the durable row was persisted before
+            // this observer fires; broadcast the derived receipt to every
+            // connected browser — ALL kinds (render/revise/render-tree/
+            // publish/agent-run) and ALL status transitions (queued→running→
+            // succeeded/failed/stale/cancelled/interrupted).
+            publishAuthoringEvent({
+              type: 'operation-updated',
+              projectId: record.projectId,
+              receipt: receiptFromRecord(record),
+              at: record.updatedAt,
+            });
+            if (
+              record.kind === 'render' ||
+              record.kind === 'revise' ||
+              record.kind === 'render-tree'
+            ) {
+              if (record.status === 'succeeded') {
+                publicationServices
+                  .get(record.projectId)
+                  ?.refreshCanonical({ actorId: record.actorId, operationId: record.operationId })
+                  .catch(() => undefined);
+              }
+            }
+          },
+        });
+        await operationService.start();
+        operationServices.set(project.projectId, operationService);
+        // Durable publication service: publish enqueues a `publish` operation
+        // through the queue above; refresh/status read the same repository.
+        publicationServices.set(
+          project.projectId,
+          createProjectPublicationService({
+            projectId: project.projectId,
+            session,
+            projectRoot: project.root,
+            publicationStore: createProjectPublicationStore(persistence.client),
+            operations: operationService,
+          }),
+        );
         const now = new Date().toISOString();
         const existing = await persistence.client.request('getProject', {
           projectId: project.projectId,
@@ -754,6 +1252,7 @@ export async function startWorkbench(
           createdAt: existing?.createdAt ?? now,
           updatedAt: now,
         });
+        const statusReporter = new FileProjectStatusReporter(project.root);
         const projectAuthoring = await createProjectAuthoringRuntime({
           projectId: project.projectId,
           projectRoot: project.root,
@@ -764,7 +1263,112 @@ export async function startWorkbench(
           persistence: persistence.client,
           yjsCore,
           events: { publish: publishAuthoringEvent },
+          coordinator,
+          authorityToken,
+          statusReporter,
+          extensionRegistrar: extensionRegistrarFor(project.projectId),
         });
+        statusReporters.set(project.projectId, statusReporter);
+        // Review/gate service over the append-only Core review stream. Reads
+        // are pure projections; mutations write durable 'review' /
+        // 'release-gate' operation records under the caller grant.
+        reviewServices.set(
+          project.projectId,
+          createHostReviewService({
+            projectId: project.projectId,
+            session,
+            operationStore: createProjectOperationStore(persistence.client),
+            // Store-first SSE (plan 4.7): review/release-gate records are
+            // written directly to the durable queue (mirroring the authoring
+            // coordinator), so the same post-persist broadcast keeps the
+            // Operation Center live for those kinds too.
+            onStatusChange: (record) => {
+              publishAuthoringEvent({
+                type: 'operation-updated',
+                projectId: record.projectId,
+                receipt: receiptFromRecord(record),
+                at: record.updatedAt,
+              });
+            },
+            // A gate resolution that promotes a candidate is an accepted-scene
+            // commit: best-effort canonical publication refresh (plan 6.5).
+            onGateAccepted: () => {
+              publicationServices
+                .get(project.projectId)
+                ?.refreshCanonical()
+                .catch(() => undefined);
+            },
+          }),
+        );
+        // Built-in Agent run service (plan 9.4): constructed only when the
+        // `agent-chat` gate passes. The model port is built per project from
+        // the same profile configuration + credential the provider uses (the
+        // credential stays inside the Host; only secret-free options cross).
+        if (agentChatEnabled) {
+          const profileConfig = activeConfiguration?.providers[profileId];
+          // Production construction is credential-backed and may fail when no
+          // key is stored yet (or the AI SDK client rejects empty options):
+          // the project must still open — the Agent surface simply stays
+          // absent for it (fail closed, feature derived from registered
+          // services only). Tests/parity inject a deterministic port.
+          let agentModel: WorkbenchAgentModelPort | null = config.agentModel ?? null;
+          if (agentModel === null) {
+            try {
+              agentModel = createWorkbenchAgentModelAdapter({
+                baseURL: profileConfig?.baseUrl ?? DEFAULT_AI_SDK_BASE_URL,
+                model: profileConfig?.model ?? DEFAULT_AI_SDK_MODEL,
+                apiKey:
+                  (await credentialStore.get(providerCredentialKey(profileId)).catch(() => null)) ??
+                  undefined,
+              });
+            } catch {
+              agentModel = null;
+            }
+          }
+          if (agentModel !== null && agentModel.supportsToolCalls) {
+            // Persist the built-in Agent principal's capability grant for
+            // this project's owner/maintainer users (plan 9.6): the session
+            // gate re-loads the row by capabilityId before every phase, and
+            // without it render prepare/commit (and every
+            // capability-checked effect) would be DENIED for the built-in
+            // caller. Mirrors the parity-matrix harness row exactly.
+            await ensureBuiltinAgentGrants(project.projectId);
+            const projectAuthoringRuntime = authoring.get(project.projectId);
+            const reviewService = reviewServices.get(project.projectId);
+            const publicationService = publicationServices.get(project.projectId);
+            const executor = createProjectToolExecutor(session, {
+              family: 'project',
+              operations: operationService,
+              revision: projectAuthoringRuntime?.revision,
+              stateProjection: stateProjections.get(project.projectId),
+              extensionRegistrar: extensionRegistrarFor(project.projectId),
+              coordinator:
+                projectAuthoringRuntime === undefined
+                  ? undefined
+                  : createMcpAuthoringCoordinatorPort({
+                      session,
+                      coordinator: projectAuthoringRuntime.coordinator,
+                      documents: projectAuthoringRuntime.documents,
+                      capabilities,
+                    }),
+              ...(reviewService === undefined ? {} : { review: reviewService }),
+              ...(publicationService === undefined ? {} : { publication: publicationService }),
+            });
+            const agentService = createWorkbenchAgentRunService({
+              projectId: project.projectId,
+              store: createAgentStore(persistence.client),
+              executor,
+              model: agentModel,
+              operations: operationService,
+              agent: {
+                maxTurns: activeConfiguration?.agent.maxTurns ?? 16,
+                maxToolCalls: activeConfiguration?.agent.maxToolCalls ?? 64,
+              },
+            });
+            await agentService.start();
+            agentRunServices.set(project.projectId, agentService);
+          }
+        }
         let authoringWatcher: ProjectAuthoringTreeWatcher;
         try {
           authoringWatcher = createProjectAuthoringTreeWatcher({
@@ -778,41 +1382,42 @@ export async function startWorkbench(
         authoring.set(project.projectId, projectAuthoring);
         authoringWatchers.set(project.projectId, authoringWatcher);
         projectConfiguration.set(project.projectId, project);
-        if (agentTasks !== null) {
-          const command = createAgentCommandService({
-            session,
-            documents: projectAuthoring.documents,
-            presence: { isHumanEditing: () => session.hasHumanPresence },
-          });
-          agentProjects.set(project.projectId, {
-            projectId: project.projectId,
-            documents: projectAuthoring.documents,
-            suggestions: createAgentSuggestionService({
-              documents: projectAuthoring.documents,
-              tasks: agentTasks,
-              command,
-              presence: { isHumanEditing: () => session.hasHumanPresence },
-            }),
-            async issueCapability(input) {
-              const issued = await capabilities.issue({
-                userId: input.principal.userId,
-                projectId: project.projectId,
-                scopes: ['mcp:author'],
-              });
-              return { capabilityId: issued.grant.capabilityId, scopes: issued.grant.scopes };
-            },
-          });
-        }
+        // Projects opened after the listener started (admin reopen) are
+        // promoted immediately; the initial sync is promoted after start.
+        await markProjectReady(project.projectId);
         return session;
       },
       closeSession: async (session) => {
-        agentProjects.delete(session.projectId);
+        // Drain/stop the project operation service before the authoring
+        // runtime is torn down; no timers are left behind.
+        await operationServices.get(session.projectId)?.close();
+        operationServices.delete(session.projectId);
         const authoringWatcher = authoringWatchers.get(session.projectId);
         authoringWatchers.delete(session.projectId);
         authoringWatcher?.dispose();
         const projectAuthoring = authoring.get(session.projectId);
         authoring.delete(session.projectId);
+        statusReporters.delete(session.projectId);
+        reviewServices.delete(session.projectId);
+        publicationServices.delete(session.projectId);
+        agentRunServices.get(session.projectId)?.close();
+        agentRunServices.delete(session.projectId);
+        const stateProjection = stateProjections.get(session.projectId);
+        stateProjections.delete(session.projectId);
+        await stateProjection?.dispose().catch(() => undefined);
         await projectAuthoring?.dispose();
+        // Plugin hooks shut down in reverse registration order after the
+        // authoring runtime is torn down; a second close is a no-op because
+        // the activation is removed from the map here.
+        const pluginActivation = pluginActivations.get(session.projectId);
+        pluginActivations.delete(session.projectId);
+        await shutdownNodePlugins(pluginActivation?.hooksManager ?? null).catch(() => undefined);
+        // Release the project authority on close so another Host (or a
+        // standalone writer) can take over. Instance-CAS: safe even if the
+        // lease was already released by the startup-failure path.
+        stopHeartbeat(session.projectId);
+        authorityTokens.delete(session.projectId);
+        await releaseProjectAuthority(session.projectId).catch(() => undefined);
       },
     });
     await runtimeLifecycle.sync(configuredProjects);
@@ -845,6 +1450,24 @@ export async function startWorkbench(
         current: BrowserSessionPrincipalV1,
       ): Promise<readonly BrowserProjectSummaryV1[]> => projectAccess.listProjects(current),
     };
+    // Feature list derived ONLY from already-registered Host services: each
+    // capability maps to a real mounted route (project home, source studio,
+    // scene canvas, graph/route) plus the review MCP tools and status
+    // projection (review-hub, plan Step 5) and the publication service + MCP
+    // tools + browser publication routes (publication, plan Step 6.6).
+    // agent-chat is derived only when the full gate passes (V3 agent.enabled
+    // + tool-call-ready model + parity flag, plan 9.6); the browser surface
+    // is only constructed when projects are configured, so the list is never
+    // empty here.
+    const launchFeatures: readonly WorkbenchProjectFeatureV1[] = [
+      'project-home',
+      'source-studio',
+      'scene-canvas',
+      'graph-route',
+      'review-hub',
+      'publication',
+      ...(agentChatEnabled ? (['agent-chat'] as const) : []),
+    ];
     const browser: HostServerOptions['browser'] =
       configuredProjects.length === 0
         ? undefined
@@ -853,6 +1476,18 @@ export async function startWorkbench(
             principal,
             authorization,
             catalog,
+            capabilities: {
+              loadCapabilities: async (projectId) => ({
+                version: 1 as const,
+                projectId,
+                // Derived from registered services only: a project whose
+                // Agent run service could not be constructed (e.g. missing
+                // provider credential) never claims the capability.
+                features: launchFeatures.filter(
+                  (feature) => feature !== 'agent-chat' || agentRunServices.has(projectId),
+                ),
+              }),
+            },
             overview: {
               loadOverview: async (projectId) => {
                 const session = sessions.get(projectId);
@@ -950,6 +1585,19 @@ export async function startWorkbench(
     const adminSession =
       defaultSession ??
       (configuredProjects.length > 0 ? sessions.get(configuredProjects[0].projectId) : null);
+    // Trusted-plugin discovery (plan 7.7): project roots resolve from the
+    // live active configuration (admin-added projects included) with a
+    // fallback to the launch-time list. Discovery itself makes no trust
+    // decision; it only reports on-disk name/version/moduleHash identities.
+    const pluginDiscoveryPort: PluginDiscoveryAdminPort = createPluginDiscoveryPort({
+      resolveProjectRoot: async (projectId) => {
+        const active = await configurationService.readActive();
+        const project =
+          active?.configuration.projects.find((entry) => entry.projectId === projectId) ??
+          configuredProjects.find((entry) => entry.projectId === projectId);
+        return project?.root ?? null;
+      },
+    });
     const adminConfiguration: McpAdminPort = createLaunchAdminPort({
       configuration: configurationService,
       runtime: runtimeLifecycle,
@@ -958,6 +1606,7 @@ export async function startWorkbench(
       devices,
       persistence: persistence.client,
       status: setupStatus,
+      plugins: pluginDiscoveryPort,
     });
     const mcpAuthorization = createMcpAuthorizationPort({
       sessions: auth,
@@ -1002,16 +1651,43 @@ export async function startWorkbench(
               if (session === null) return null;
               const projectAuthoring = authoring.get(projectId);
               if (projectAuthoring === undefined) return null;
+              const reviewService = reviewServices.get(projectId);
+              const publicationService = publicationServices.get(projectId);
               return createProjectSessionMcpRegistry(session, {
                 family: 'project',
+                operations: operationServices.get(projectId),
                 revision: projectAuthoring.revision,
+                stateProjection: stateProjections.get(projectId),
                 coordinator: createMcpAuthoringCoordinatorPort({
                   session,
                   coordinator: projectAuthoring.coordinator,
                   documents: projectAuthoring.documents,
                   capabilities,
                 }),
-                reference: await referencePortFor(projectId),
+                // Plugin activation health (plan 7.3): a live accessor so
+                // `nova_status` reports the current activation snapshot at
+                // call time; null when plugins were never activated.
+                plugins: () => pluginActivations.get(projectId) ?? null,
+                // Enabled-plugin extension gate (plan 7.5) for the accepted-
+                // source validation paths.
+                extensionRegistrar: extensionRegistrarFor(projectId),
+                ...(publicationService === undefined ? {} : { publication: publicationService }),
+                ...(reviewService === undefined
+                  ? {}
+                  : {
+                      review: reviewService,
+                      // Live projections: `nova_status` reads the append-only
+                      // review stream and the durable publication store at
+                      // call time (plan Steps 5/6), never cached snapshots.
+                      status: {
+                        review: () => reviewService.workflowReviewProjection(),
+                        ...(publicationService === undefined
+                          ? {}
+                          : {
+                              publication: () => publicationService.workflowPublicationProjection(),
+                            }),
+                      },
+                    }),
               });
             },
           });
@@ -1081,6 +1757,7 @@ export async function startWorkbench(
       },
       runtime: runtimeLifecycle,
       status: setupStatus,
+      plugins: pluginDiscoveryPort,
       loadOwnerProfile: async () => {
         const owner = await persistence.client.request('loadOwner', undefined);
         return owner === null
@@ -1105,8 +1782,24 @@ export async function startWorkbench(
         coordinators: {
           get: (projectId) => authoring.get(projectId)?.coordinator ?? null,
         },
+        mutations: {
+          get: (projectId) => {
+            const session = sessions.get(projectId);
+            const projectAuthoring = authoring.get(projectId);
+            if (session === null || projectAuthoring === undefined) return null;
+            return createBrowserAuthoringMutationPort({
+              session,
+              coordinator: projectAuthoring.coordinator,
+              documents: projectAuthoring.documents,
+              capabilities,
+            });
+          },
+        },
         revision: {
           get: (projectId) => authoring.get(projectId)?.revision ?? null,
+        },
+        operations: {
+          get: (projectId) => operationServices.get(projectId) ?? null,
         },
         capabilities: {
           async resolve(input) {
@@ -1120,16 +1813,72 @@ export async function startWorkbench(
         },
         events: eventSource,
       }).register(hostServer);
-    }
-    if (agentProjects.size > 0) {
-      createBrowserAgentApi({
+      // Guarded publication surface (plan Step 6.6): catalog/get/bounded read
+      // routes plus the publish trigger, all through ProjectPublicationService.
+      createBrowserPublicationApi({
         principal,
+        access: projectAccess,
         authorization,
         catalog,
-        projects: {
-          get: (projectId) => agentProjects.get(projectId) ?? null,
+        publications: {
+          get: (projectId) => publicationServices.get(projectId) ?? null,
+        },
+        capabilities: {
+          async resolve(input) {
+            const issued = await capabilities.issue({
+              userId: input.principal.userId,
+              projectId: input.projectId,
+              scopes: ['mcp:submit'],
+            });
+            return issued.grant;
+          },
         },
       }).register(hostServer);
+      // Guarded review surface (plan Step 5): comment list/get/add/update, the
+      // safe event trail, and release-gate list/decide, all through the
+      // per-project HostReviewService (durable 'review' / 'release-gate'
+      // operation records under the caller grant). Comment mutations require
+      // an `mcp:author` grant; gate decisions require `mcp:submit`.
+      createBrowserReviewApi({
+        principal,
+        access: projectAccess,
+        authorization,
+        catalog,
+        reviews: {
+          get: (projectId) => reviewServices.get(projectId) ?? null,
+        },
+        capabilities: {
+          async resolve(input) {
+            const issued = await capabilities.issue({
+              userId: input.principal.userId,
+              projectId: input.projectId,
+              scopes: [input.scope],
+            });
+            return issued.grant;
+          },
+        },
+      }).register(hostServer);
+      // Guarded Agent chat surface (plan 9.5): conversation/run routes plus
+      // SSE progress and cancel/retry. Registered ONLY when the `agent-chat`
+      // gate passes, so a disabled Agent has no reachable route at all.
+      if (agentChatEnabled) {
+        createBrowserAgentChatApi({
+          principal,
+          access: projectAccess,
+          authorization,
+          catalog,
+          roleResolver: async (userId, projectId) => {
+            const owner = await persistence.client
+              .request('loadOwner', undefined)
+              .catch(() => null);
+            if (owner?.userId === userId) return 'maintainer';
+            return memberships.getMembership(userId, projectId);
+          },
+          services: {
+            get: (projectId) => agentRunServices.get(projectId) ?? null,
+          },
+        }).register(hostServer);
+      }
     }
     hostServer.registerPublicAuthPostRoute('/api/v1/auth/login', async (c) => {
       const body = await bodyObject(c.req.raw);
@@ -1164,6 +1913,10 @@ export async function startWorkbench(
       handle.mode === 'unix'
         ? `http+unix://${handle.address}`
         : `http://${handle.host}:${handle.port}`;
+    // The listener is live: promote every opened project lease to `ready` and
+    // start its heartbeat so the lease can never expire under this Host.
+    hostEndpoint = endpoint;
+    for (const project of configuredProjects) await markProjectReady(project.projectId);
     return {
       host: hostServer,
       endpoint,
@@ -1171,17 +1924,28 @@ export async function startWorkbench(
       auth,
       provider,
       close: async () => {
+        for (const projectId of [...heartbeatTimers.keys()]) stopHeartbeat(projectId);
         await disposeAuthoringRuntimes?.();
         configurationService.dispose();
         await hostServer.close();
+        // Instance-CAS release for every coordinator this Host created; safe
+        // to run after the listener is gone and for never-acquired projects.
+        for (const projectId of [...coordinators.keys()]) {
+          await releaseProjectAuthority(projectId).catch(() => undefined);
+        }
         await persistence.dispose();
       },
     };
   } catch (error) {
-    // Partial-launch failure: dispose the worker (bounded terminate) and any
-    // already-created server so no thread or port survives the failed start.
+    // Partial-launch failure: dispose the worker (bounded terminate), any
+    // already-created server and every acquired authority lease so no thread,
+    // port or lease survives the failed start.
+    for (const projectId of [...heartbeatTimers.keys()]) stopHeartbeat(projectId);
     await disposeAuthoringRuntimes?.().catch(() => undefined);
     await host?.close().catch(() => undefined);
+    for (const projectId of [...coordinators.keys()]) {
+      await releaseProjectAuthority(projectId).catch(() => undefined);
+    }
     await persistence.dispose();
     throw error;
   }
@@ -1198,6 +1962,8 @@ export interface LaunchAdminPortOptions {
   readonly devices: McpDevicePairingService;
   readonly persistence: PersistenceWorkerClient;
   readonly status: SetupStatusBuilder;
+  /** Trusted-plugin discovery; absent → the admin plugin tools fail closed. */
+  readonly plugins?: PluginDiscoveryAdminPort;
 }
 
 function adminFailure(
@@ -1268,7 +2034,7 @@ function v1Candidate(
     version: 1,
     projects,
     defaultProjectId,
-    provider: active?.configuration.provider ?? null,
+    provider: active?.configuration.providers.default ?? null,
     network: active?.configuration.network ?? {
       mode: 'loopback',
       port: 8787,
@@ -1288,7 +2054,8 @@ function v1Candidate(
  * rather than faking success.
  */
 export function createLaunchAdminPort(options: LaunchAdminPortOptions): McpAdminPort {
-  const { configuration, runtime, memberships, auth, devices, persistence, status } = options;
+  const { configuration, runtime, memberships, auth, devices, persistence, status, plugins } =
+    options;
 
   /** The project list currently registered in the active configuration. */
   async function configuredProjects(): Promise<readonly WorkbenchProjectConfigurationV1[]> {
@@ -1768,6 +2535,17 @@ export function createLaunchAdminPort(options: LaunchAdminPortOptions): McpAdmin
         };
       }
       return { version: 1, operationHandle: handle, kind: null, operation: null };
+    },
+    // Trusted-plugin discovery (plan 7.7): reports the name/version/moduleHash
+    // triples the Host found under the project root; the owner admin builds
+    // trusted allowlists from these identities only. Absent port → fail
+    // closed (the registry surfaces NO_ADMIN_SERVICE).
+    pluginsDiscovered: async (input) => {
+      if (plugins === undefined) {
+        throw new Error('Plugin discovery is not available on this Host.');
+      }
+      const discovered = await plugins.discover({ projectId: input.projectId });
+      return { version: 1, projectId: input.projectId, plugins: discovered };
     },
   };
 }

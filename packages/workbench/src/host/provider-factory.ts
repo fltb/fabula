@@ -30,9 +30,17 @@ import type {
   WorkbenchProviderConfigurationV1,
   WorkbenchProviderReadViewV1,
 } from '../contracts/configuration.js';
-import type { ProviderCredentialStore } from './providers/index.js';
+import {
+  DEFAULT_PROVIDER_PROFILE,
+  type ProviderCredentialStore,
+  providerCredentialKey,
+} from './providers/index.js';
 
-/** Provider id under which the Host stores the AI-SDK API key. */
+/**
+ * Provider id under which legacy (pre-profile) Hosts stored the AI-SDK API
+ * key. New Hosts store profile-scoped keys (`ai-sdk:<profileId>`); the
+ * credential store falls back to this bare key for the default profile.
+ */
 export const HOST_AI_SDK_PROVIDER_ID = 'ai-sdk';
 
 /**
@@ -64,14 +72,24 @@ export class HostProviderError extends Error {
 export interface HostProviderFactoryOptions {
   /** Credential boundary; the only source of the API key. */
   readonly store: ProviderCredentialStore;
-  /** Validated Phase-0 provider DTO; null when no provider is configured. */
+  /** Validated Phase-0 provider DTO for the default profile; null when none is configured. */
   readonly configuration: WorkbenchProviderConfigurationV1 | null;
   /**
    * Test/dev-only provider override (e.g. `MockProvider`). When present the
-   * factory reports configured and `create()` returns the override without
-   * touching the credential store. Production construction never uses it.
+   * factory reports configured and every `create*()` returns the override
+   * without touching the credential store. Production construction never
+   * uses it.
    */
   readonly override?: LLMProvider;
+  /**
+   * Test/dev-only PER-PROJECT override constructor (e.g. the deterministic
+   * mock built for each project session with that project's reference dir).
+   * When present (and no shared `override` is set), `createForProfile`
+   * builds a FRESH provider per call from the given project root, so no two
+   * sessions share a provider instance. Production construction never uses
+   * it, and the credential-backed path is untouched when it is absent.
+   */
+  readonly overrideForProject?: (projectRoot: string) => LLMProvider;
 }
 
 /** Minimal completion used as the default validation probe. */
@@ -133,11 +151,18 @@ async function abortable<T>(task: Promise<T>, signal: AbortSignal | undefined): 
  * Credential-backed provider factory. One instance per Host: it owns the
  * secret-free readiness state and constructs runtime providers with fully
  * explicit AI SDK options.
+ *
+ * Construction is per provider profile (V3 `providers` record): each profile
+ * reads its own `ai-sdk:<profileId>` credential key and builds its own
+ * provider instance, so no two projects ever share a runtime provider
+ * instance. `create()` is the default-profile convenience path and delegates
+ * to {@link createForProfile}.
  */
 export class HostProviderFactory {
   readonly #store: ProviderCredentialStore;
   readonly #configuration: WorkbenchProviderConfigurationV1 | null;
   readonly #override: LLMProvider | undefined;
+  readonly #overrideForProject: ((projectRoot: string) => LLMProvider) | undefined;
   #lastValidation: WorkbenchProjectValidationV1 = 'unvalidated';
   #lastValidatedAt: string | null = null;
 
@@ -145,6 +170,7 @@ export class HostProviderFactory {
     this.#store = options.store;
     this.#configuration = options.configuration;
     this.#override = options.override;
+    this.#overrideForProject = options.overrideForProject;
   }
 
   /**
@@ -153,18 +179,23 @@ export class HostProviderFactory {
    * authoritative readiness for the AI-SDK provider.
    */
   get configured(): boolean {
-    return this.#override !== undefined || this.#configuration !== null;
+    return (
+      this.#override !== undefined ||
+      this.#overrideForProject !== undefined ||
+      this.#configuration !== null
+    );
   }
 
-  /** True when the credential store holds a key for the AI-SDK provider. */
+  /** True when the credential store holds a key for the default profile. */
   async hasCredential(): Promise<boolean> {
-    return (await this.#store.get(HOST_AI_SDK_PROVIDER_ID)) !== null;
+    return (await this.#store.get(providerCredentialKey(DEFAULT_PROVIDER_PROFILE))) !== null;
   }
 
   /** Secret-free readiness view (Phase-0 `WorkbenchProviderReadViewV1` shape). */
   async readiness(): Promise<WorkbenchProviderReadViewV1> {
     const configured =
       this.#override !== undefined ||
+      this.#overrideForProject !== undefined ||
       (this.#configuration !== null && (await this.hasCredential()));
     return {
       kind: 'ai-sdk',
@@ -179,30 +210,56 @@ export class HostProviderFactory {
   }
 
   /**
-   * Construct the runtime provider with explicit AI SDK options. The
+   * Construct the runtime provider for the default profile (`default`). The
    * credential is read from the store and passed as `apiKey`; endpoint/model
    * default in-module when the configuration omits them, so `AiSdkProvider`
    * cannot fall back to process environment values.
    */
   async create(): Promise<LLMProvider> {
+    return this.createForProfile(DEFAULT_PROVIDER_PROFILE, this.#configuration ?? undefined);
+  }
+
+  /**
+   * Construct a runtime provider for one named provider profile. Each call
+   * builds its own provider instance from that profile's configuration and
+   * reads the `ai-sdk:<profileId>` credential key, so profiles never share a
+   * runtime provider instance.
+   *
+   * `projectRoot` is required only for the per-project dev override seam
+   * (`overrideForProject`); the credential-backed path never uses it.
+   */
+  async createForProfile(
+    profileId: string,
+    configuration: WorkbenchProviderConfigurationV1 | undefined,
+    projectRoot?: string,
+  ): Promise<LLMProvider> {
     if (this.#override !== undefined) return this.#override;
-    if (this.#configuration === null) {
+    if (this.#overrideForProject !== undefined) {
+      if (projectRoot === undefined) {
+        throw new HostProviderError(
+          'PROVIDER_NOT_CONFIGURED',
+          `Provider profile "${profileId}" needs a project root for the per-project dev override`,
+        );
+      }
+      return this.#overrideForProject(projectRoot);
+    }
+    if (configuration === undefined) {
       throw new HostProviderError(
         'PROVIDER_NOT_CONFIGURED',
-        'The AI provider is not configured; complete Workbench setup first',
+        `Provider profile "${profileId}" is not configured; complete Workbench setup first`,
       );
     }
-    const apiKey = await this.#store.get(HOST_AI_SDK_PROVIDER_ID);
+    const apiKey = await this.#store.get(providerCredentialKey(profileId));
     if (apiKey === null) {
       throw new HostProviderError(
         'PROVIDER_CREDENTIAL_UNAVAILABLE',
-        'No stored AI provider credential; save one through Workbench setup or the owner dashboard',
+        `No stored AI provider credential for profile "${profileId}"; save one through Workbench setup or the owner dashboard`,
       );
     }
     return new AiSdkProvider({
-      baseURL: this.#configuration.baseUrl ?? DEFAULT_AI_SDK_BASE_URL,
+      baseURL: configuration.baseUrl ?? DEFAULT_AI_SDK_BASE_URL,
       apiKey,
-      model: this.#configuration.model ?? DEFAULT_AI_SDK_MODEL,
+      model: configuration.model ?? DEFAULT_AI_SDK_MODEL,
     });
   }
 
@@ -216,7 +273,7 @@ export class HostProviderFactory {
       this.#lastValidation = lastValidation;
       this.#lastValidatedAt = new Date().toISOString();
     };
-    if (this.#override !== undefined) {
+    if (this.#override !== undefined || this.#overrideForProject !== undefined) {
       stamp('valid');
       return [];
     }

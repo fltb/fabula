@@ -24,8 +24,12 @@
  * mapping (401 vs 403) is exposed for the transport via
  * {@link mcpAuthFailureStatus}.
  */
-import { MCP_ADMIN_SCOPE, PROJECT_ACCESS_ROLE_GRANTS } from '../../contracts/configuration.js';
-import type { AuthUserRecord } from '../../contracts/persistence.js';
+import {
+  MCP_ADMIN_SCOPE,
+  PROJECT_ACCESS_ROLE_GRANTS,
+  PROJECT_ACCESS_ROLES,
+} from '../../contracts/configuration.js';
+import type { AuthUserRecord, CapabilityState } from '../../contracts/persistence.js';
 import type {
   AgentCapabilityFailureCode,
   AgentCapabilityGrant,
@@ -110,8 +114,12 @@ export interface McpAuthorizationPortOptions {
    * is rejected here. Mirrors the Yjs `SessionAuthPortOptions` contract.
    */
   readonly sessions: Pick<LocalAuthService, 'getSession'>;
-  /** Shared AgentCapabilityService; validates the opaque token at project/scopes. */
-  readonly capabilities: Pick<AgentCapabilityService, 'validate'>;
+  /**
+   * Shared AgentCapabilityService: validates the opaque token at
+   * project/scopes for browser mode, and persists the server-derived device
+   * grant row for device mode.
+   */
+  readonly capabilities: Pick<AgentCapabilityService, 'validate' | 'persistGrant'>;
   /** Shared project ACL/lifecycle gate, checked before capability/resource use. */
   readonly access?: Pick<ProjectAccessService, 'authorize'>;
   /** Durable device-credential verification for device mode (owner-paired). */
@@ -134,6 +142,21 @@ const FAILURE_MESSAGES: Record<McpAuthFailureCode, string> = {
   INSUFFICIENT_ROLE: 'The caller does not have the project role required for the requested scopes.',
   ADMIN_ROUTE_REQUIRED: 'The device credential is restricted to the admin route.',
 };
+
+/**
+ * Server-side failure to persist the device-mode capability grant. The
+ * presented credential itself verified; the request fails so the caller
+ * retries instead of receiving a confusing NOT_FOUND denial when the session
+ * gate re-loads the durable row for the enqueued operation.
+ */
+export class DeviceGrantPersistenceError extends Error {
+  override readonly name = 'DeviceGrantPersistenceError';
+  readonly code = 'DEVICE_GRANT_PERSIST_FAILED';
+
+  constructor(cause: unknown) {
+    super('The device capability grant could not be persisted; retry the request.', { cause });
+  }
+}
 
 /**
  * HTTP status for each typed denial. 401: the presented credentials are
@@ -180,19 +203,26 @@ function mapCapabilityFailure(code: AgentCapabilityFailureCode): McpAuthFailureC
 }
 
 /**
- * Default MCP authorization port over the Host session store, the shared
- * AgentCapabilityService, and the durable device verifier. Browser mode
- * requires a live session plus a matching capability token; device mode
- * verifies an owner-paired credential against the durable hash-only store and
- * derives the actor from the issuing owner. Fails closed on malformed input
- * (missing session, empty token, empty scopes) and on any mismatch.
+ * Inverse of {@link PROJECT_ACCESS_ROLE_GRANTS}: every grantable project
+ * scope → the least project role that grants it. Derived from the single
+ * grants constant so role rules never diverge; `mcp:admin` is owner-only and
+ * handled separately by the route check.
  */
-const MCP_SCOPE_REQUIRED_ROLE: Readonly<Record<string, ProjectAccessRole>> = {
-  'mcp:read': 'reader',
-  'mcp:render': 'reader',
-  'mcp:author': 'author',
-  'mcp:submit': 'maintainer',
-};
+const MCP_SCOPE_REQUIRED_ROLE: Readonly<Record<string, ProjectAccessRole>> = (() => {
+  const inverse: Record<string, ProjectAccessRole> = {};
+  for (const role of PROJECT_ACCESS_ROLES) {
+    for (const scope of PROJECT_ACCESS_ROLE_GRANTS[role].scopes) {
+      const current = inverse[scope];
+      if (
+        current === undefined ||
+        PROJECT_ACCESS_ROLE_GRANTS[role].rank < PROJECT_ACCESS_ROLE_GRANTS[current].rank
+      ) {
+        inverse[scope] = role;
+      }
+    }
+  }
+  return inverse;
+})();
 
 /** Resolve the highest project role represented by every requested scope. */
 function requiredProjectRole(
@@ -231,6 +261,14 @@ async function projectGrant(
   return result.ok ? { projectId, role: result.grant.role } : null;
 }
 
+/**
+ * Default MCP authorization port over the Host session store, the shared
+ * AgentCapabilityService, and the durable device verifier. Browser mode
+ * requires a live session plus a matching capability token; device mode
+ * verifies an owner-paired credential against the durable hash-only store and
+ * derives the actor from the issuing owner. Fails closed on malformed input
+ * (missing session, empty token, empty scopes) and on any mismatch.
+ */
 export function createMcpAuthorizationPort(
   options: McpAuthorizationPortOptions,
 ): McpAuthorizationPort {
@@ -286,6 +324,28 @@ export function createMcpAuthorizationPort(
         );
         if (deviceProjectGrant === null)
           return { ok: false, failure: failure('INSUFFICIENT_ROLE') };
+
+        // The device credential is authoritative: mirror it into the durable
+        // capability store so the session's per-effect gate (`checkGrant`,
+        // which re-loads the row) accepts the device caller instead of
+        // denying with NOT_FOUND. The upsert is idempotent — a re-pair or
+        // scope/expiry change overwrites the previous row. A failed persist
+        // is a server-side storage failure, not a credential failure: throw a
+        // typed error so the caller retries rather than later receiving a
+        // confusing NOT_FOUND denial from the session gate.
+        const deviceGrant: CapabilityState = {
+          capabilityId: `device:${verified.device.deviceId}`,
+          userId: owner.userId,
+          projectId,
+          scope: [...verified.device.scopes],
+          version: 1,
+          expiresAt: verified.device.expiresAt,
+        };
+        try {
+          await options.capabilities.persistGrant(deviceGrant);
+        } catch (cause) {
+          throw new DeviceGrantPersistenceError(cause);
+        }
 
         return {
           ok: true,

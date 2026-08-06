@@ -4,9 +4,12 @@
  * Every tool derives its inputs exclusively from the session's accepted
  * `session.source` (never client-supplied paths) and, for effects, from the
  * session's serialized operation queue. Read tools (`mcp:read`) are pure
- * reads of the accepted source/projection; render (`mcp:render`) runs through
- * `session.enqueueOperation` with a server-derived operation id and actor id,
- * so no request field can impersonate an actor or reuse an operation id.
+ * reads of the accepted source/projection; render (`mcp:render`) enqueues a
+ * durable operation through the injected ProjectOperationService, whose
+ * runner uses the session's two-phase detached lane (prepare/commit inside
+ * the serialized lane, execute outside it) with a server-derived operation
+ * id and actor id, so no request field can impersonate an actor or reuse an
+ * operation id.
  *
  * Tool input schemas are plain JSON Schema objects — this module has no zod
  * dependency; the transport converts them at registration if needed.
@@ -14,27 +17,49 @@
  * (nonsecret), never thrown.
  */
 
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
-  getProjectStatus,
+  type BranchPath,
+  buildWorkflowStatus,
   type JsonValue,
   listEntities,
+  type NovelValidationResult,
+  type PluginExtensionSchemaRegistrar,
+  type ProjectReferencePacketV1,
   type ProjectSourceSnapshotV1,
+  type ReviewGateV1,
   sanitizeError,
   showEntity,
+  type ValidationIssue,
   validateNovel,
+  type WorkflowExecutionProjectionV1,
+  type WorkflowPublicationProjectionV1,
+  type WorkflowReviewProjectionV1,
+  type WorkflowStatusV1,
+  type WorkflowWorkingProjectionV1,
 } from '@novalistically/core';
 import {
+  commitEditorialCandidates,
+  type EditorialCandidateSetV1,
+  type EditorialCandidatesOutcome,
+  type EditorialCommitResultV1,
   type EditorialRenderRequestV1,
   type EditorialRuntime,
+  executeEditorialCandidates,
   getSourceDocument,
   listSourceDocuments,
   previewSourceChange,
+  type ReleaseGateResolutionV1,
+  type RenderGameDialogueTreeRequestV1,
+  type RenderGameDialogueTreeResult,
   type RenderNovelResult,
-  renderNovel,
+  renderGameDialogueTree,
   type SceneSelector,
   type SourceChangeV1,
 } from '@novalistically/core/editorial';
+import type { SourceAnalysisOptions, SourceDiagnosticV1 } from '@novalistically/core/source';
+import { diffEvent } from '@novalistically/core/tooling';
+import type { NodePluginActivationResult } from '@novalistically/node-host';
 import {
   AUTHORING_DOCUMENT_LIMITS_V1,
   MCP_TOOL_CATALOG_V1,
@@ -50,9 +75,11 @@ import {
   type ReferenceJobV1,
   type ReferenceRangeV1,
 } from '@novalistically/workbench-protocol';
+import YAML from 'yaml';
 import {
   AUTHORING_CONTRACT_VERSION,
   type AuthoringFailureV1,
+  type AuthoringNextWorkingActionV1,
   type AuthoringStateV1,
   type McpAuthoringApplyInputV1,
   type McpAuthoringApplyOutputV1,
@@ -75,6 +102,7 @@ import {
   type McpConflictResolveOutputV1,
   type McpOperationGetInputV1,
   type McpOperationGetOutputV1,
+  type WorkingValidationResultV1,
 } from '../../contracts/authoring.js';
 import {
   type ConfigChangeRequestV1,
@@ -83,8 +111,28 @@ import {
   type ProjectAccessRole,
   type WorkbenchConfigurationV1,
 } from '../../contracts/configuration.js';
+import {
+  WORKBENCH_GRAPH_VIEW_VERSION,
+  type WorkbenchBranchDecisionV1,
+  type WorkbenchRouteSelectorV1,
+} from '../../contracts/graph.js';
+import type { ProjectPublicationRecordV1 } from '../../contracts/persistence.js';
 import type { AuthoringRevisionPort } from '../authoring/types.js';
-import type { ProjectSession, SessionOperationResult } from '../project-session.js';
+import { projectCanonicalGraphRuntime } from '../graph-projection.js';
+import type {
+  ProjectOperationEnqueueResult,
+  ProjectOperationRunner,
+  ProjectOperationRunnerResult,
+  ProjectOperationService,
+} from '../operation-service.js';
+import type { ProjectSession, SessionDetachedOperationResult } from '../project-session.js';
+import type {
+  PublicationReadResultV1,
+  PublishEnqueueResultV1,
+  PublishPublicationRequestV1,
+} from '../publication/publication-service.js';
+import type { HostNewReviewCommentV1, HostReviewCommentV1 } from '../review/review-service.js';
+import type { CanonicalStateProjectionService } from '../state/canonical-state-projection.js';
 import type { McpAuthorizedCaller } from './auth.js';
 
 function toolDescriptor(name: string): McpToolDescriptorV1 {
@@ -173,6 +221,13 @@ export interface McpToolRegistry {
    * `permittedScopes`. tools/list must pass the caller's grant scopes.
    */
   list(permittedScopes: readonly string[]): readonly McpToolDefinition[];
+  /**
+   * Every definition this registry can serve (family-filtered), including
+   * tools a particular grant may not cover. Read-only; the shared
+   * `ProjectToolExecutor` and agent model use it to build the AI SDK tool
+   * set without duplicating handler or scope logic.
+   */
+  definitions(): readonly McpToolDefinition[];
   get(name: string): McpToolDefinition | null;
   /**
    * Run one tool. Re-checks the caller's grant against the tool's required
@@ -229,6 +284,87 @@ export interface McpAuthoringCoordinatorPort {
     input: McpConflictResolveInputV1,
     caller: McpAuthorizedCaller,
   ): Promise<McpConflictResolveOutputV1>;
+  /**
+   * Validate the materialized working layer without accepting it. CAS
+   * mismatches fail closed with typed `WORKSPACE_STALE` / `ACCEPTED_HASH_MISMATCH`
+   * errors; the accepted layer and authoring phase never change.
+   */
+  validateWorking(input: {
+    readonly expectedWorkspaceDigest: string;
+    readonly expectedAcceptedSourceHash: string | null;
+  }): Promise<WorkingValidationResultV1>;
+}
+
+/** Project-scoped comment read filter (wire mirror of the `nova_review_list` schema). */
+export interface McpReviewCommentFilterV1 {
+  readonly status?: HostReviewCommentV1['status'];
+  readonly severity?: HostReviewCommentV1['severity'];
+  readonly targetType?: string;
+  readonly targetId?: string;
+  /** Narrow to comments whose target.id equals this event id. */
+  readonly eventId?: string;
+}
+
+export type McpReviewCommentUpdateV1 =
+  | {
+      readonly action: 'replace';
+      readonly commentId: string;
+      readonly input: HostNewReviewCommentV1;
+    }
+  | {
+      readonly action: 'resolve' | 'wontfix' | 'reopen' | 'escalate';
+      readonly commentId: string;
+    };
+
+/**
+ * Host review/gate seam over the append-only Core review stream (plan Step 5).
+ * Every mutation derives actorId/capabilityVersion from the caller grant and
+ * writes a durable `ProjectOperationRecordV1`; gate decisions flow through
+ * Core `resolveReleaseGate` and never re-invoke the provider. Absent ports
+ * fail closed with a typed `REVIEW_SERVICE_UNAVAILABLE` error.
+ */
+export interface McpReviewPort {
+  readonly projectId: string;
+  listComments(filter?: McpReviewCommentFilterV1): Promise<readonly HostReviewCommentV1[]>;
+  getComment(commentId: string): Promise<HostReviewCommentV1 | null>;
+  addComment(
+    input: HostNewReviewCommentV1,
+    caller: McpAuthorizedCaller,
+  ): Promise<HostReviewCommentV1>;
+  updateComment(
+    input: McpReviewCommentUpdateV1,
+    caller: McpAuthorizedCaller,
+  ): Promise<HostReviewCommentV1>;
+  listGates(eventId?: string): Promise<readonly ReviewGateV1[]>;
+  decideGate(
+    input: {
+      readonly eventId: string;
+      readonly candidateRevisionId: string;
+      readonly decision: 'accept' | 'reject';
+      readonly reason: string;
+    },
+    caller: McpAuthorizedCaller,
+  ): Promise<ReleaseGateResolutionV1>;
+}
+
+/**
+ * Host publication seam (plan Step 6.6): the durable `publish` queue, the
+ * record store and the bounded artifact reader. Reads never leak absolute
+ * Host paths — records carry only `relativeOutputPath` and `read` returns
+ * bounded markdown slices. Absent ports fail closed with a typed
+ * `PUBLICATION_UNAVAILABLE` error.
+ */
+export interface McpPublicationPort {
+  readonly projectId: string;
+  /** Enqueue a durable `publish` operation; idempotency is source-scoped. */
+  publish(
+    input: PublishPublicationRequestV1,
+    caller: McpAuthorizedCaller,
+  ): Promise<PublishEnqueueResultV1>;
+  /** Read one durable row; null when absent. */
+  get(publicationId: string): Promise<ProjectPublicationRecordV1 | null>;
+  /** Bounded markdown slice of one written artifact. */
+  read(publicationId: string, offset: number, limit: number): Promise<PublicationReadResultV1>;
 }
 /** Owner-scoped configuration surface for `nova_admin_config_*` (revision CAS). */
 export interface McpAdminConfigurationPort {
@@ -291,6 +427,10 @@ export interface McpAdminOperationGetInput {
   readonly version: 1;
   readonly operationHandle: string;
 }
+export interface McpAdminPluginsDiscoveredInput {
+  readonly version: 1;
+  readonly projectId: string;
+}
 
 /** Narrow owner-admin service seams; every method is optional for fail-closed legacy wiring. */
 export interface McpAdminPort extends McpAdminConfigurationPort {
@@ -313,25 +453,160 @@ export interface McpAdminPort extends McpAdminConfigurationPort {
   deviceRevoke?: (input: McpAdminDeviceRevokeInput) => Promise<unknown>;
   operationList?: (input: McpAdminOperationListInput) => Promise<unknown>;
   operationGet?: (input: McpAdminOperationGetInput) => Promise<unknown>;
+  /** Discovered trusted-plugin identities for one configured project root. */
+  pluginsDiscovered?: (input: McpAdminPluginsDiscoveredInput) => Promise<unknown>;
 }
 
-/** Injected render implementation; defaults to Core `renderNovel` over session services. */
-export type McpRenderFunction = (
-  request: EditorialRenderRequestV1,
+/**
+ * Candidate/commit render seams for the two-phase render path. The runner
+ * calls `execute` (compile + provider + validation + archive) inside the
+ * detached execute phase and `commit` (accepted-head CAS + publication
+ * readiness) inside the detached commit phase; defaults are Core's
+ * `executeEditorialCandidates` / `commitEditorialCandidates`.
+ */
+export interface McpCandidatesSeam {
+  execute(
+    request: EditorialRenderRequestV1,
+    runtime: EditorialRuntime,
+  ): Promise<EditorialCandidatesOutcome>;
+  commit(
+    candidateSet: EditorialCandidateSetV1,
+    runtime: EditorialRuntime,
+  ): Promise<EditorialCommitResultV1>;
+}
+
+/** Injected dialogue-tree render implementation; defaults to Core `renderGameDialogueTree`. */
+export type McpRenderTreeFunction = (
+  request: RenderGameDialogueTreeRequestV1,
   runtime: EditorialRuntime,
-) => Promise<RenderNovelResult>;
+) => Promise<RenderGameDialogueTreeResult>;
+
+/**
+ * Host-supplied accepted-layer workflow status seams for `nova_status` and
+ * the derived `PROJECT_STATUS.md` refresh. Every member is optional so legacy
+ * wiring and tests degrade deterministically; an absent review/publication
+ * seam reports honest zeros / `missing` instead of fabricated state.
+ */
+export interface McpWorkflowStatusPort {
+  /**
+   * Review projection: a snapshot value or a live accessor (so `nova_status`
+   * reflects the append-only review stream at call time). When absent the
+   * workflow status reports honest zeros instead of invented counts.
+   */
+  readonly review?:
+    | WorkflowReviewProjectionV1
+    | (() => WorkflowReviewProjectionV1 | Promise<WorkflowReviewProjectionV1>);
+  /**
+   * Publication projection: a snapshot value or a live accessor (so
+   * `nova_status` reflects the durable publication store at call time). When
+   * absent the workflow status reports honest `missing`.
+   */
+  readonly publication?:
+    | WorkflowPublicationProjectionV1
+    | (() => WorkflowPublicationProjectionV1 | Promise<WorkflowPublicationProjectionV1>);
+  /** ISO-8601 clock; defaults to the session runtime clock. */
+  readonly now?: () => string;
+}
+
+/**
+ * Live or snapshot plugin activation health for one project. `null` means
+ * plugins were never activated for the project (disabled or not configured);
+ * an activation result carries active/blocked/disabled records plus the
+ * hooks manager identity.
+ */
+export type McpPluginHealthSource =
+  | NodePluginActivationResult
+  | null
+  | (() => NodePluginActivationResult | null);
+
+/**
+ * Session-derived workflow status sources for {@link buildWorkflowStatusForSession}.
+ */
+export interface McpWorkflowStatusSource {
+  /** Authoring coordinator working-state seam; absent → a clean working projection. */
+  readonly coordinator?: Pick<McpAuthoringCoordinatorPort, 'projectId' | 'getState'>;
+  /**
+   * Plugin activation health. When a required plugin is blocked (identity
+   * mismatch, init failure, or a conflict awaiting human arbitration) the
+   * status gains a blocking diagnostic and the guidance names the health
+   * counts; a live accessor is resolved at call time.
+   */
+  readonly plugins?: McpPluginHealthSource;
+  /** Native revision seam for the accepted revision id. */
+  readonly revision?: AuthoringRevisionPort;
+  /**
+   * Accepted-source validation seam; defaults to the same `validateNovel`
+   * path `nova_validate` uses. Injectable for deterministic tests. The
+   * optional `SourceAnalysisOptions` is forwarded to `validateNovel` so the
+   * enabled-plugin extension gate (plan 7.5) applies to injected seams too.
+   */
+  readonly validate?: (
+    snapshot: ProjectSourceSnapshotV1,
+    sourceOptions?: SourceAnalysisOptions,
+  ) => Promise<NovelValidationResult>;
+  /**
+   * Enabled-plugin extension gate for the accepted source (plan 7.5). When
+   * present, `validateNovel` reports unknown/disabled EventFile `extensions`
+   * namespaces as error-severity source diagnostics; absent → no extension
+   * diagnostics (legacy behavior).
+   */
+  readonly extensionRegistrar?: PluginExtensionSchemaRegistrar;
+  /** Review/publication projections and clock. */
+  readonly status?: McpWorkflowStatusPort;
+  /**
+   * Per-source/route canonical state projection service (plan 8.1). When
+   * present, `nova_status` orders its per-event execution reads by the
+   * derived stream's canonical replay sequence; absent → the compile's
+   * authored order (full-replay fallback).
+   */
+  readonly stateProjection?: CanonicalStateProjectionService;
+}
 
 export interface McpRegistryOptions {
-  /** Render implementation seam; tests inject a recording stub. */
+  /** Project operation service (durable FIFO render queue + cancel); absent render tools fail closed. */
+  readonly operations?: ProjectOperationService;
   /** Project-scoped reference catalog; absent tools fail closed. */
   readonly reference?: McpReferencePort;
-  readonly render?: McpRenderFunction;
+  /** Candidate/commit seams for the two-phase render path; default to Core's split. */
+  readonly candidates?: McpCandidatesSeam;
+  /** Dialogue-tree render seam; defaults to Core `renderGameDialogueTree`. */
+  readonly renderTree?: McpRenderTreeFunction;
   /** Author/submit coordinator port; when absent the authoring tools fail closed. */
   readonly coordinator?: McpAuthoringCoordinatorPort;
   /** Native immutable revision service for this project; absent fails closed. */
   readonly revision?: AuthoringRevisionPort;
   /** Owner admin service ports; missing individual methods fail closed. */
   readonly admin?: McpAdminPort;
+  /** Project review/gate service; absent review tools fail closed. */
+  readonly review?: McpReviewPort;
+  /** Project publication service; absent publication tools fail closed. */
+  readonly publication?: McpPublicationPort;
+  /**
+   * Accepted-layer workflow status seams for `nova_status`. Absent review and
+   * publication members report honest zeros / `missing` (no stores yet).
+   */
+  readonly status?: McpWorkflowStatusPort;
+  /**
+   * Plugin activation health for `nova_status` blockers/guidance (plan 7.3).
+   * Absent → no plugin diagnostics surface, even when a required plugin is
+   * blocked; the launch always wires it for configured projects.
+   */
+  readonly plugins?: McpPluginHealthSource;
+  /**
+   * Enabled-plugin extension gate (plan 7.5) for the accepted-source
+   * validation paths. When present, `nova_validate`/`nova_status` report
+   * unknown/disabled EventFile `extensions` namespaces as error-severity
+   * source diagnostics; absent → legacy behavior.
+   */
+  readonly extensionRegistrar?: PluginExtensionSchemaRegistrar;
+  /**
+   * Per-source/route canonical state projection service (plan 8.1). When
+   * present, `nova_event_state_diff` reads through the derived stream
+   * (nearest verified snapshot → suffix, full-replay fallback) instead of a
+   * raw per-request compile; absent → the raw `diffEvent` path. This is a
+   * derived cache, never a second authority.
+   */
+  readonly stateProjection?: CanonicalStateProjectionService;
   /**
    * Select the descriptor family exposed by this registry. The legacy
    * `all` default is retained for direct callers; Host routes always choose
@@ -468,6 +743,228 @@ function parseSceneSelector(value: unknown): SceneSelector {
   );
 }
 
+/** One validated render/chunk identity pair for a reference-backed render. */
+// Type alias (not interface) so the shape keeps its implicit index signature
+// and stays assignable to Core's JsonObject payload contract.
+type ParsedReferenceChunk = {
+  readonly referenceId: string;
+  readonly chunkId: string;
+};
+
+/** Outcome of the shared render input parser (nova_render/nova_revise/nova_render_tree). */
+type RenderInputOutcome =
+  | {
+      readonly ok: true;
+      readonly value: {
+        readonly selector: SceneSelector;
+        readonly model: string | undefined;
+        readonly references: readonly ParsedReferenceChunk[];
+        /** The validated input record; only schema-allowed keys can survive. */
+        readonly fields: Record<string, unknown>;
+      };
+    }
+  | { readonly ok: false; readonly result: McpToolResult };
+
+/**
+ * Shared strict parser for the three render-surface tools. Every tool rejects
+ * unknown keys, wrong selector shapes, unbounded chunk lists, reference
+ * chunks without `mcp:reference:read`, and duplicate chunk pairs exactly the
+ * same way; capability/source/reference identity handling stays identical to
+ * `nova_render`.
+ */
+function parseRenderInput(
+  input: unknown,
+  caller: McpAuthorizedCaller,
+  _options: Pick<McpRegistryOptions, 'reference'>,
+  extraAllowed: readonly string[] = [],
+): RenderInputOutcome {
+  const parsed = parseObject(input, 'Input must be an object.');
+  if (!parsed.ok) return parsed;
+  // Fail closed: no actorId/operationId (or any other server field) may reach the queue.
+  const unknown = rejectUnknownKeys(parsed.value, [
+    'sceneSelector',
+    'model',
+    'referenceChunks',
+    ...extraAllowed,
+  ]);
+  if (unknown) return { ok: false, result: unknown };
+  let selector: SceneSelector;
+  let model: string | undefined;
+  try {
+    selector = parseSceneSelector(parsed.value.sceneSelector);
+    model = optionalString(parsed.value, 'model');
+  } catch (error) {
+    return { ok: false, result: mcpToolError('INVALID_INPUT', (error as Error).message) };
+  }
+  const references: ParsedReferenceChunk[] = [];
+  if (parsed.value.referenceChunks !== undefined) {
+    if (
+      !Array.isArray(parsed.value.referenceChunks) ||
+      parsed.value.referenceChunks.length > REFERENCE_MCP_LIMITS_V1.maxCitations
+    ) {
+      return { ok: false, result: invalidInput('referenceChunks must be a bounded array.') };
+    }
+    if (!caller.grant.scopes.includes(MCP_REFERENCE_READ_SCOPE)) {
+      return {
+        ok: false,
+        result: mcpToolError(
+          'SCOPE_MISMATCH',
+          'Reference-backed renders require mcp:reference:read.',
+        ),
+      };
+    }
+    for (const value of parsed.value.referenceChunks) {
+      const candidate = parseObject(value, 'Each reference chunk must be an object.');
+      if (!candidate.ok) return candidate;
+      const chunkUnknown = rejectUnknownKeys(candidate.value, ['referenceId', 'chunkId']);
+      if (chunkUnknown) return { ok: false, result: chunkUnknown };
+      const referenceId = referenceString(
+        candidate.value,
+        'referenceId',
+        REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength,
+      );
+      const chunkId = referenceString(
+        candidate.value,
+        'chunkId',
+        REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength,
+      );
+      if (!referenceId.ok) return referenceId;
+      if (!chunkId.ok) return chunkId;
+      references.push({
+        referenceId: requiredParsedValue(referenceId.value),
+        chunkId: requiredParsedValue(chunkId.value),
+      });
+    }
+    if (
+      new Set(references.map((value) => `${value.referenceId}\u0000${value.chunkId}`)).size !==
+      references.length
+    ) {
+      return { ok: false, result: invalidInput('referenceChunks must not contain duplicates.') };
+    }
+  }
+  return { ok: true, value: { selector, model, references, fields: parsed.value } };
+}
+
+/**
+ * Strict route selector for `nova_graph`: exactly `version` + `branchPath`
+ * (with optional `discourseBranch`), mirroring the browser graph route's
+ * validation — unknown keys, wrong types, malformed decisions and
+ * non-integer `narrativeOrder` are all rejected before any graph work.
+ */
+function parseRouteSelector(
+  value: Record<string, unknown>,
+):
+  | { readonly ok: true; readonly value: WorkbenchRouteSelectorV1 }
+  | { readonly ok: false; readonly result: McpToolResult } {
+  const topKeys = Object.keys(value);
+  if (
+    topKeys.length < 2 ||
+    !('version' in value) ||
+    !('branchPath' in value) ||
+    (topKeys.length === 3 && !('discourseBranch' in value)) ||
+    topKeys.length > 3 ||
+    topKeys.some((key) => key !== 'version' && key !== 'branchPath' && key !== 'discourseBranch')
+  ) {
+    return {
+      ok: false,
+      result: invalidInput(
+        'nova_graph requires exactly version and branchPath, with optional discourseBranch.',
+      ),
+    };
+  }
+  if (value.version !== WORKBENCH_GRAPH_VIEW_VERSION) {
+    return {
+      ok: false,
+      result: invalidInput(`route selector version must be ${WORKBENCH_GRAPH_VIEW_VERSION}.`),
+    };
+  }
+  const branchPath = value.branchPath;
+  if (
+    typeof branchPath !== 'object' ||
+    branchPath === null ||
+    Array.isArray(branchPath) ||
+    Object.keys(branchPath).length !== 1 ||
+    !('decisions' in branchPath) ||
+    !Array.isArray((branchPath as Record<string, unknown>).decisions)
+  ) {
+    return {
+      ok: false,
+      result: invalidInput('branchPath must contain exactly a decisions array.'),
+    };
+  }
+  const rawDecisions = (branchPath as Record<string, unknown>).decisions as unknown[];
+  const decisions: WorkbenchBranchDecisionV1[] = [];
+  for (let index = 0; index < rawDecisions.length; index += 1) {
+    const raw = rawDecisions[index];
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+      return {
+        ok: false,
+        result: invalidInput(`route decision ${index} must be an object.`),
+      };
+    }
+    const record = raw as Record<string, unknown>;
+    const keys = Object.keys(record);
+    if (
+      keys.length !== 3 ||
+      !('atEventId' in record) ||
+      !('choiceId' in record) ||
+      !('narrativeOrder' in record)
+    ) {
+      return {
+        ok: false,
+        result: invalidInput(
+          `route decision ${index} must contain exactly atEventId, choiceId, narrativeOrder.`,
+        ),
+      };
+    }
+    const { atEventId, choiceId, narrativeOrder } = record;
+    if (typeof atEventId !== 'string' || atEventId.length === 0) {
+      return {
+        ok: false,
+        result: invalidInput(`route decision ${index} atEventId must be a non-empty string.`),
+      };
+    }
+    if (typeof choiceId !== 'string' || choiceId.length === 0) {
+      return {
+        ok: false,
+        result: invalidInput(`route decision ${index} choiceId must be a non-empty string.`),
+      };
+    }
+    if (
+      typeof narrativeOrder !== 'number' ||
+      !Number.isSafeInteger(narrativeOrder) ||
+      narrativeOrder < 0
+    ) {
+      return {
+        ok: false,
+        result: invalidInput(
+          `route decision ${index} narrativeOrder must be a non-negative integer.`,
+        ),
+      };
+    }
+    decisions.push({ atEventId, choiceId, narrativeOrder });
+  }
+  let discourseBranch: string | undefined;
+  if ('discourseBranch' in value) {
+    const candidate = value.discourseBranch;
+    if (typeof candidate !== 'string' || candidate.length === 0) {
+      return {
+        ok: false,
+        result: invalidInput('discourseBranch must be a non-empty string.'),
+      };
+    }
+    discourseBranch = candidate;
+  }
+  return {
+    ok: true,
+    value: {
+      version: WORKBENCH_GRAPH_VIEW_VERSION,
+      branchPath: { decisions },
+      ...(discourseBranch === undefined ? {} : { discourseBranch }),
+    },
+  };
+}
+
 function parseSourceChange(value: unknown): SourceChangeV1 {
   const parsed = parseObject(value, 'each change must be an object.');
   if (!parsed.ok) throw new InputShapeError(mcpErrorMessage(parsed.result));
@@ -499,29 +996,280 @@ function parseSourceChange(value: unknown): SourceChangeV1 {
   };
 }
 /** Serialize `validateNovel` results: its `results` map is not JSON. */
-async function serializeValidation(snapshot: ProjectSourceSnapshotV1): Promise<McpToolResult> {
-  const validation = await validateNovel(snapshot);
+async function serializeValidation(
+  snapshot: ProjectSourceSnapshotV1,
+  sourceOptions?: SourceAnalysisOptions,
+): Promise<McpToolResult> {
+  const validation = await validateNovel(snapshot, undefined, sourceOptions);
   // Object.fromEntries defines own data properties (CreateDataProperty), so an
   // event id like "__proto__" becomes real JSON data instead of a prototype
   // mutation; never copy into a plain `{}` with `results[key] = value`.
   const results = Object.fromEntries(validation.results);
-  return mcpToolOk({ passed: validation.passed, iss: validation.iss, results });
+  // `nova_validate` always validates the accepted layer; the working layer is
+  // validated by `nova_authoring_validate` and never inferred implicitly.
+  return mcpToolOk({
+    layer: 'accepted',
+    passed: validation.passed,
+    iss: validation.iss,
+    results,
+    ...(validation.sourceDiagnostics === undefined
+      ? {}
+      : { sourceDiagnostics: validation.sourceDiagnostics }),
+  });
 }
 
-// ─── Session operation outcome mapping ───────────────────────────────────────
-
-function mapOperationResult<T>(result: SessionOperationResult<T>): McpToolResult {
-  switch (result.status) {
-    case 'completed':
-      return mcpToolOk(result.result);
-    case 'denied':
-      return mcpToolError(
-        `DENIED:${result.reason}`,
-        `The session capability gate denied the render: ${result.reason}.`,
-      );
-    case 'failed':
-      return mcpToolError(result.errorCode, result.message);
+/**
+ * Event id of an EventFile logical path: the parsed `event:` field (the
+ * authoritative id, e.g. `E5` for `E5_threshold_rejection.yaml`), falling
+ * back to the file stem for loaders that keep no parse value.
+ */
+function eventIdForDocument(snapshot: ProjectSourceSnapshotV1, logicalPath: string | null): string {
+  if (logicalPath === null) return '';
+  const document = snapshot.documents.find((candidate) => candidate.logicalPath === logicalPath);
+  if (document !== undefined) {
+    const parsed = document.parseResult.value;
+    if (parsed !== null && typeof parsed === 'object') {
+      const event = (parsed as Record<string, unknown>).event;
+      if (typeof event === 'string' && event.length > 0) return event;
+    }
+    try {
+      const reparsed = YAML.parse(document.content);
+      if (reparsed !== null && typeof reparsed === 'object') {
+        const event = (reparsed as Record<string, unknown>).event;
+        if (typeof event === 'string' && event.length > 0) return event;
+      }
+    } catch {
+      // The document is already flagged elsewhere; fall through to the stem.
+    }
   }
+  const match = logicalPath.match(/^chapters\/chapter_\d{2}\/(E[^/]+)\.(?:yaml|yml)$/);
+  return match?.[1] ?? '';
+}
+
+/**
+ * Convert one source diagnostic into a workflow-validatable issue. The
+ * registrar emits error-severity diagnostics for unknown/disabled namespaces,
+ * which must block the scene like any other accepted-source error.
+ */
+function sourceDiagnosticIssue(
+  diagnostic: SourceDiagnosticV1,
+  snapshot: ProjectSourceSnapshotV1,
+): ValidationIssue {
+  return {
+    validator: 'source',
+    severity: diagnostic.severity,
+    kind: 'compiler_invariant',
+    event: eventIdForDocument(snapshot, diagnostic.logicalPath),
+    entity: '',
+    message: `${diagnostic.code}: ${diagnostic.message}`,
+    fixSuggestion: 'Edit the source document to resolve the source diagnostic.',
+    fixAction: 'edit_file',
+    fixTarget: { file: diagnostic.logicalPath ?? '' },
+  };
+}
+
+// ─── Accepted-layer workflow status (nova_status / PROJECT_STATUS.md) ───────
+
+/**
+ * Build the full accepted-layer workflow status for one session, or null when
+ * the session has no accepted source. This is the single composition point
+ * behind `nova_status` and the per-project `PROJECT_STATUS.md` refresh.
+ *
+ * Everything is derived from injected session state: the accepted snapshot,
+ * the same `validateNovel` accepted-source validation path `nova_validate`
+ * uses, per-event execution state from the injected execution repository, the
+ * authoring coordinator's working state, and the injected review/publication
+ * seams (honest zeros / `missing` until the Step 5/6 stores exist). Event
+ * order is the canonical compile order and issue order follows it, so the
+ * result is deterministic; no provider/LLM call and no filesystem access
+ * beyond the injected execution repository happens here.
+ */
+export async function buildWorkflowStatusForSession(
+  session: ProjectSession,
+  source: McpWorkflowStatusSource = {},
+): Promise<WorkflowStatusV1 | null> {
+  const snapshot = session.source;
+  if (snapshot === null) return null;
+  const projectId = session.projectId;
+
+  // Accepted-layer validation through the same path `nova_validate` uses.
+  const validation = await (source.validate ?? validateNovel)(
+    snapshot,
+    undefined,
+    source.extensionRegistrar === undefined
+      ? undefined
+      : { extensionRegistrar: source.extensionRegistrar },
+  );
+
+  // Planned events in canonical compile order. Per-event execution state comes
+  // from the injected repository; a scene whose accepted record carries the
+  // current sourceHash is completed (the core applies that identity rule).
+  // `renderBlockedReasons` is empty at this step: failed render attempts
+  // (empty prose / missing analysis / exhausted retries) are only observable
+  // in-memory during a render run — Step 4's durable scene revision archive
+  // makes them queryable per event, which is where this projection fills in.
+  const compilation = session.runtime.compile(snapshot);
+  // Planned events in canonical order. With the per-source/route projection
+  // service wired (plan 8.1), the per-event list is ordered by the derived
+  // stream's canonical replay sequence (never narrativeOrder), restricted to
+  // the authored render plan; without it the compile's authored order is used
+  // (full-replay fallback). Per-event rendered/blocked state still comes from
+  // the injected execution repository — the service is a derived cache, never
+  // a second authority.
+  const plannedIds = new Set(compilation.events.map((event) => event.id));
+  let orderedEventIds = compilation.events.map((event) => event.id);
+  if (source.stateProjection !== undefined) {
+    const stream = await source.stateProjection.events(snapshot);
+    if (stream.length > 0) {
+      const streamed = stream
+        .map((event) => event.eventId)
+        .filter((eventId) => plannedIds.has(eventId));
+      if (streamed.length > 0) orderedEventIds = streamed;
+    }
+  }
+  const execution: WorkflowExecutionProjectionV1 = {
+    events: await Promise.all(
+      orderedEventIds.map(async (eventId) => {
+        const read = await session.runtime.services.execution.readAcceptedScene({
+          projectId,
+          eventId,
+        });
+        return {
+          eventId,
+          acceptedScene: read?.value ?? null,
+          renderBlockedReasons: [],
+        };
+      }),
+    ),
+  };
+
+  // Deterministic issue order: canonical event order first, then any event id
+  // outside the render plan in sorted order.
+  const orderedIds = [
+    ...orderedEventIds,
+    ...[...validation.results.keys()].filter((id) => !plannedIds.has(id)).sort(),
+  ];
+  const errors: ValidationIssue[] = [];
+  const warnings: ValidationIssue[] = [];
+  for (const eventId of orderedIds) {
+    const result = validation.results.get(eventId);
+    if (result === undefined) continue;
+    errors.push(...result.errors);
+    warnings.push(...result.warnings);
+  }
+  // Source-level extension-gate diagnostics (plan 7.5): unknown/disabled
+  // namespaces are error-severity and must surface exactly like per-event
+  // validation errors (FIX_ACCEPTED_SOURCE, blocked scenes).
+  for (const diagnostic of validation.sourceDiagnostics ?? []) {
+    const issue = sourceDiagnosticIssue(diagnostic, snapshot);
+    if (issue.severity === 'error') errors.push(issue);
+    else warnings.push(issue);
+  }
+
+  // Accepted revision identity: the coordinator's persisted state when
+  // present, else the native revision port.
+  const coordinatorState = source.coordinator?.getState();
+  let acceptedRevisionId: string | null = coordinatorState?.acceptedRevisionId ?? null;
+  if (acceptedRevisionId === null && source.revision !== undefined) {
+    acceptedRevisionId = (await source.revision.loadAccepted(projectId))?.revisionId ?? null;
+  }
+
+  // Working projection from the coordinator state. `validated` /
+  // `validationPassed` stay false because the coordinator state does not track
+  // `validateWorking` runs yet (plan Step 5 completes it); dirty and conflict
+  // are real coordinator state, never guessed.
+  const working: WorkflowWorkingProjectionV1 =
+    coordinatorState === undefined
+      ? { dirty: false, validated: false, validationPassed: false, conflict: false }
+      : {
+          dirty: coordinatorState.workingDirty,
+          validated: false,
+          validationPassed: false,
+          conflict:
+            coordinatorState.conflicts.length > 0 ||
+            coordinatorState.phase === 'conflict' ||
+            coordinatorState.phase === 'recovery-required',
+        };
+
+  // The review seam may be a snapshot or a live accessor; resolve either so
+  // `nova_status` always reflects the append-only review stream at call time.
+  const reviewSeam = source.status?.review;
+  const review =
+    typeof reviewSeam === 'function'
+      ? await reviewSeam()
+      : (reviewSeam ?? { open: 0, blocking: 0, pendingGates: 0 });
+
+  // Same for the publication seam: a snapshot or a live accessor over the
+  // durable publication store (current/stale/missing, never fabricated).
+  const publicationSeam = source.status?.publication;
+  const publication =
+    typeof publicationSeam === 'function'
+      ? await publicationSeam()
+      : (publicationSeam ?? {
+          status: 'missing',
+          publicationId: null,
+          novelHash: null,
+        });
+
+  const status = buildWorkflowStatus({
+    projectId,
+    snapshot,
+    acceptedRevisionId,
+    validation: { errors, warnings },
+    iss: validation.iss,
+    execution,
+    working,
+    review,
+    publication,
+    now: source.status?.now ?? (() => session.runtime.services.clock.now()),
+  });
+
+  // Plugin activation health (plan 7.3): plugins were activated for this
+  // project, so the status names the health counts in guidance; a required
+  // plugin that is blocked (identity mismatch, init failure, or a conflict
+  // awaiting human arbitration) makes render unavailable and must also
+  // surface as a blocking diagnostic. The WorkflowStatusV1 wire shape has no
+  // plugin field, so this goes through the existing blockers + guidance
+  // surface without reshaping the contract.
+  const pluginsSeam = source.plugins;
+  const plugins = typeof pluginsSeam === 'function' ? await pluginsSeam() : (pluginsSeam ?? null);
+  if (plugins !== null) {
+    const pluginBlockers =
+      plugins.blocked.length === 0
+        ? []
+        : plugins.blocked.map((blocked) => ({
+            code: 'PLUGIN_BLOCKED' as const,
+            message: `Plugin "${blocked.name}" is blocked: ${blocked.reason}`,
+            severity: 'error' as const,
+          }));
+    const health = `Plugin health: ${plugins.active.length} active, ${plugins.blocked.length} blocked, ${plugins.disabled.length} disabled.`;
+    return {
+      ...status,
+      ...(pluginBlockers.length === 0 ? {} : { blockers: [...pluginBlockers, ...status.blockers] }),
+      guidance: `${health} ${status.guidance}`,
+    };
+  }
+  return status;
+}
+
+/**
+ * Deterministic next working-layer action for the authoring loop. A conflict
+ * or recovery-required phase maps to RESOLVE_CONFLICT; a dirty layer maps to
+ * VALIDATE_WORKING; a clean layer has no next action. SUBMIT_WORKING is
+ * produced only once the coordinator tracks a passing `validateWorking` on
+ * the current digest (plan Step 5); today a dirty layer always validates
+ * first, matching the workflow-status action chain.
+ */
+function authoringNextWorkingAction(state: AuthoringStateV1): AuthoringNextWorkingActionV1 | null {
+  if (
+    state.conflicts.length > 0 ||
+    state.phase === 'conflict' ||
+    state.phase === 'recovery-required'
+  ) {
+    return 'RESOLVE_CONFLICT';
+  }
+  if (state.workingDirty) return 'VALIDATE_WORKING';
+  return null;
 }
 
 // ─── Authoring/admin input parsing (strict, fail closed) ────────────────────
@@ -547,6 +1295,410 @@ const NO_REFERENCE_PORT = mcpToolError(
   'REFERENCE_UNAVAILABLE',
   'The reference catalog is not available for this project.',
 );
+const NO_OPERATION_SERVICE = mcpToolError(
+  'OPERATION_SERVICE_UNAVAILABLE',
+  'The project operation service is not available for this project.',
+);
+const NO_REVIEW_SERVICE = mcpToolError(
+  'REVIEW_SERVICE_UNAVAILABLE',
+  'The review service is not available for this project.',
+);
+const NO_PUBLICATION_SERVICE = mcpToolError(
+  'PUBLICATION_UNAVAILABLE',
+  'The publication service is not available for this project.',
+);
+
+// ─── Review/gate input parsing (strict, fail closed) ─────────────────────────
+
+/** The one accepted version for review/gate MCP tool inputs. */
+const REVIEW_MCP_CONTRACT_VERSION = 1;
+const REVIEW_COMMENT_STATUSES = ['open', 'addressed', 'resolved', 'wontfix', 'superseded'] as const;
+const REVIEW_SEVERITIES = ['nit', 'suggestion', 'blocking'] as const;
+const REVIEW_TARGET_TYPES = [
+  'novel',
+  'chapter',
+  'scene',
+  'line',
+  'character',
+  'worldrule',
+] as const;
+const REVIEW_CATEGORIES = [
+  'style',
+  'pacing',
+  'character_voice',
+  'plot_logic',
+  'world_consistency',
+  'reader_experience',
+] as const;
+const REVIEW_UPDATE_ACTIONS = ['replace', 'resolve', 'wontfix', 'reopen', 'escalate'] as const;
+
+function parseReviewInput(
+  input: unknown,
+  allowed: readonly string[],
+):
+  | { readonly ok: true; readonly value: Record<string, unknown> }
+  | { readonly ok: false; readonly result: McpToolResult } {
+  const parsed = parseObject(input, 'Input must be an object.');
+  if (!parsed.ok) return parsed;
+  const unknown = rejectUnknownKeys(parsed.value, allowed);
+  if (unknown) return { ok: false, result: unknown };
+  if (parsed.value.version !== REVIEW_MCP_CONTRACT_VERSION) {
+    return { ok: false, result: invalidInput('review request version must be 1.') };
+  }
+  return parsed;
+}
+
+function reviewOptionalEnum(
+  value: Record<string, unknown>,
+  key: string,
+  allowed: readonly string[],
+):
+  | { readonly ok: true; readonly value: string | undefined }
+  | { readonly ok: false; readonly result: McpToolResult } {
+  const candidate = value[key];
+  if (candidate === undefined) return { ok: true, value: undefined };
+  if (typeof candidate !== 'string' || !allowed.includes(candidate)) {
+    return {
+      ok: false,
+      result: invalidInput(`${key} must be one of: ${allowed.join(', ')}.`),
+    };
+  }
+  return { ok: true, value: candidate };
+}
+
+function reviewOptionalString(
+  value: Record<string, unknown>,
+  key: string,
+  maxLength = 4096,
+):
+  | { readonly ok: true; readonly value: string | undefined }
+  | { readonly ok: false; readonly result: McpToolResult } {
+  const candidate = value[key];
+  if (candidate === undefined) return { ok: true, value: undefined };
+  if (typeof candidate !== 'string' || candidate.length === 0 || candidate.length > maxLength) {
+    return {
+      ok: false,
+      result: invalidInput(`${key} must be a bounded non-empty string when present.`),
+    };
+  }
+  return { ok: true, value: candidate };
+}
+
+/** Strict review target parse mirroring Core `newReviewCommentSchema`. */
+function parseReviewTarget(
+  value: Record<string, unknown>,
+):
+  | { readonly ok: true; readonly value: HostNewReviewCommentV1['target'] }
+  | { readonly ok: false; readonly result: McpToolResult } {
+  const target = parseObject(value.target, 'target must be an object.');
+  if (!target.ok) return target;
+  const unknown = rejectUnknownKeys(target.value, ['type', 'id', 'lineRange', 'lineBasis']);
+  if (unknown) return { ok: false, result: unknown };
+  const type = target.value.type;
+  if (typeof type !== 'string' || !(REVIEW_TARGET_TYPES as readonly string[]).includes(type)) {
+    return {
+      ok: false,
+      result: invalidInput(
+        'target.type must be novel, chapter, scene, line, character, or worldrule.',
+      ),
+    };
+  }
+  const id = requiredString(target.value, 'id');
+  if (!id.ok) return { ok: false, result: id.result };
+  if (type === 'novel' && id.value !== 'novel') {
+    return { ok: false, result: invalidInput('a novel target id must be "novel".') };
+  }
+  if (type === 'chapter' && !/^chapter:[1-9]\d*$/.test(id.value)) {
+    return {
+      ok: false,
+      result: invalidInput('a chapter target id must match chapter:<n> with n >= 1.'),
+    };
+  }
+  if (type !== 'line') {
+    return {
+      ok: true,
+      value: { type: type as HostNewReviewCommentV1['target']['type'], id: id.value },
+    };
+  }
+  // Line targets require an accepted-scene line basis; the Core facade
+  // additionally validates the basis against the archived scene revision.
+  const lineRange = target.value.lineRange;
+  if (
+    !Array.isArray(lineRange) ||
+    lineRange.length !== 2 ||
+    !lineRange.every((entry) => Number.isInteger(entry) && (entry as number) >= 1)
+  ) {
+    return {
+      ok: false,
+      result: invalidInput('a line target requires a [start, end] lineRange of positive integers.'),
+    };
+  }
+  const [start, end] = lineRange as [number, number];
+  if (end < start) {
+    return { ok: false, result: invalidInput('lineRange end must be >= start.') };
+  }
+  const lineBasis = parseObject(target.value.lineBasis, 'lineBasis must be an object.');
+  if (!lineBasis.ok) return { ok: false, result: lineBasis.result };
+  const basisUnknown = rejectUnknownKeys(lineBasis.value, ['revisionId', 'proseHash']);
+  if (basisUnknown) return { ok: false, result: basisUnknown };
+  const revisionId = requiredString(lineBasis.value, 'revisionId');
+  const proseHash = requiredString(lineBasis.value, 'proseHash');
+  if (!revisionId.ok) return { ok: false, result: revisionId.result };
+  if (!proseHash.ok) return { ok: false, result: proseHash.result };
+  if (!/^[0-9a-f]{64}$/.test(proseHash.value)) {
+    return { ok: false, result: invalidInput('lineBasis.proseHash must be a 64-char hex hash.') };
+  }
+  return {
+    ok: true,
+    value: {
+      type: 'line',
+      id: id.value,
+      lineRange: [start, end],
+      lineBasis: { revisionId: revisionId.value, proseHash: proseHash.value },
+    },
+  };
+}
+
+/** Secret-free wire serialization of a projected comment (nulls made explicit). */
+function safeReviewComment(comment: HostReviewCommentV1): JsonValue {
+  return {
+    id: comment.id,
+    author: comment.author,
+    actorId: comment.actorId,
+    target: {
+      type: comment.target.type,
+      id: comment.target.id,
+      ...(comment.target.lineRange === undefined ? {} : { lineRange: comment.target.lineRange }),
+      ...(comment.target.lineBasis === undefined
+        ? {}
+        : {
+            lineBasis: {
+              revisionId: comment.target.lineBasis.revisionId,
+              proseHash: comment.target.lineBasis.proseHash,
+            },
+          }),
+    },
+    severity: comment.severity,
+    category: comment.category,
+    content: comment.content,
+    status: comment.status,
+    applications: comment.applications.map((application) => ({
+      eventId: application.eventId,
+      revisionId: application.revisionId,
+      operationId: application.operationId,
+      appliedAt: application.appliedAt,
+    })),
+    supersedesId: comment.supersedesId ?? null,
+    resolvedBy: comment.resolvedBy ?? null,
+    createdAt: comment.createdAt,
+    resolvedAt: comment.resolvedAt ?? null,
+  };
+}
+
+/** Secret-free wire serialization of a projected gate (nulls made explicit). */
+function safeReviewGate(gate: ReviewGateV1): JsonValue {
+  return {
+    gateId: gate.gateId,
+    sourceHash: gate.sourceHash,
+    eventId: gate.eventId,
+    proseHash: gate.proseHash,
+    scopeHash: gate.scopeHash,
+    validationIdentity: gate.validationIdentity,
+    warningFingerprints: gate.warningFingerprints,
+    revisionId: gate.revisionId,
+    openedAt: gate.openedAt,
+    openedBy: gate.openedBy,
+    status: gate.status,
+    decision:
+      gate.decision === null
+        ? null
+        : {
+            gateId: gate.decision.gateId,
+            decision: gate.decision.decision,
+            revisionId: gate.decision.revisionId,
+            capabilityVersion: gate.decision.capabilityVersion,
+            reason: gate.decision.reason,
+            actorId: gate.decision.actorId,
+            createdAt: gate.decision.createdAt,
+          },
+    supersededAt: gate.supersededAt ?? null,
+    supersededBy: gate.supersededBy ?? null,
+    supersedeReason: gate.supersedeReason ?? null,
+  };
+}
+
+/** Core business errors (EditorialOperationError etc.) surface as typed results. */
+function reviewErrorResult(error: unknown, fallback = 'INTERNAL_ERROR'): McpToolResult {
+  const code =
+    error instanceof Error && 'code' in error && typeof error.code === 'string'
+      ? error.code
+      : fallback;
+  return mcpToolError(
+    code,
+    error instanceof Error ? error.message : 'The review operation failed.',
+  );
+}
+
+// ─── Publication tools (plan Step 6.6) ──────────────────────────────────────
+
+/** The one accepted version for publication MCP tool inputs. */
+const PUBLICATION_MCP_CONTRACT_VERSION = 1;
+const PUBLICATION_MAX_ID_LENGTH = 128;
+const PUBLICATION_MAX_TITLE_LENGTH = 256;
+const PUBLICATION_MAX_READ_BYTES = 256 * 1024;
+
+/** Strict versioned publication input: object + known keys + version 1. */
+function parsePublicationVersionedInput(
+  input: unknown,
+  allowed: readonly string[],
+):
+  | { readonly ok: true; readonly value: Record<string, unknown> }
+  | { readonly ok: false; readonly result: McpToolResult } {
+  const parsed = parseObject(input, 'Input must be an object.');
+  if (!parsed.ok) return parsed;
+  const unknown = rejectUnknownKeys(parsed.value, allowed);
+  if (unknown) return { ok: false, result: unknown };
+  if (parsed.value.version !== PUBLICATION_MCP_CONTRACT_VERSION) {
+    return { ok: false, result: invalidInput('publication request version must be 1.') };
+  }
+  return parsed;
+}
+
+/**
+ * Parse the publish request: an optional strict route selector (branchPath),
+ * an optional top-level discourseBranch and an optional bounded title. A
+ * selector and a top-level discourseBranch are aliases; supplying both is a
+ * shape error. No branch identity → canonical publish.
+ */
+function parsePublishRequest(
+  value: Record<string, unknown>,
+):
+  | { readonly ok: true; readonly value: PublishPublicationRequestV1 }
+  | { readonly ok: false; readonly result: McpToolResult } {
+  let branchPath: BranchPath | undefined;
+  let discourseBranch: string | undefined;
+  if ('branchPath' in value) {
+    const raw = value.branchPath;
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+      return {
+        ok: false,
+        result: invalidInput('branchPath must be a strict route selector object.'),
+      };
+    }
+    const selector = parseRouteSelector(raw as Record<string, unknown>);
+    if (!selector.ok) {
+      return {
+        ok: false,
+        result: invalidInput(
+          'branchPath must contain exactly version and branchPath, with optional discourseBranch.',
+        ),
+      };
+    }
+    branchPath = {
+      decisions: selector.value.branchPath.decisions.map((decision) => ({
+        atEventId: decision.atEventId,
+        choiceId: decision.choiceId,
+        narrativeOrder: decision.narrativeOrder,
+      })),
+    };
+    discourseBranch = selector.value.discourseBranch;
+  }
+  if ('discourseBranch' in value) {
+    const candidate = value.discourseBranch;
+    if (typeof candidate !== 'string' || candidate.length === 0) {
+      return {
+        ok: false,
+        result: invalidInput('discourseBranch must be a non-empty string.'),
+      };
+    }
+    if (discourseBranch !== undefined) {
+      return {
+        ok: false,
+        result: invalidInput(
+          'discourseBranch must not be supplied both inside branchPath and at the top level.',
+        ),
+      };
+    }
+    discourseBranch = candidate;
+  }
+  let title: string | undefined;
+  if ('title' in value) {
+    const candidate = value.title;
+    if (
+      typeof candidate !== 'string' ||
+      candidate.length === 0 ||
+      candidate.length > PUBLICATION_MAX_TITLE_LENGTH
+    ) {
+      return {
+        ok: false,
+        result: invalidInput(
+          `title must be a string of at most ${PUBLICATION_MAX_TITLE_LENGTH} characters.`,
+        ),
+      };
+    }
+    title = candidate;
+  }
+  return {
+    ok: true,
+    value: {
+      ...(branchPath === undefined ? {} : { branchPath }),
+      ...(discourseBranch === undefined ? {} : { discourseBranch }),
+      ...(title === undefined ? {} : { title }),
+    },
+  };
+}
+
+/** Bounded publication id: non-empty, at most 128 characters. */
+function parsePublicationId(
+  value: Record<string, unknown>,
+):
+  | { readonly ok: true; readonly value: string }
+  | { readonly ok: false; readonly result: McpToolResult } {
+  const publicationId = requiredString(value, 'publicationId');
+  if (!publicationId.ok) return publicationId;
+  if (publicationId.value.length > PUBLICATION_MAX_ID_LENGTH) {
+    return {
+      ok: false,
+      result: invalidInput(
+        `publicationId must be at most ${PUBLICATION_MAX_ID_LENGTH} characters.`,
+      ),
+    };
+  }
+  return { ok: true, value: publicationId.value };
+}
+
+/** Secret-free wire serialization of a durable publication row (relative paths only). */
+function safePublicationRecord(record: ProjectPublicationRecordV1): JsonValue {
+  return {
+    publicationId: record.publicationId,
+    kind: record.kind,
+    value: {
+      sourceHash: record.value.sourceHash,
+      scopeHash: record.value.scopeHash,
+      revisionIds: [...record.value.revisionIds],
+      novelHash: record.value.novelHash,
+      relativeOutputPath: record.value.relativeOutputPath,
+      byteLength: record.value.byteLength,
+      actorId: record.value.actorId,
+      operationId: record.value.operationId,
+      createdAt: record.value.createdAt,
+      status: record.value.status,
+    },
+    updatedAt: record.updatedAt,
+  };
+}
+
+/** Publication service failures surface as typed, nonsecret results. */
+function publicationErrorResult(error: unknown): McpToolResult {
+  const code =
+    error instanceof Error && 'code' in error && typeof error.code === 'string'
+      ? error.code
+      : 'INTERNAL_ERROR';
+  return mcpToolError(
+    code,
+    error instanceof Error ? error.message : 'The publication operation failed.',
+  );
+}
 
 function parseAdminVersionedInput(
   input: unknown,
@@ -1159,6 +2311,551 @@ function parseConfiguration(
   };
 }
 
+// ─── Shared render-surface execution (nova_render / nova_revise / nova_render_tree) ──
+
+/**
+ * Resolve the project-scoped reference packet inside the queued operation.
+ * Citations are built server-side only, after queue authorization; missing
+ * chunks and empty quotes fail the operation as input errors.
+ */
+async function resolveReferencePacket(
+  referencePacket: McpReferencePort,
+  references: readonly ParsedReferenceChunk[],
+  projectId: string,
+): Promise<ProjectReferencePacketV1> {
+  return {
+    version: 1 as const,
+    projectId,
+    citations: await Promise.all(
+      references.map(async ({ referenceId, chunkId }, index) => {
+        const result = await referencePacket.getChunk({
+          version: 1,
+          referenceId,
+          chunkId,
+        });
+        if (result === null) throw new InputShapeError('Reference chunk was not found.');
+        const chunk = result.chunk;
+        if (chunk.quote === null || chunk.quote.length === 0) {
+          throw new InputShapeError('Reference chunk has no text quote.');
+        }
+        return {
+          version: 1 as const,
+          citationId: `${chunk.referenceId}:${chunk.chunkId}:${index}`,
+          referenceId: chunk.referenceId,
+          chunkId: chunk.chunkId,
+          contentHash: chunk.contentHash,
+          chunkHash: chunk.chunkHash,
+          quote: chunk.quote,
+          locator: chunk.locator,
+          authoritative: false as const,
+        };
+      }),
+    ),
+  };
+}
+
+/** Capability scope for a render-surface operation, shared by all three tools. */
+function renderSurfaceScope(references: readonly ParsedReferenceChunk[]): readonly string[] {
+  return references.length === 0
+    ? [MCP_RENDER_SCOPE]
+    : [MCP_RENDER_SCOPE, MCP_REFERENCE_READ_SCOPE];
+}
+
+/**
+ * Identity captured by the render prepare phase and re-verified by the commit
+ * phase. `sourceHash` is the primary staleness signal (the session's accepted
+ * source); `acceptedRevisionId` closes the native-revision identity when a
+ * coordinator seam exists; `sceneHeads` is a per-event accepted-head
+ * fingerprint for explicit `events` selectors (the Core commit CAS covers
+ * every other selector); `references` is the request's static reference
+ * identity.
+ */
+interface RenderCaptureIdentity {
+  readonly sourceHash: string;
+  readonly source: ProjectSourceSnapshotV1;
+  readonly acceptedRevisionId: string | null;
+  readonly sceneHeads: ReadonlyMap<
+    string,
+    { readonly revisionId: string; readonly version: number }
+  >;
+  readonly references: readonly ParsedReferenceChunk[];
+}
+
+/** sha256 hex digest; deterministic identity hashing for queued operation payloads. */
+function sha256Hex(value: string): string {
+  return createHash('sha256').update(value, 'utf8').digest('hex');
+}
+
+/** Live accepted native revision id from the optional coordinator seam. */
+function acceptedRevisionIdFor(options: McpRegistryOptions): () => string | null {
+  return () => {
+    const coordinator = options.coordinator;
+    return coordinator === undefined ? null : coordinator.getState().acceptedRevisionId;
+  };
+}
+
+/**
+ * Capture the render identity inside the serialized lane. Fails closed when
+ * the accepted source disappeared between enqueue and prepare.
+ */
+async function captureRenderIdentity(
+  session: ProjectSession,
+  acceptedRevisionId: () => string | null,
+  eventIdsForHeads: readonly string[],
+  references: readonly ParsedReferenceChunk[],
+): Promise<RenderCaptureIdentity> {
+  const source = session.source;
+  if (source === null) {
+    throw Object.assign(new Error('The session has no accepted source to render.'), {
+      code: 'NO_ACCEPTED_SOURCE',
+    });
+  }
+  const sceneHeads = new Map<string, { revisionId: string; version: number }>();
+  if (eventIdsForHeads.length > 0) {
+    const execution = session.runtime.services.execution;
+    for (const eventId of eventIdsForHeads) {
+      const read = await execution.readAcceptedScene({ projectId: session.projectId, eventId });
+      if (read !== null) {
+        sceneHeads.set(eventId, { revisionId: read.value.revisionId, version: read.revision });
+      }
+    }
+  }
+  return {
+    sourceHash: source.sourceHash,
+    source,
+    acceptedRevisionId: acceptedRevisionId(),
+    sceneHeads,
+    references,
+  };
+}
+
+/**
+ * Re-verify the captured identities at commit time. Returns a typed reason
+ * when the source/revision/scene heads moved; null means the candidate is
+ * still current and may be promoted.
+ */
+async function stalenessReason(
+  session: ProjectSession,
+  capture: RenderCaptureIdentity,
+  acceptedRevisionId: () => string | null,
+): Promise<string | null> {
+  const current = session.source;
+  if (current === null || current.sourceHash !== capture.sourceHash) {
+    return 'SOURCE_MOVED: the accepted source changed while the render ran; candidate archived and never promoted.';
+  }
+  if (capture.acceptedRevisionId !== acceptedRevisionId()) {
+    return 'REVISION_MOVED: the accepted native revision changed while the render ran; candidate archived and never promoted.';
+  }
+  const execution = session.runtime.services.execution;
+  for (const [eventId, head] of capture.sceneHeads) {
+    const read = await execution.readAcceptedScene({ projectId: session.projectId, eventId });
+    if (read === null || read.revision !== head.version) {
+      return `SCENE_HEAD_MOVED: accepted scene ${eventId} changed while the render ran; candidate archived and never promoted.`;
+    }
+  }
+  return null;
+}
+
+/**
+ * Assemble the final `RenderNovelResult` from the candidate set and the
+ * commit outcome. Mirrors the tail of Core's composed `executeEditorialRender`
+ * (which is not exported piecewise): result mapping, release decisions and
+ * the publication projection are derived from the commit result, never from
+ * in-run state.
+ */
+function buildSurfaceRenderResult(
+  candidateSet: EditorialCandidateSetV1,
+  commitResult: EditorialCommitResultV1,
+): RenderNovelResult {
+  const results = candidateSet.orderedResults.map((result) => {
+    const decision = commitResult.decisions.get(result.eventId) ?? null;
+    const revisionId = commitResult.revisionIds.get(result.eventId) ?? null;
+    const disposition = commitResult.sceneDispositions.get(result.eventId) ?? 'candidate_blocked';
+    return {
+      eventId: result.eventId,
+      prose: result.prose,
+      wordCount: result.prose ? result.prose.split(/\s+/).filter(Boolean).length : 0,
+      cacheHit: result.cacheHit,
+      released: decision ? decision.status === 'accepted' : false,
+      revisionId,
+      promoted: disposition === 'candidate_promoted' || disposition === 'head_reused',
+      locked: false,
+      disposition,
+      releaseDecision: decision,
+      analysis: result.analysis,
+      validationErrors: result.validation?.errors.length ?? 0,
+      validationIssueMessages: result.validation?.errors.map((issue) => issue.message) ?? [],
+      providerCalls: result.providerCalls.map((entry) => ({
+        phase: entry.phase,
+        attempt: entry.attempt,
+        outcome: entry.outcome,
+        requestHash: entry.requestHash,
+        model: entry.model,
+        seed: entry.seed,
+        failureReason: entry.failureReason,
+      })),
+      promptHash: result.promptHash,
+      pass2Rejection: result.pass2Rejection,
+      errors: result.errors,
+      editorialErrors: [],
+    };
+  });
+  return {
+    operationId: candidateSet.operationId,
+    results,
+    errors: commitResult.editorialErrors.map((error) => error.message),
+    editorialErrors: [...commitResult.editorialErrors],
+    publication: commitResult.publication,
+  };
+}
+
+/** Map the session's detached-operation outcome onto the service's runner contract. */
+function mapDetachedOutcome<T>(
+  outcome: SessionDetachedOperationResult<T>,
+): ProjectOperationRunnerResult {
+  switch (outcome.status) {
+    case 'completed':
+      return { status: 'succeeded', result: outcome.result };
+    case 'stale':
+      return { status: 'stale' };
+    case 'cancelled':
+      return { status: 'cancelled' };
+    case 'denied':
+      return {
+        status: 'failed',
+        errorCode: `DENIED:${outcome.reason}`,
+        message: `The capability gate denied the operation: ${outcome.reason}.`,
+      };
+    case 'failed':
+      return { status: 'failed', errorCode: outcome.errorCode, message: outcome.message };
+  }
+}
+
+/** Map the operation service's enqueue outcome onto the tool result contract. */
+function mapOperationEnqueue(result: ProjectOperationEnqueueResult): McpToolResult {
+  switch (result.status) {
+    case 'queued':
+      return mcpToolOk({ status: 'queued', operationHandle: result.operationHandle });
+    case 'replayed':
+      return mcpToolOk({ status: 'queued', operationHandle: result.record.operationId });
+    case 'conflict':
+      return mcpToolError(
+        'IDEMPOTENCY_CONFLICT',
+        `An operation with the same idempotency key but a different request already exists (${result.record.operationId}).`,
+      );
+    case 'queue-full':
+      return mcpToolError(
+        'OPERATION_QUEUE_FULL',
+        `The project operation queue is full (${result.active} active operations).`,
+      );
+    case 'closed':
+      return mcpToolError('OPERATION_SERVICE_CLOSED', 'The project operation service is closed.');
+  }
+}
+
+interface RenderSurfaceRunnerOptions {
+  readonly session: ProjectSession;
+  readonly caller: McpAuthorizedCaller;
+  readonly candidates: McpCandidatesSeam;
+  readonly kind: 'render' | 'revise';
+  readonly selector: SceneSelector;
+  readonly model: string | undefined;
+  readonly references: readonly ParsedReferenceChunk[];
+  readonly revision?: { readonly instruction?: string; readonly reviewIds?: readonly string[] };
+  readonly referencePort: McpReferencePort | undefined;
+  readonly acceptedRevisionId: () => string | null;
+  readonly payload: JsonValue;
+}
+
+/**
+ * Runner wiring for `nova_render` / `nova_revise`: prepare captures the
+ * source/revision/scene-head identity inside the lane, execute runs the
+ * candidate computation off-lane with the abort signal, commit re-verifies
+ * the identity and promotes through the Core commit split.
+ */
+function buildRenderSurfaceRunner(options: RenderSurfaceRunnerOptions): ProjectOperationRunner {
+  const {
+    session,
+    caller,
+    candidates,
+    kind,
+    selector,
+    model,
+    references,
+    revision,
+    referencePort,
+    acceptedRevisionId,
+    payload,
+  } = options;
+  return async (context) => {
+    const outcome = await session.enqueueDetachedOperation({
+      kind,
+      capabilityId: caller.grant.capabilityId,
+      scope: renderSurfaceScope(references),
+      expectedVersion: caller.grant.version,
+      operationId: context.operationId,
+      payload,
+      signal: context.signal,
+      prepare: () =>
+        captureRenderIdentity(
+          session,
+          acceptedRevisionId,
+          selector.type === 'events' ? selector.eventIds : [],
+          references,
+        ),
+      execute: async (runContext, capture, executeSignal) => {
+        const resolvedReferencePacket =
+          referencePort === undefined
+            ? undefined
+            : await resolveReferencePacket(referencePort, references, session.projectId);
+        const request: EditorialRenderRequestV1 = {
+          version: 1,
+          source: capture.source,
+          selector,
+          mutation: { operationId: runContext.operationId, actorId: runContext.actorId },
+          ...(model !== undefined ? { model } : {}),
+          ...(revision === undefined ? {} : { revision }),
+          ...(resolvedReferencePacket === undefined
+            ? {}
+            : { referencePacket: resolvedReferencePacket }),
+        };
+        return candidates.execute(request, {
+          services: session.runtime.services,
+          signal: executeSignal,
+        });
+      },
+      commit: async (_runContext, capture, candidate) => {
+        if (candidate.kind === 'failed') {
+          // Preflight failure: nothing to promote; the failed result is final.
+          return { status: 'completed', result: candidate.result };
+        }
+        const stale = await stalenessReason(session, capture, acceptedRevisionId);
+        if (stale !== null) return { status: 'stale', reason: stale };
+        const commitResult = await candidates.commit(candidate.candidateSet, {
+          services: session.runtime.services,
+        });
+        if (commitResult.stale) {
+          return {
+            status: 'stale',
+            reason:
+              'ACCEPTED_HEAD_CONFLICT: an accepted scene head moved while the render ran; candidate archived and never promoted.',
+          };
+        }
+        return {
+          status: 'completed',
+          result: buildSurfaceRenderResult(candidate.candidateSet, commitResult),
+        };
+      },
+    });
+    return mapDetachedOutcome(outcome);
+  };
+}
+
+interface RenderTreeRunnerOptions {
+  readonly session: ProjectSession;
+  readonly caller: McpAuthorizedCaller;
+  readonly renderTree: McpRenderTreeFunction;
+  readonly model: string | undefined;
+  readonly references: readonly ParsedReferenceChunk[];
+  readonly referencePort: McpReferencePort | undefined;
+  readonly acceptedRevisionId: () => string | null;
+  readonly payload: JsonValue;
+}
+
+/**
+ * Runner wiring for `nova_render_tree`: same two-phase lane discipline as the
+ * surface runners. Core exposes only the composed tree render, so execute
+ * runs it whole (its internal per-route commits use the request snapshot) and
+ * commit re-verifies the captured source/revision identity before the result
+ * is reported; a moved source archives the result as stale.
+ */
+function buildRenderTreeRunner(options: RenderTreeRunnerOptions): ProjectOperationRunner {
+  const {
+    session,
+    caller,
+    renderTree,
+    model,
+    references,
+    referencePort,
+    acceptedRevisionId,
+    payload,
+  } = options;
+  return async (context) => {
+    const outcome = await session.enqueueDetachedOperation({
+      kind: 'render-tree',
+      capabilityId: caller.grant.capabilityId,
+      scope: renderSurfaceScope(references),
+      expectedVersion: caller.grant.version,
+      operationId: context.operationId,
+      payload,
+      signal: context.signal,
+      prepare: () => captureRenderIdentity(session, acceptedRevisionId, [], references),
+      execute: async (runContext, capture, executeSignal) => {
+        const resolvedReferencePacket =
+          referencePort === undefined
+            ? undefined
+            : await resolveReferencePacket(referencePort, references, session.projectId);
+        const request: RenderGameDialogueTreeRequestV1 = {
+          version: 1,
+          source: capture.source,
+          mutation: { operationId: runContext.operationId, actorId: runContext.actorId },
+          ...(model !== undefined ? { model } : {}),
+          ...(resolvedReferencePacket === undefined
+            ? {}
+            : { referencePacket: resolvedReferencePacket }),
+        };
+        return renderTree(request, {
+          services: session.runtime.services,
+          signal: executeSignal,
+        });
+      },
+      commit: async (_runContext, capture, candidate) => {
+        const stale = await stalenessReason(session, capture, acceptedRevisionId);
+        if (stale !== null) return { status: 'stale', reason: stale };
+        return { status: 'completed', result: candidate };
+      },
+    });
+    return mapDetachedOutcome(outcome);
+  };
+}
+
+/**
+ * Shared enqueue path for `nova_render` / `nova_revise`. Both tools carry the
+ * same capability/source/reference identity handling; revise additionally
+ * forwards the bounded `revision` (instruction + reviewIds) into the actual
+ * Pass 1 render request. The tool returns `{status:'queued', operationHandle}`
+ * immediately; the durable FIFO queue runs the two-phase render.
+ */
+async function enqueueRenderSurfaceOperation(options: {
+  readonly session: ProjectSession;
+  readonly caller: McpAuthorizedCaller;
+  readonly operations?: ProjectOperationService;
+  readonly candidates: McpCandidatesSeam;
+  readonly kind: 'render' | 'revise';
+  readonly selector: SceneSelector;
+  readonly model: string | undefined;
+  readonly references: readonly ParsedReferenceChunk[];
+  readonly revision?: { readonly instruction?: string; readonly reviewIds?: readonly string[] };
+  readonly referencePort: McpReferencePort | undefined;
+  readonly acceptedRevisionId: () => string | null;
+}): Promise<McpToolResult> {
+  const {
+    session,
+    caller,
+    operations,
+    candidates,
+    kind,
+    selector,
+    model,
+    references,
+    revision,
+    referencePort,
+    acceptedRevisionId,
+  } = options;
+  const source = session.source;
+  if (source === null) return NO_ACCEPTED_SOURCE;
+  const referencePacket = references.length === 0 ? undefined : (referencePort ?? null);
+  if (referencePacket === null) return NO_REFERENCE_PORT;
+  if (operations === undefined) return NO_OPERATION_SERVICE;
+  const payload: JsonValue = {
+    selector,
+    ...(model !== undefined ? { model } : {}),
+    ...(references.length === 0 ? {} : { referenceChunks: [...references] }),
+    ...(revision === undefined
+      ? {}
+      : {
+          revision: {
+            ...(revision.instruction === undefined ? {} : { instruction: revision.instruction }),
+            ...(revision.reviewIds === undefined ? {} : { reviewIds: [...revision.reviewIds] }),
+          },
+        }),
+  };
+  const requestHash = sha256Hex(JSON.stringify(payload));
+  const enqueued = await operations.enqueue({
+    kind,
+    idempotencyKey: sha256Hex(requestHash),
+    actorId: caller.grant.userId,
+    capabilityVersion: caller.grant.version,
+    sourceHash: source.sourceHash,
+    acceptedRevisionId: null,
+    requestHash,
+    runner: buildRenderSurfaceRunner({
+      session,
+      caller,
+      candidates,
+      kind,
+      selector,
+      model,
+      references,
+      revision,
+      referencePort,
+      acceptedRevisionId,
+      payload,
+    }),
+  });
+  return mapOperationEnqueue(enqueued);
+}
+
+/**
+ * Enqueue path for `nova_render_tree`. The tree request has no selector or
+ * revision (Core `RenderGameDialogueTreeRequestV1`), but capability, source
+ * and reference identity handling is identical to `nova_render`.
+ */
+async function enqueueRenderTreeOperation(options: {
+  readonly session: ProjectSession;
+  readonly caller: McpAuthorizedCaller;
+  readonly operations?: ProjectOperationService;
+  readonly renderTree: McpRenderTreeFunction;
+  readonly selector: SceneSelector;
+  readonly model: string | undefined;
+  readonly references: readonly ParsedReferenceChunk[];
+  readonly referencePort: McpReferencePort | undefined;
+  readonly acceptedRevisionId: () => string | null;
+}): Promise<McpToolResult> {
+  const {
+    session,
+    caller,
+    operations,
+    renderTree,
+    selector,
+    model,
+    references,
+    referencePort,
+    acceptedRevisionId,
+  } = options;
+  const source = session.source;
+  if (source === null) return NO_ACCEPTED_SOURCE;
+  const referencePacket = references.length === 0 ? undefined : (referencePort ?? null);
+  if (referencePacket === null) return NO_REFERENCE_PORT;
+  if (operations === undefined) return NO_OPERATION_SERVICE;
+  const payload: JsonValue = {
+    selector,
+    ...(model !== undefined ? { model } : {}),
+    ...(references.length === 0 ? {} : { referenceChunks: [...references] }),
+  };
+  const requestHash = sha256Hex(JSON.stringify(payload));
+  const enqueued = await operations.enqueue({
+    kind: 'render-tree',
+    idempotencyKey: sha256Hex(requestHash),
+    actorId: caller.grant.userId,
+    capabilityVersion: caller.grant.version,
+    sourceHash: source.sourceHash,
+    acceptedRevisionId: null,
+    requestHash,
+    runner: buildRenderTreeRunner({
+      session,
+      caller,
+      renderTree,
+      model,
+      references,
+      referencePort,
+      acceptedRevisionId,
+      payload,
+    }),
+  });
+  return mapOperationEnqueue(enqueued);
+}
+
 /**
  * Build the canonical Workbench MCP tool registry over one ProjectSession.
  * The registry owns no path, storage, credentials, or transport; it is a pure
@@ -1168,17 +2865,24 @@ export function createProjectSessionMcpRegistry(
   session: ProjectSession,
   options: McpRegistryOptions = {},
 ): McpToolRegistry {
-  const render: McpRenderFunction =
-    options.render ?? ((request, runtime) => renderNovel(request, runtime));
+  const candidates: McpCandidatesSeam = options.candidates ?? {
+    execute: (request, runtime) => executeEditorialCandidates(request, runtime),
+    commit: (candidateSet, runtime) => commitEditorialCandidates(candidateSet, runtime),
+  };
+  const renderTree: McpRenderTreeFunction = options.renderTree ?? renderGameDialogueTree;
   const definitions: readonly McpToolDefinition[] = [
     {
       ...toolMetadata('nova_status'),
       run: async () => {
-        const source = session.source;
-        return mcpToolOk({
-          projection: session.projection,
-          status: source === null ? null : getProjectStatus(source),
+        const status = await buildWorkflowStatusForSession(session, {
+          coordinator: options.coordinator,
+          revision: options.revision,
+          status: options.status,
+          plugins: options.plugins,
+          stateProjection: options.stateProjection,
+          extensionRegistrar: options.extensionRegistrar,
         });
+        return status === null ? NO_ACCEPTED_SOURCE : mcpToolOk(status);
       },
     },
     {
@@ -1186,7 +2890,12 @@ export function createProjectSessionMcpRegistry(
       run: async () => {
         const source = session.source;
         if (source === null) return NO_ACCEPTED_SOURCE;
-        return serializeValidation(source);
+        return serializeValidation(
+          source,
+          options.extensionRegistrar === undefined
+            ? undefined
+            : { extensionRegistrar: options.extensionRegistrar },
+        );
       },
     },
     {
@@ -1279,143 +2988,102 @@ export function createProjectSessionMcpRegistry(
       },
     },
     {
-      ...toolMetadata('nova_render'),
-      run: async (caller, input) => {
-        const parsed = parseObject(input, 'Input must be an object.');
-        if (!parsed.ok) return parsed.result;
-        // Fail closed: no actorId/operationId (or any other server field) may reach the queue.
-        const unknown = rejectUnknownKeys(parsed.value, [
-          'sceneSelector',
-          'model',
-          'referenceChunks',
-        ]);
-        if (unknown) return unknown;
-        let selector: SceneSelector;
-        let model: string | undefined;
-        try {
-          selector = parseSceneSelector(parsed.value.sceneSelector);
-          model = optionalString(parsed.value, 'model');
-        } catch (error) {
-          return mcpToolError('INVALID_INPUT', (error as Error).message);
-        }
-        const references: Array<{ readonly referenceId: string; readonly chunkId: string }> = [];
-        if (parsed.value.referenceChunks !== undefined) {
-          if (
-            !Array.isArray(parsed.value.referenceChunks) ||
-            parsed.value.referenceChunks.length > REFERENCE_MCP_LIMITS_V1.maxCitations
-          ) {
-            return invalidInput('referenceChunks must be a bounded array.');
-          }
-          if (!caller.grant.scopes.includes(MCP_REFERENCE_READ_SCOPE)) {
-            return mcpToolError(
-              'SCOPE_MISMATCH',
-              'Reference-backed renders require mcp:reference:read.',
-            );
-          }
-          for (const value of parsed.value.referenceChunks) {
-            const candidate = parseObject(value, 'Each reference chunk must be an object.');
-            if (!candidate.ok) return candidate.result;
-            const chunkUnknown = rejectUnknownKeys(candidate.value, ['referenceId', 'chunkId']);
-            if (chunkUnknown) return chunkUnknown;
-            const referenceId = referenceString(
-              candidate.value,
-              'referenceId',
-              REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength,
-            );
-            const chunkId = referenceString(
-              candidate.value,
-              'chunkId',
-              REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength,
-            );
-            if (!referenceId.ok) return referenceId.result;
-            if (!chunkId.ok) return chunkId.result;
-            references.push({
-              referenceId: requiredParsedValue(referenceId.value),
-              chunkId: requiredParsedValue(chunkId.value),
-            });
-          }
-        }
+      ...toolMetadata('nova_graph'),
+      run: async (_caller, input) => {
         const source = session.source;
         if (source === null) return NO_ACCEPTED_SOURCE;
-        const referencePacket =
-          references.length === 0
-            ? undefined
-            : (() => {
-                const reference = options.reference;
-                if (reference === undefined) return null;
-                return reference;
-              })();
-        if (referencePacket === null) return NO_REFERENCE_PORT;
-
-        if (
-          new Set(references.map((value) => `${value.referenceId}\u0000${value.chunkId}`)).size !==
-          references.length
-        ) {
-          return invalidInput('referenceChunks must not contain duplicates.');
-        }
-        const operation = await session.enqueueOperation({
+        const parsed = parseObject(input, 'Input must be an object.');
+        if (!parsed.ok) return parsed.result;
+        const selector = parseRouteSelector(parsed.value);
+        if (!selector.ok) return selector.result;
+        return mcpToolOk(projectCanonicalGraphRuntime(source, selector.value));
+      },
+    },
+    {
+      ...toolMetadata('nova_render'),
+      run: async (caller, input) => {
+        const parsed = parseRenderInput(input, caller, options);
+        if (!parsed.ok) return parsed.result;
+        return enqueueRenderSurfaceOperation({
+          session,
+          caller,
+          operations: options.operations,
+          candidates,
           kind: 'render',
-          capabilityId: caller.grant.capabilityId,
-          scope:
-            references.length === 0
-              ? [MCP_RENDER_SCOPE]
-              : [MCP_RENDER_SCOPE, MCP_REFERENCE_READ_SCOPE],
-          expectedVersion: caller.grant.version,
-          payload: {
-            selector,
-            ...(model !== undefined ? { model } : {}),
-            ...(references.length === 0 ? {} : { referenceChunks: references }),
-          },
-          run: async (context) => {
-            const resolvedReferencePacket =
-              referencePacket === undefined
-                ? undefined
-                : {
-                    version: 1 as const,
-                    projectId: session.projectId,
-                    citations: await Promise.all(
-                      references.map(async ({ referenceId, chunkId }, index) => {
-                        const result = await referencePacket.getChunk({
-                          version: 1,
-                          referenceId,
-                          chunkId,
-                        });
-                        if (result === null)
-                          throw new InputShapeError('Reference chunk was not found.');
-                        const chunk = result.chunk;
-                        if (chunk.quote === null || chunk.quote.length === 0) {
-                          throw new InputShapeError('Reference chunk has no text quote.');
-                        }
-                        return {
-                          version: 1 as const,
-                          citationId: `${chunk.referenceId}:${chunk.chunkId}:${index}`,
-                          referenceId: chunk.referenceId,
-                          chunkId: chunk.chunkId,
-                          contentHash: chunk.contentHash,
-                          chunkHash: chunk.chunkHash,
-                          quote: chunk.quote,
-                          locator: chunk.locator,
-                          authoritative: false as const,
-                        };
-                      }),
-                    ),
-                  };
-            return render(
-              {
-                version: 1,
-                source,
-                selector,
-                mutation: { operationId: context.operationId, actorId: context.actorId },
-                ...(model !== undefined ? { model } : {}),
-                ...(resolvedReferencePacket === undefined
-                  ? {}
-                  : { referencePacket: resolvedReferencePacket }),
-              },
-              { services: session.runtime.services },
-            );
-          },
+          selector: parsed.value.selector,
+          model: parsed.value.model,
+          references: parsed.value.references,
+          referencePort: options.reference,
+          acceptedRevisionId: acceptedRevisionIdFor(options),
         });
-        return mapOperationResult(operation);
+      },
+    },
+    {
+      ...toolMetadata('nova_revise'),
+      run: async (caller, input) => {
+        const parsed = parseRenderInput(input, caller, options, ['instruction', 'reviewIds']);
+        if (!parsed.ok) return parsed.result;
+        const { selector, model, references, fields } = parsed.value;
+        let instruction: string | undefined;
+        if (fields.instruction !== undefined) {
+          if (typeof fields.instruction !== 'string' || fields.instruction.length > 4096) {
+            return invalidInput('instruction must be a string of at most 4096 characters.');
+          }
+          instruction = fields.instruction;
+        }
+        let reviewIds: readonly string[] | undefined;
+        if (fields.reviewIds !== undefined) {
+          const ids = fields.reviewIds;
+          if (!Array.isArray(ids) || ids.length > 256) {
+            return invalidInput('reviewIds must be an array of at most 256 review ids.');
+          }
+          if (!ids.every((entry) => typeof entry === 'string' && entry.length > 0)) {
+            return invalidInput('each reviewIds entry must be a non-empty string.');
+          }
+          if (new Set(ids).size !== ids.length) {
+            return invalidInput('reviewIds must not contain duplicates.');
+          }
+          reviewIds = ids;
+        }
+        const revision =
+          instruction === undefined && reviewIds === undefined
+            ? undefined
+            : {
+                ...(instruction === undefined ? {} : { instruction }),
+                ...(reviewIds === undefined ? {} : { reviewIds }),
+              };
+        const operations = options.operations;
+        return enqueueRenderSurfaceOperation({
+          session,
+          caller,
+          operations,
+          candidates,
+          kind: 'revise',
+          selector,
+          model,
+          references,
+          revision,
+          referencePort: options.reference,
+          acceptedRevisionId: acceptedRevisionIdFor(options),
+        });
+      },
+    },
+    {
+      ...toolMetadata('nova_render_tree'),
+      run: async (caller, input) => {
+        const parsed = parseRenderInput(input, caller, options);
+        if (!parsed.ok) return parsed.result;
+        return enqueueRenderTreeOperation({
+          session,
+          caller,
+          operations: options.operations,
+          renderTree,
+          selector: parsed.value.selector,
+          model: parsed.value.model,
+          references: parsed.value.references,
+          referencePort: options.reference,
+          acceptedRevisionId: acceptedRevisionIdFor(options),
+        });
       },
     },
     {
@@ -1906,6 +3574,7 @@ export function createProjectSessionMcpRegistry(
           version: AUTHORING_CONTRACT_VERSION,
           projectId: session.projectId,
           state,
+          nextWorkingAction: authoringNextWorkingAction(state),
           generatedAt: state.generatedAt,
         };
         return mcpToolOk(output);
@@ -2125,6 +3794,40 @@ export function createProjectSessionMcpRegistry(
       },
     },
     {
+      ...toolMetadata('nova_authoring_validate'),
+      run: async (_caller, input) => {
+        const parsed = parseToolInput(input, [
+          'version',
+          'expectedWorkspaceDigest',
+          'expectedAcceptedSourceHash',
+        ]);
+        if (!parsed.ok) return parsed.result;
+        const coordinator = options.coordinator;
+        if (coordinator === undefined) return NO_AUTHORING_COORDINATOR;
+        const digest = requiredString(parsed.value, 'expectedWorkspaceDigest');
+        if (!digest.ok) return digest.result;
+        const accepted = nullableStringField(parsed.value, 'expectedAcceptedSourceHash');
+        if (!accepted.ok) return accepted.result;
+        try {
+          return mcpToolOk(
+            await coordinator.validateWorking({
+              expectedWorkspaceDigest: digest.value,
+              expectedAcceptedSourceHash: accepted.value,
+            }),
+          );
+        } catch (error) {
+          if (
+            error instanceof Error &&
+            'code' in error &&
+            typeof (error as { readonly code?: unknown }).code === 'string'
+          ) {
+            return mcpToolError((error as { readonly code: string }).code, error.message);
+          }
+          return mcpToolError('INTERNAL_ERROR', sanitizeError(error));
+        }
+      },
+    },
+    {
       ...toolMetadata('nova_authoring_submit'),
       run: async (caller, input) => {
         const parsed = parseToolInput(input, ['version', 'expectedWorkspaceDigest', 'message']);
@@ -2165,6 +3868,29 @@ export function createProjectSessionMcpRegistry(
           operationId: operationHandle.value,
         };
         return mcpToolOk(await coordinator.getOperation(request));
+      },
+    },
+    {
+      ...toolMetadata('nova_operation_cancel'),
+      run: async (_caller, input) => {
+        const parsed = parseToolInput(input, ['version', 'operationHandle']);
+        if (!parsed.ok) return parsed.result;
+        const operations = options.operations;
+        if (operations === undefined) return NO_OPERATION_SERVICE;
+        const operationHandle = requiredString(parsed.value, 'operationHandle');
+        if (!operationHandle.ok) return operationHandle.result;
+        const result = await operations.cancel(operationHandle.value);
+        if (result.status === 'not-found') {
+          return mcpToolError(
+            'OPERATION_NOT_FOUND',
+            `No operation "${operationHandle.value}" exists for this project.`,
+          );
+        }
+        return mcpToolOk({
+          version: AUTHORING_CONTRACT_VERSION,
+          operationId: operationHandle.value,
+          status: result.record.status,
+        });
       },
     },
     {
@@ -2259,6 +3985,42 @@ export function createProjectSessionMcpRegistry(
       },
     },
     {
+      ...toolMetadata('nova_event_state_diff'),
+      run: async (_caller, input) => {
+        const source = session.source;
+        if (source === null) return NO_ACCEPTED_SOURCE;
+        const parsed = parseObject(input, 'Input must be an object.');
+        if (!parsed.ok) return parsed.result;
+        const unknown = rejectUnknownKeys(parsed.value, ['eventId']);
+        if (unknown) return unknown;
+        const eventId = requiredString(parsed.value, 'eventId');
+        if (!eventId.ok) return eventId.result;
+        // Plan 8.4: read through the per-source/route projection service when
+        // wired (nearest verified snapshot → suffix, full-replay fallback);
+        // the raw `diffEvent` compile stays as the fallback when the service
+        // is unavailable. The service is a derived cache, never a second
+        // authority — its per-event states are pinned to the full canonical
+        // replay by the state-projection equivalence gate.
+        const projection = options.stateProjection;
+        const diff =
+          projection === undefined
+            ? diffEvent(source, eventId.value)
+            : await projection.diff(source, eventId.value);
+        if (diff === null) {
+          return mcpToolError(
+            'EVENT_NOT_FOUND',
+            `The event "${eventId.value}" is not present in the accepted source.`,
+          );
+        }
+        return mcpToolOk({
+          eventId: eventId.value,
+          before: diff.before,
+          after: diff.after,
+          changed: diff.changed,
+        });
+      },
+    },
+    {
       ...toolMetadata('nova_revision_restore'),
       run: async (caller, input) => {
         const parsed = parseToolInput(input, [
@@ -2293,6 +4055,297 @@ export function createProjectSessionMcpRegistry(
           }),
           AUTHORING_CONTRACT_VERSION,
         );
+      },
+    },
+    {
+      ...toolMetadata('nova_review_list'),
+      run: async (_caller, input) => {
+        const parsed = parseReviewInput(input, [
+          'version',
+          'status',
+          'severity',
+          'targetType',
+          'targetId',
+          'eventId',
+        ]);
+        if (!parsed.ok) return parsed.result;
+        const review = options.review;
+        if (review === undefined) return NO_REVIEW_SERVICE;
+        const status = reviewOptionalEnum(parsed.value, 'status', REVIEW_COMMENT_STATUSES);
+        const severity = reviewOptionalEnum(parsed.value, 'severity', REVIEW_SEVERITIES);
+        const targetType = reviewOptionalEnum(parsed.value, 'targetType', REVIEW_TARGET_TYPES);
+        const targetId = reviewOptionalString(parsed.value, 'targetId', 4096);
+        const eventId = reviewOptionalString(parsed.value, 'eventId', 4096);
+        if (!status.ok) return status.result;
+        if (!severity.ok) return severity.result;
+        if (!targetType.ok) return targetType.result;
+        if (!targetId.ok) return targetId.result;
+        if (!eventId.ok) return eventId.result;
+        const comments = await review.listComments({
+          ...(status.value === undefined
+            ? {}
+            : { status: status.value as HostReviewCommentV1['status'] }),
+          ...(severity.value === undefined
+            ? {}
+            : { severity: severity.value as HostReviewCommentV1['severity'] }),
+          ...(targetType.value === undefined ? {} : { targetType: targetType.value }),
+          ...(targetId.value === undefined ? {} : { targetId: targetId.value }),
+          ...(eventId.value === undefined ? {} : { eventId: eventId.value }),
+        });
+        return mcpToolOk({ version: 1, items: comments.map(safeReviewComment) });
+      },
+    },
+    {
+      ...toolMetadata('nova_review_get'),
+      run: async (_caller, input) => {
+        const parsed = parseReviewInput(input, ['version', 'commentId']);
+        if (!parsed.ok) return parsed.result;
+        const review = options.review;
+        if (review === undefined) return NO_REVIEW_SERVICE;
+        const commentId = requiredString(parsed.value, 'commentId');
+        if (!commentId.ok) return commentId.result;
+        const comment = await review.getComment(commentId.value);
+        return mcpToolOk({
+          version: 1,
+          comment: comment === null ? null : safeReviewComment(comment),
+        });
+      },
+    },
+    {
+      ...toolMetadata('nova_review_add'),
+      run: async (caller, input) => {
+        const parsed = parseReviewInput(input, [
+          'version',
+          'target',
+          'severity',
+          'category',
+          'content',
+        ]);
+        if (!parsed.ok) return parsed.result;
+        const review = options.review;
+        if (review === undefined) return NO_REVIEW_SERVICE;
+        const target = parseReviewTarget(parsed.value);
+        if (!target.ok) return target.result;
+        const severity = reviewOptionalEnum(parsed.value, 'severity', REVIEW_SEVERITIES);
+        const category = reviewOptionalEnum(parsed.value, 'category', REVIEW_CATEGORIES);
+        if (!severity.ok) return severity.result;
+        if (!category.ok) return category.result;
+        if (severity.value === undefined || category.value === undefined) {
+          return invalidInput('severity and category are required for a new comment.');
+        }
+        const content = requiredString(parsed.value, 'content');
+        if (!content.ok) return content.result;
+        if (content.value.length > 65536) {
+          return invalidInput('content must be a string of at most 65536 characters.');
+        }
+        try {
+          const comment = await review.addComment(
+            {
+              target: target.value,
+              severity: severity.value as HostNewReviewCommentV1['severity'],
+              category: category.value as HostNewReviewCommentV1['category'],
+              content: content.value,
+            },
+            caller,
+          );
+          return mcpToolOk({ version: 1, comment: safeReviewComment(comment) });
+        } catch (error) {
+          return reviewErrorResult(error);
+        }
+      },
+    },
+    {
+      ...toolMetadata('nova_review_update'),
+      run: async (caller, input) => {
+        const parsed = parseReviewInput(input, [
+          'version',
+          'commentId',
+          'action',
+          'target',
+          'severity',
+          'category',
+          'content',
+        ]);
+        if (!parsed.ok) return parsed.result;
+        const review = options.review;
+        if (review === undefined) return NO_REVIEW_SERVICE;
+        const commentId = requiredString(parsed.value, 'commentId');
+        if (!commentId.ok) return commentId.result;
+        const action = reviewOptionalEnum(parsed.value, 'action', REVIEW_UPDATE_ACTIONS);
+        if (!action.ok) return action.result;
+        if (action.value === undefined) {
+          return invalidInput('action is required for a comment update.');
+        }
+        let update: McpReviewCommentUpdateV1;
+        if (action.value === 'replace') {
+          const target = parseReviewTarget(parsed.value);
+          if (!target.ok) return target.result;
+          const severity = reviewOptionalEnum(parsed.value, 'severity', REVIEW_SEVERITIES);
+          const category = reviewOptionalEnum(parsed.value, 'category', REVIEW_CATEGORIES);
+          if (!severity.ok) return severity.result;
+          if (!category.ok) return category.result;
+          if (severity.value === undefined || category.value === undefined) {
+            return invalidInput('replace requires target, severity, category, and content.');
+          }
+          const content = requiredString(parsed.value, 'content');
+          if (!content.ok) return content.result;
+          if (content.value.length > 65536) {
+            return invalidInput('content must be a string of at most 65536 characters.');
+          }
+          update = {
+            action: 'replace',
+            commentId: commentId.value,
+            input: {
+              target: target.value,
+              severity: severity.value as HostNewReviewCommentV1['severity'],
+              category: category.value as HostNewReviewCommentV1['category'],
+              content: content.value,
+            },
+          };
+        } else {
+          update = {
+            action: action.value as 'resolve' | 'wontfix' | 'reopen' | 'escalate',
+            commentId: commentId.value,
+          };
+        }
+        try {
+          const comment = await review.updateComment(update, caller);
+          return mcpToolOk({ version: 1, comment: safeReviewComment(comment) });
+        } catch (error) {
+          return reviewErrorResult(error);
+        }
+      },
+    },
+    {
+      ...toolMetadata('nova_release_gate_list'),
+      run: async (_caller, input) => {
+        const parsed = parseReviewInput(input, ['version', 'eventId']);
+        if (!parsed.ok) return parsed.result;
+        const review = options.review;
+        if (review === undefined) return NO_REVIEW_SERVICE;
+        const eventId = reviewOptionalString(parsed.value, 'eventId', 4096);
+        if (!eventId.ok) return eventId.result;
+        const gates = await review.listGates(eventId.value);
+        return mcpToolOk({ version: 1, items: gates.map(safeReviewGate) });
+      },
+    },
+    {
+      ...toolMetadata('nova_release_gate_decide'),
+      run: async (caller, input) => {
+        const parsed = parseReviewInput(input, [
+          'version',
+          'eventId',
+          'candidateRevisionId',
+          'decision',
+          'reason',
+        ]);
+        if (!parsed.ok) return parsed.result;
+        const review = options.review;
+        if (review === undefined) return NO_REVIEW_SERVICE;
+        const eventId = requiredString(parsed.value, 'eventId');
+        if (!eventId.ok) return eventId.result;
+        const candidateRevisionId = requiredString(parsed.value, 'candidateRevisionId');
+        if (!candidateRevisionId.ok) return candidateRevisionId.result;
+        const decision = reviewOptionalEnum(parsed.value, 'decision', ['accept', 'reject']);
+        if (!decision.ok) return decision.result;
+        if (decision.value === undefined) {
+          return invalidInput('decision must be accept or reject.');
+        }
+        const reason = requiredString(parsed.value, 'reason');
+        if (!reason.ok) return reason.result;
+        if (reason.value.length > 4096) {
+          return invalidInput('reason must be a string of at most 4096 characters.');
+        }
+        try {
+          const resolution = await review.decideGate(
+            {
+              eventId: eventId.value,
+              candidateRevisionId: candidateRevisionId.value,
+              decision: decision.value as 'accept' | 'reject',
+              reason: reason.value,
+            },
+            caller,
+          );
+          return mcpToolOk({ version: 1, resolution });
+        } catch (error) {
+          return reviewErrorResult(error);
+        }
+      },
+    },
+    {
+      ...toolMetadata('nova_publish'),
+      run: async (caller, input) => {
+        const parsed = parsePublicationVersionedInput(input, [
+          'version',
+          'branchPath',
+          'discourseBranch',
+          'title',
+        ]);
+        if (!parsed.ok) return parsed.result;
+        const publication = options.publication;
+        if (publication === undefined) return NO_PUBLICATION_SERVICE;
+        if (session.source === null) return NO_ACCEPTED_SOURCE;
+        const request = parsePublishRequest(parsed.value);
+        if (!request.ok) return request.result;
+        try {
+          const result = await publication.publish(request.value, caller);
+          return mapOperationEnqueue(result.enqueue);
+        } catch (error) {
+          return publicationErrorResult(error);
+        }
+      },
+    },
+    {
+      ...toolMetadata('nova_publication_get'),
+      run: async (_caller, input) => {
+        const parsed = parsePublicationVersionedInput(input, ['version', 'publicationId']);
+        if (!parsed.ok) return parsed.result;
+        const publication = options.publication;
+        if (publication === undefined) return NO_PUBLICATION_SERVICE;
+        const publicationId = parsePublicationId(parsed.value);
+        if (!publicationId.ok) return publicationId.result;
+        const record = await publication.get(publicationId.value);
+        return mcpToolOk({
+          version: 1,
+          publication: record === null ? null : safePublicationRecord(record),
+        });
+      },
+    },
+    {
+      ...toolMetadata('nova_publication_read'),
+      run: async (_caller, input) => {
+        const parsed = parsePublicationVersionedInput(input, [
+          'version',
+          'publicationId',
+          'offset',
+          'limit',
+        ]);
+        if (!parsed.ok) return parsed.result;
+        const publication = options.publication;
+        if (publication === undefined) return NO_PUBLICATION_SERVICE;
+        const publicationId = parsePublicationId(parsed.value);
+        if (!publicationId.ok) return publicationId.result;
+        const offset = parsed.value.offset;
+        if (typeof offset !== 'number' || !Number.isSafeInteger(offset) || offset < 0) {
+          return invalidInput('offset must be a non-negative integer.');
+        }
+        const limit = parsed.value.limit;
+        if (
+          typeof limit !== 'number' ||
+          !Number.isSafeInteger(limit) ||
+          limit < 1 ||
+          limit > PUBLICATION_MAX_READ_BYTES
+        ) {
+          return invalidInput(
+            `limit must be an integer between 1 and ${PUBLICATION_MAX_READ_BYTES}.`,
+          );
+        }
+        try {
+          const result = await publication.read(publicationId.value, offset, limit);
+          return mcpToolOk({ version: 1, ...result });
+        } catch (error) {
+          return publicationErrorResult(error);
+        }
       },
     },
     {
@@ -2598,6 +4651,23 @@ export function createProjectSessionMcpRegistry(
       },
     },
     {
+      // Trusted-plugin discovery (plan 7.7): name/version/moduleHash triples
+      // for the plugins the Host found under one configured project root, so
+      // the owner admin can build a trusted allowlist from real identities
+      // only. Discovery makes no trust decision; activation/trust stays with
+      // `activateNodePlugins`.
+      ...toolMetadata('nova_admin_plugins_discovered'),
+      run: async (_caller, input) => {
+        const parsed = parseAdminVersionedInput(input, ['version', 'projectId']);
+        if (!parsed.ok) return parsed.result;
+        const projectId = adminString(parsed.value, 'projectId');
+        if (!projectId.ok) return projectId.result;
+        const method = options.admin?.pluginsDiscovered;
+        if (method === undefined) return NO_ADMIN_SERVICE;
+        return mcpToolOk(await method({ version: 1, projectId: projectId.value }));
+      },
+    },
+    {
       ...toolMetadata('nova_admin_config_preview'),
       run: async (_caller, input) => {
         const parsed = parseObject(input, 'Input must be an object.');
@@ -2640,6 +4710,9 @@ export function createProjectSessionMcpRegistry(
       return selectedDefinitions.filter((definition) =>
         definition.requiredScopes.every((scope) => permittedScopes.includes(scope)),
       );
+    },
+    definitions() {
+      return selectedDefinitions;
     },
     get(name) {
       return byName.get(name) ?? null;

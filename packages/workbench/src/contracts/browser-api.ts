@@ -44,9 +44,31 @@ export const BROWSER_PROJECT_OVERVIEW_PATH = `${BROWSER_API_BASE_PATH}/projects/
 export const BROWSER_PROJECT_GRAPHS_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/graphs`;
 /** `GET /api/v1/projects/:projectId/references` — safe reference catalog. */
 export const BROWSER_PROJECT_REFERENCES_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/references`;
+/** `GET /api/v1/projects/:projectId/capabilities` — Host-derived feature gates. */
+export const BROWSER_PROJECT_CAPABILITIES_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/capabilities`;
 
 /** Query parameter carrying the strict route selector on the graphs endpoint. */
 export const BROWSER_GRAPH_ROUTE_QUERY = 'route';
+
+/** `GET /api/v1/projects/:projectId/reviews` — review comment list. */
+export const BROWSER_PROJECT_REVIEWS_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/reviews`;
+/** `GET /api/v1/projects/:projectId/reviews/:commentId` — one comment. */
+export const BROWSER_PROJECT_REVIEW_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/reviews/:commentId`;
+/** `GET /api/v1/projects/:projectId/reviews/history` — safe review event trail. */
+export const BROWSER_PROJECT_REVIEW_HISTORY_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/reviews/history`;
+/** `GET /api/v1/projects/:projectId/gates` — release gate list. */
+export const BROWSER_PROJECT_GATES_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/gates`;
+/** `POST /api/v1/projects/:projectId/gates/:gateId/decision` — gate decision. */
+export const BROWSER_PROJECT_GATE_DECISION_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/gates/:gateId/decision`;
+/** `GET/POST /api/v1/projects/:projectId/publications` — publication list / publish. */
+export const BROWSER_PROJECT_PUBLICATIONS_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/publications`;
+/** `GET /api/v1/projects/:projectId/publications/:publicationId` — one publication. */
+export const BROWSER_PROJECT_PUBLICATION_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/publications/:publicationId`;
+/** `GET /api/v1/projects/:projectId/publications/:publicationId/content` — bounded markdown slice. */
+export const BROWSER_PROJECT_PUBLICATION_CONTENT_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/publications/:publicationId/content`;
+/** Query parameters of the bounded publication content endpoint. */
+export const BROWSER_PUBLICATION_CONTENT_OFFSET_QUERY = 'offset';
+export const BROWSER_PUBLICATION_CONTENT_LIMIT_QUERY = 'limit';
 
 /**
  * Safe current-session principal. Identity + role + display fields only:
@@ -117,6 +139,29 @@ export interface BrowserProjectOverviewV1 {
   readonly generatedAt: string;
 }
 /**
+ * Host-derived feature gate for one project view surface. The Host publishes
+ * a feature only when the complete service and route behind it are registered
+ * and reachable; the client never infers features from navigation constants
+ * or configuration. `agent-chat` additionally stays hidden until the Agent
+ * parity gate passes.
+ */
+export type WorkbenchProjectFeatureV1 =
+  | 'project-home'
+  | 'source-studio'
+  | 'scene-canvas'
+  | 'graph-route'
+  | 'review-hub'
+  | 'publication'
+  | 'agent-chat';
+
+/** Versioned capabilities envelope for one project. */
+export interface BrowserProjectCapabilitiesV1 {
+  readonly version: 1;
+  readonly projectId: string;
+  readonly features: readonly WorkbenchProjectFeatureV1[];
+}
+
+/**
  * Strict documented route selector for `GET /api/v1/projects/:projectId/graphs`.
  * Single source of truth: the graph contract's {@link WorkbenchRouteSelectorV1},
  * aliased here as the browser API's wire selector.
@@ -168,11 +213,368 @@ export type BrowserApiErrorCode =
   /** 503 — the project's reference library is unavailable. */
   | 'REFERENCE_UNAVAILABLE'
   /** 409 — an import lifecycle operation conflicts with the current job state. */
-  | 'REFERENCE_CONFLICT';
+  | 'REFERENCE_CONFLICT'
+  /** 404 — the review comment does not exist or is superseded away. */
+  | 'REVIEW_COMMENT_NOT_FOUND'
+  /** 400 — a review request is malformed or violates a documented bound. */
+  | 'REVIEW_INVALID'
+  /** 503 — the project review stream is unavailable. */
+  | 'REVIEW_UNAVAILABLE'
+  /** 404 — the release gate does not exist. */
+  | 'GATE_NOT_FOUND'
+  /** 409 — the gate is not open (already decided or superseded). */
+  | 'GATE_NOT_OPEN'
+  /** 400 — the gate decision violates a documented bound. */
+  | 'GATE_DECISION_INVALID'
+  /** 404 — the publication does not exist. */
+  | 'PUBLICATION_NOT_FOUND'
+  /** 400 — a publication request is malformed or violates a documented bound. */
+  | 'PUBLICATION_INVALID'
+  /** 503 — the project publication repository is unavailable. */
+  | 'PUBLICATION_UNAVAILABLE'
+  /** 409 — publication conflicts with the current accepted source/scope identity. */
+  | 'PUBLICATION_CONFLICT'
+  /** 503 — the Agent chat surface is not enabled for this project. */
+  | 'AGENT_CHAT_UNAVAILABLE'
+  /** 404 — the agent conversation does not exist. */
+  | 'AGENT_CHAT_CONVERSATION_NOT_FOUND'
+  /** 404 — the agent run does not exist. */
+  | 'AGENT_CHAT_RUN_NOT_FOUND'
+  /** 400 — an agent chat request is malformed or exceeds a documented bound. */
+  | 'AGENT_CHAT_INVALID'
+  /** 409 — the run is already terminal and cannot be cancelled/retried here. */
+  | 'AGENT_CHAT_RUN_TERMINAL'
+  /** 409 — the project operation queue is full; retry later. */
+  | 'AGENT_CHAT_QUEUE_FULL';
 /** Secret-free error envelope for every non-2xx browser read response. */
 export interface BrowserApiErrorV1 {
   readonly error: {
     readonly code: BrowserApiErrorCode;
     readonly message: string;
   };
+}
+
+// ─── Review Hub contract ────────────────────────────────────────────────────
+// Browser-safe review DTOs: comments, their revision linkage, the safe event
+// trail, and release gates. The boundary rules are absolute: no actor
+// secrets, no capability tokens, no revision bytes, no filesystem paths, and
+// no raw event payloads ever cross this boundary. All identity fields are
+// Host-allocated opaque strings; `actorId` from the review stream is never
+// echoed here.
+
+/** Comment severity projected from the review stream. */
+export type BrowserReviewSeverityV1 = 'nit' | 'suggestion' | 'blocking';
+/** Comment category projected from the review stream. */
+export type BrowserReviewCategoryV1 =
+  | 'style'
+  | 'pacing'
+  | 'character_voice'
+  | 'plot_logic'
+  | 'world_consistency'
+  | 'reader_experience';
+/** Comment lifecycle status projected from the append-only review stream. */
+export type BrowserReviewStatusV1 = 'open' | 'addressed' | 'resolved' | 'wontfix' | 'superseded';
+/** Target kinds a review comment can be attached to. */
+export type BrowserReviewTargetTypeV1 =
+  | 'novel'
+  | 'chapter'
+  | 'scene'
+  | 'line'
+  | 'character'
+  | 'worldrule';
+
+/**
+ * One revision application: which revision addressed (or considered) the
+ * comment. Written from `comment_applied` events; this is the Review Hub's
+ * revision linkage. No revision bytes or operation internals are included.
+ */
+export interface BrowserReviewApplicationV1 {
+  /** The scene event the applied revision rendered. */
+  readonly eventId: string;
+  /** Accepted native revision id that produced the prose. */
+  readonly revisionId: string;
+  /** Durable operation id that ran the revision. */
+  readonly operationId: string;
+  readonly appliedAt: string;
+}
+
+/**
+ * One browser-safe review comment. `eventId` is the target scene event id
+ * (novel/chapter/line targets still carry the owning scene event when the
+ * Host can resolve one). `supersedesId` links a replacement to its
+ * predecessor; `applications` carry the revision linkage. No actor id, no
+ * line bytes, no paths.
+ */
+export interface BrowserReviewCommentV1 {
+  readonly version: BrowserApiVersion;
+  readonly commentId: string;
+  readonly eventId: string;
+  readonly targetType: BrowserReviewTargetTypeV1;
+  readonly severity: BrowserReviewSeverityV1;
+  readonly category: BrowserReviewCategoryV1;
+  readonly content: string;
+  readonly status: BrowserReviewStatusV1;
+  readonly author: 'human' | 'llm';
+  readonly createdAt: string;
+  readonly resolvedAt: string | null;
+  readonly supersedesId: string | null;
+  readonly applications: readonly BrowserReviewApplicationV1[];
+}
+
+/** Review comment list for one project, optionally narrowed to one event. */
+export interface BrowserReviewListV1 {
+  readonly version: BrowserApiVersion;
+  readonly projectId: string;
+  readonly comments: readonly BrowserReviewCommentV1[];
+  readonly generatedAt: string;
+}
+
+/** One comment result (get/add/update all return the projected comment). */
+export interface BrowserReviewCommentResultV1 {
+  readonly version: BrowserApiVersion;
+  readonly comment: BrowserReviewCommentV1;
+}
+
+/** Kinds of review events surfaced in the safe history trail. */
+export type BrowserReviewHistoryKindV1 =
+  | 'comment_added'
+  | 'comment_replaced'
+  | 'comment_status_changed'
+  | 'comment_applied'
+  | 'gate_opened'
+  | 'gate_decided'
+  | 'gate_superseded';
+
+/**
+ * One safe entry of the review event trail. The Host renders each event to
+ * `summary` (never raw payloads) and links it to its comment or gate; actor
+ * ids and event payload internals are never included.
+ */
+export interface BrowserReviewHistoryEntryV1 {
+  readonly version: BrowserApiVersion;
+  readonly sequence: number;
+  readonly kind: BrowserReviewHistoryKindV1;
+  readonly commentId: string | null;
+  readonly gateId: string | null;
+  /** Native revision id for `comment_applied` entries; null otherwise. */
+  readonly revisionId: string | null;
+  readonly at: string;
+  readonly summary: string;
+}
+
+/** Review history trail for one project, optionally narrowed to one event. */
+export interface BrowserReviewHistoryV1 {
+  readonly version: BrowserApiVersion;
+  readonly projectId: string;
+  readonly entries: readonly BrowserReviewHistoryEntryV1[];
+  readonly generatedAt: string;
+}
+
+/** Lifecycle status of one release gate. */
+export type BrowserReviewGateStatusV1 = 'open' | 'decided' | 'superseded';
+
+/** Browser-safe gate decision; the maintainer actor id stays server-side. */
+export interface BrowserReviewGateDecisionV1 {
+  readonly decision: 'waived' | 'rejected' | 'accepted';
+  readonly revisionId: string;
+  readonly reason: string;
+  readonly decidedAt: string;
+}
+
+/**
+ * One browser-safe release gate for a scene candidate. Identity fields are
+ * hashes only (never prose bytes); `warningFingerprints` are stable
+ * fingerprints, not free text. The binding candidate revision is
+ * `revisionId`.
+ */
+export interface BrowserReviewGateV1 {
+  readonly version: BrowserApiVersion;
+  readonly gateId: string;
+  readonly eventId: string;
+  readonly sourceHash: string;
+  readonly proseHash: string;
+  readonly scopeHash: string;
+  readonly validationIdentity: string;
+  readonly warningFingerprints: readonly string[];
+  readonly revisionId: string;
+  readonly status: BrowserReviewGateStatusV1;
+  readonly decision: BrowserReviewGateDecisionV1 | null;
+  readonly openedAt: string;
+  readonly supersededAt: string | null;
+}
+
+/** Release gate list for one project, optionally narrowed to one event. */
+export interface BrowserReviewGateListV1 {
+  readonly version: BrowserApiVersion;
+  readonly projectId: string;
+  readonly gates: readonly BrowserReviewGateV1[];
+  readonly generatedAt: string;
+}
+
+/** Explicit browser review-comment add request. */
+export interface BrowserReviewAddRequestV1 {
+  readonly version: BrowserApiVersion;
+  readonly projectId: string;
+  /** Scene event the comment targets. */
+  readonly eventId: string;
+  readonly severity: BrowserReviewSeverityV1;
+  readonly category: BrowserReviewCategoryV1;
+  readonly content: string;
+}
+
+/**
+ * Comment update actions. `addressed` is NOT an action: it is written only
+ * by `comment_applied` events after a revision addresses the comment.
+ */
+export type BrowserReviewUpdateActionV1 = 'replace' | 'resolve' | 'wontfix' | 'reopen' | 'escalate';
+
+/** Explicit browser review-comment update request. */
+export interface BrowserReviewUpdateRequestV1 {
+  readonly version: BrowserApiVersion;
+  readonly projectId: string;
+  readonly commentId: string;
+  readonly action: BrowserReviewUpdateActionV1;
+  /** Replacement content; required for `replace`. */
+  readonly content?: string;
+  readonly severity?: BrowserReviewSeverityV1;
+  readonly category?: BrowserReviewCategoryV1;
+}
+
+/** Explicit browser release-gate decision request. */
+export interface BrowserReviewGateDecideRequestV1 {
+  readonly version: BrowserApiVersion;
+  readonly projectId: string;
+  readonly gateId: string;
+  readonly decision: 'accept' | 'reject';
+  readonly reason: string;
+}
+
+/** Immediate result of a gate decision; async promotion continues as an operation. */
+export interface BrowserReviewGateDecisionResultV1 {
+  readonly version: BrowserApiVersion;
+  readonly projectId: string;
+  readonly gateId: string;
+  readonly eventId: string;
+  readonly outcome: 'accepted' | 'rejected' | 'stale' | 'superseded';
+  /** Gate decision status; `pending_waiver` only under strict release policy. */
+  readonly decisionStatus: 'accepted' | 'pending_waiver' | 'blocked';
+  readonly decidedAt: string;
+}
+
+// ─── Publication contract ───────────────────────────────────────────────────
+// Browser-safe publication DTOs: the project-relative artifact catalog and
+// the bounded content reader. The boundary rules are absolute: `relativeOutputPath`
+// is project-relative (never an absolute Host path), hashes are identity only
+// (never prose bytes), `actorId` from the publication record is never echoed,
+// and content is read through the bounded read route — the browser never
+// learns where the file lives on the Host.
+
+/** Publication kind: the canonical novel or a custom branch publication. */
+export type BrowserPublicationKindV1 = 'canonical' | 'custom';
+/** Lifecycle status of one publication relative to the accepted source. */
+export type BrowserPublicationStatusV1 = 'current' | 'stale';
+
+/**
+ * Stable reason codes explaining why a publication is no longer current.
+ * `missing_scenes`/`blocked_scenes` mirror the assembly readiness state;
+ * `source_changed`/`scope_mixed` mean the artifact no longer matches the
+ * accepted source/scope; `out_of_date` is the generic fallback the Host uses
+ * when the record predates the current accepted revision.
+ */
+export type BrowserPublicationStaleReasonV1 =
+  | 'missing_scenes'
+  | 'blocked_scenes'
+  | 'source_changed'
+  | 'scope_mixed'
+  | 'out_of_date';
+
+/**
+ * One browser-safe publication record. `relativeOutputPath` is the
+ * project-relative artifact file (`output/novel.md` for canonical, otherwise
+ * `output/<publicationId>.md`); `novelHash` is the SHA-256 of the exact
+ * written bytes and `byteLength` their UTF-8 size. The Host projects
+ * `sceneCount` (assembled scene set) and `wordCount` (artifact token count)
+ * from the artifact it produced; the browser never reads the file itself.
+ */
+export interface BrowserPublicationRecordV1 {
+  readonly version: BrowserApiVersion;
+  readonly projectId: string;
+  readonly publicationId: string;
+  readonly kind: BrowserPublicationKindV1;
+  readonly status: BrowserPublicationStatusV1;
+  readonly sourceHash: string;
+  readonly scopeHash: string;
+  readonly revisionIds: readonly string[];
+  readonly novelHash: string;
+  readonly relativeOutputPath: string;
+  readonly byteLength: number;
+  readonly sceneCount: number;
+  readonly wordCount: number;
+  readonly staleReasons: readonly BrowserPublicationStaleReasonV1[];
+  /** Durable operation that produced the artifact; null only before completion. */
+  readonly operationId: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+/** Publication catalog for one project (canonical + custom branches). */
+export interface BrowserPublicationListV1 {
+  readonly version: BrowserApiVersion;
+  readonly projectId: string;
+  readonly publications: readonly BrowserPublicationRecordV1[];
+  readonly generatedAt: string;
+}
+
+/** One publication result (get returns the projected record or null). */
+export interface BrowserPublicationGetResultV1 {
+  readonly version: BrowserApiVersion;
+  readonly publication: BrowserPublicationRecordV1 | null;
+}
+
+/** Bounded cursor query accepted by the publication content endpoint. */
+export interface BrowserPublicationReadQueryV1 {
+  readonly offset?: number;
+  readonly limit?: number;
+}
+
+/**
+ * One bounded markdown slice of a publication. `byteLength` is the slice
+ * size; `totalByteLength` is the artifact size, so a reader can page through
+ * the whole novel with offset/limit without ever learning a Host path.
+ */
+export interface BrowserPublicationReadResultV1 {
+  readonly version: BrowserApiVersion;
+  readonly projectId: string;
+  readonly publicationId: string;
+  readonly offset: number;
+  readonly limit: number;
+  readonly content: string;
+  readonly byteLength: number;
+  readonly totalByteLength: number;
+}
+
+/**
+ * Explicit browser publish request. Omitting all branch fields publishes the
+ * canonical novel (`output/novel.md`); supplying `branchPath` (the strict
+ * route selector) plus optional `discourseBranch`/`title` publishes a custom
+ * branch artifact. Assembly is a durable operation, so the result is queued.
+ */
+export interface BrowserPublishRequestV1 {
+  readonly version: BrowserApiVersion;
+  readonly projectId: string;
+  readonly branchPath?: BrowserGraphRouteSelectorV1;
+  readonly discourseBranch?: string;
+  readonly title?: string;
+}
+
+/** Immediate result of a publish request; the view refreshes to the record. */
+export interface BrowserPublishResultV1 {
+  readonly version: BrowserApiVersion;
+  readonly projectId: string;
+  readonly publicationId: string;
+  readonly kind: BrowserPublicationKindV1;
+  readonly outcome: 'queued' | 'current' | 'stale' | 'failed';
+  /** Durable operation to track when the assembly is queued. */
+  readonly operationId: string | null;
+  readonly staleReasons: readonly BrowserPublicationStaleReasonV1[];
 }

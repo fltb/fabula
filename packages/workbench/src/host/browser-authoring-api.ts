@@ -21,7 +21,11 @@ import {
   type AuthoringReconcileChoiceV1,
   type AuthoringStateV1,
   type AuthoringSubmitReceiptV1,
+  BROWSER_AUTHORING_DOCUMENT_CREATE_PATH,
+  BROWSER_AUTHORING_DOCUMENT_DELETE_PATH,
+  BROWSER_AUTHORING_DOCUMENT_MOVE_PATH,
   BROWSER_AUTHORING_EVENTS_PATH,
+  BROWSER_AUTHORING_OPERATION_CANCEL_PATH,
   BROWSER_AUTHORING_OPERATION_PATH,
   BROWSER_AUTHORING_OPERATIONS_PATH,
   BROWSER_AUTHORING_RECONCILE_PATH,
@@ -31,6 +35,10 @@ import {
   BROWSER_AUTHORING_REVISIONS_PATH,
   BROWSER_AUTHORING_STATE_PATH,
   BROWSER_AUTHORING_SUBMIT_PATH,
+  type BrowserAuthoringDocumentCreateRequestV1,
+  type BrowserAuthoringDocumentDeleteRequestV1,
+  type BrowserAuthoringDocumentMoveRequestV1,
+  type BrowserAuthoringDocumentMutationResultV1,
   type BrowserAuthoringReconcileRequestV1,
   type BrowserAuthoringReconcileResultV1,
   type BrowserAuthoringRevisionDiffV1,
@@ -42,6 +50,12 @@ import {
 } from '../contracts/authoring.js';
 import type { BrowserSessionPrincipalV1 } from '../contracts/browser-api.js';
 import { BROWSER_API_BASE_PATH, BROWSER_SESSION_HEADER } from '../contracts/browser-api.js';
+import type { ProjectOperationRecordV1 } from '../contracts/persistence.js';
+import { receiptFromRecord } from './authoring/coordinator.js';
+import type {
+  AuthoringMutationCaller,
+  BrowserAuthoringMutationPort,
+} from './authoring/mcp-adapter.js';
 import type {
   AuthoringCoordinator,
   AuthoringRevisionPort,
@@ -82,6 +96,13 @@ export interface BrowserAuthoringRevisionRegistry {
 /** Safe operation stream source. Implementations own subscription lifecycle. */
 export interface BrowserAuthoringEventSource {
   subscribe(projectId: string, listener: (event: AuthoringActivityEventV1) => void): () => void;
+  /**
+   * Broadcast one safe activity event to a project's subscribers. Callers
+   * MUST publish only after the backing record is durably persisted (plan
+   * 4.7). Absent (embedded/test hosts) the client falls back to re-reading
+   * the operation list.
+   */
+  publish?(projectId: string, event: AuthoringActivityEventV1): void;
 }
 export type BrowserAuthoringCapabilityKind = 'submit' | 'reconcile' | 'restore';
 
@@ -101,6 +122,46 @@ export interface BrowserAuthoringCapabilityResolver {
 export interface BrowserAuthoringCoordinatorRegistry {
   get(projectId: string): AuthoringCoordinator | null | Promise<AuthoringCoordinator | null>;
 }
+
+/**
+ * Project-scoped working-document lifecycle service (create/move/delete).
+ * The Host resolves the shared browser/MCP mutation port; the browser never
+ * supplies a session, grant, actor or scope.
+ */
+export interface BrowserAuthoringMutationRegistry {
+  get(
+    projectId: string,
+  ): BrowserAuthoringMutationPort | null | Promise<BrowserAuthoringMutationPort | null>;
+}
+
+/**
+ * Per-project durable operation surface (the unified Operation Center read +
+ * cancel seam). Implemented by the Host's ProjectOperationService; the
+ * browser never supplies an actor, capability or queue identity.
+ */
+export interface BrowserOperationServicePort {
+  /**
+   * Cancel one durable operation. `queued` rows transition to `cancelled`;
+   * `running` rows are aborted and transitioned to `cancelled`; terminal rows
+   * report `terminal` and are left untouched.
+   */
+  cancel(
+    operationId: string,
+  ): Promise<
+    | { readonly status: 'cancelled'; readonly record: ProjectOperationRecordV1 }
+    | { readonly status: 'not-found' }
+    | { readonly status: 'terminal' }
+  >;
+  /** Read one durable operation record, or null when absent. */
+  get(operationId: string): Promise<ProjectOperationRecordV1 | null>;
+}
+
+/** Project-scoped operation service resolved by the Host. */
+export interface BrowserOperationServiceRegistry {
+  get(
+    projectId: string,
+  ): BrowserOperationServicePort | null | Promise<BrowserOperationServicePort | null>;
+}
 export interface BrowserAuthoringApiOptions {
   readonly principal: BrowserPrincipalResolver;
   /** Shared ACL/lifecycle service; when present it is the authoritative role gate. */
@@ -108,6 +169,10 @@ export interface BrowserAuthoringApiOptions {
   readonly authorization: BrowserProjectAuthorization;
   readonly catalog: BrowserProjectCatalog;
   readonly coordinators: BrowserAuthoringCoordinatorRegistry;
+  /** Working-document lifecycle service (create/move/delete); absent routes fail closed. */
+  readonly mutations?: BrowserAuthoringMutationRegistry | null;
+  /** Durable operation service (cancel + unified reads); absent cancel route fails closed. */
+  readonly operations?: BrowserOperationServiceRegistry | null;
   /** Native immutable revision service, resolved only after project access. */
   readonly revision?: BrowserAuthoringRevisionRegistry | null;
   readonly capabilities?: BrowserAuthoringCapabilityResolver | null;
@@ -129,6 +194,7 @@ export type BrowserAuthoringErrorCode =
   | 'UNKNOWN_FIELD'
   | 'INVALID_INPUT'
   | 'OPERATION_NOT_FOUND'
+  | 'OPERATION_TERMINAL'
   | 'REVISION_NOT_FOUND'
   | 'AUTHORING_UNAVAILABLE'
   | 'INTERNAL'
@@ -142,6 +208,7 @@ const ERROR_STATUS: Readonly<Record<BrowserAuthoringErrorCode, number>> = {
   UNKNOWN_FIELD: 400,
   INVALID_INPUT: 400,
   OPERATION_NOT_FOUND: 404,
+  OPERATION_TERMINAL: 409,
   REVISION_NOT_FOUND: 404,
   AUTHORING_UNAVAILABLE: 503,
   INTERNAL: 500,
@@ -245,6 +312,38 @@ function isSuccessfulReceipt(receipt: AuthoringOperationReceiptV1): boolean {
   return (
     receipt.status === 'queued' || receipt.status === 'running' || receipt.status === 'completed'
   );
+}
+
+/**
+ * Map a shared mutation-service failure onto the typed browser error surface.
+ * Known authoring failure codes keep their MCP-identical identity; anything
+ * else (e.g. a document-store business code) is a caller-input problem and
+ * surfaces as `INVALID_INPUT`, never as a fabricated 200 or an internal leak.
+ */
+function mapMutationFailure(failure: { readonly code: string; readonly message: string }): {
+  readonly code: BrowserAuthoringErrorCode;
+  readonly message: string;
+} {
+  const known: readonly BrowserAuthoringErrorCode[] = [
+    'PROJECT_NOT_FOUND',
+    'PROJECT_NOT_READY',
+    'WORKSPACE_STALE',
+    'ACCEPTED_HASH_MISMATCH',
+    'DOCUMENT_NOT_FOUND',
+    'CANDIDATE_INVALID',
+    'CONFLICT_REQUIRES_RESOLUTION',
+    'SUBMIT_BLOCKED',
+    'HUMAN_EDITING',
+    'INVALID_INPUT',
+    'UNKNOWN_FIELD',
+    'INTERNAL',
+  ];
+  return {
+    code: known.includes(failure.code as BrowserAuthoringErrorCode)
+      ? (failure.code as BrowserAuthoringErrorCode)
+      : 'INVALID_INPUT',
+    message: failure.message,
+  };
 }
 
 async function readJson(c: Context<HostListenerEnv>): Promise<unknown> {
@@ -400,7 +499,7 @@ function operationsHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEn
     return json({
       version: AUTHORING_CONTRACT_VERSION,
       projectId: access.projectId,
-      operations: access.coordinator.listOperations(),
+      operations: await access.coordinator.listOperations(),
       generatedAt: api.options.now?.() ?? new Date().toISOString(),
     } satisfies BrowserAuthoringOperationsV1);
   };
@@ -414,10 +513,63 @@ function operationHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv
     if (!nonEmptyString(operationId)) {
       return authoringError('OPERATION_NOT_FOUND', 'An operation id is required.');
     }
-    const receipt = access.coordinator.getOperation(operationId);
+    const receipt = await access.coordinator.getOperation(operationId);
     return receipt === null
       ? authoringError('OPERATION_NOT_FOUND', 'The operation does not exist.')
       : json(receipt);
+  };
+}
+
+function cancelOperationHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv> {
+  return async (c) => {
+    // Cancellation mutates the durable queue, so it is gated like the other
+    // mutation routes (maintainer; same role the MCP nova_operation_cancel
+    // tool requires via mcp:submit).
+    const access = await api.access(c, 'maintainer');
+    if (!access.ok) return access.response;
+    const operationId = c.req.param('operationId');
+    if (!nonEmptyString(operationId)) {
+      return authoringError('OPERATION_NOT_FOUND', 'An operation id is required.');
+    }
+    const registry = api.options.operations;
+    if (registry === undefined || registry === null) {
+      return authoringError(
+        'AUTHORING_UNAVAILABLE',
+        'The durable operation service is unavailable.',
+      );
+    }
+    const service = await registry.get(access.projectId);
+    if (service === null) {
+      return authoringError(
+        'PROJECT_NOT_READY',
+        'The operation service is not ready for this project.',
+      );
+    }
+    try {
+      const result = await service.cancel(operationId);
+      if (result.status === 'not-found') {
+        return authoringError('OPERATION_NOT_FOUND', 'The operation does not exist.');
+      }
+      if (result.status === 'terminal') {
+        return authoringError(
+          'OPERATION_TERMINAL',
+          'The operation already reached a terminal state and cannot be cancelled.',
+        );
+      }
+      // The service persisted the cancelled record before returning; only now
+      // is the update broadcast (plan 4.7: record first, SSE second).
+      const receipt = receiptFromRecord(result.record);
+      api.options.events?.publish?.(access.projectId, {
+        type: 'operation-updated',
+        version: AUTHORING_CONTRACT_VERSION,
+        projectId: access.projectId,
+        receipt,
+        at: result.record.updatedAt,
+      });
+      return json(receipt);
+    } catch {
+      return authoringError('INTERNAL', 'The Host could not cancel the operation.');
+    }
   };
 }
 
@@ -605,13 +757,22 @@ function submitHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv> {
     if (!access.ok) return access.response;
     const parsed = parseStrictObject(
       await readJson(c),
-      ['version', 'projectId', 'expectedAcceptedSourceHash', 'expectedWorkspaceDigest'],
+      [
+        'version',
+        'projectId',
+        'expectedAcceptedRevisionId',
+        'expectedAcceptedSourceHash',
+        'expectedWorkspaceDigest',
+      ],
       ['message'],
     );
     if (!parsed.ok) return authoringError(parsed.code, parsed.message);
     const body = parsed.value;
     if (body.projectId !== access.projectId) {
       return authoringError('INVALID_INPUT', 'The request project does not match its route.');
+    }
+    if (!optionalHash(body.expectedAcceptedRevisionId)) {
+      return authoringError('INVALID_INPUT', 'expectedAcceptedRevisionId must be a hash or null.');
     }
     if (!optionalHash(body.expectedAcceptedSourceHash)) {
       return authoringError('INVALID_INPUT', 'expectedAcceptedSourceHash must be a hash or null.');
@@ -629,6 +790,7 @@ function submitHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv> {
     if (grant instanceof Response) return grant;
     try {
       const receipt = await access.coordinator.submit({
+        expectedAcceptedRevisionId: body.expectedAcceptedRevisionId as string | null,
         expectedAcceptedSourceHash: body.expectedAcceptedSourceHash,
         expectedWorkspaceDigest: body.expectedWorkspaceDigest,
         ...(body.message === undefined ? {} : { message: body.message as string }),
@@ -659,6 +821,7 @@ function reconcileHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv
       'projectId',
       'choice',
       'candidateHash',
+      'expectedAcceptedRevisionId',
       'expectedAcceptedSourceHash',
     ]);
     if (!parsed.ok) return authoringError(parsed.code, parsed.message);
@@ -679,6 +842,9 @@ function reconcileHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv
         'candidateHash and expectedAcceptedSourceHash must be hashes or null.',
       );
     }
+    if (!optionalHash(body.expectedAcceptedRevisionId)) {
+      return authoringError('INVALID_INPUT', 'expectedAcceptedRevisionId must be a hash or null.');
+    }
     if (body.choice !== 'keep-working' && body.candidateHash === null) {
       return authoringError('INVALID_INPUT', 'This reconcile action requires candidateHash.');
     }
@@ -688,6 +854,7 @@ function reconcileHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv
       const receipt = await access.coordinator.reconcileExternal({
         choice: body.choice as AuthoringReconcileChoiceV1,
         candidateHash: body.candidateHash,
+        expectedAcceptedRevisionId: body.expectedAcceptedRevisionId as string | null,
         expectedAcceptedSourceHash: body.expectedAcceptedSourceHash,
         actorId: access.principal.userId,
         capabilityId: grant.capabilityId,
@@ -703,6 +870,127 @@ function reconcileHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv
       return json({ status: 'queued', receipt } satisfies BrowserAuthoringReconcileResultV1, 202);
     } catch {
       return authoringError('INTERNAL', 'The Host could not enqueue the reconcile operation.');
+    }
+  };
+}
+
+function documentMutationHandler(
+  api: BrowserAuthoringApiImpl,
+  kind: 'create' | 'move' | 'delete',
+): Handler<HostListenerEnv> {
+  return async (c) => {
+    const access = await api.access(c, 'author');
+    if (!access.ok) return access.response;
+    const required =
+      kind === 'create'
+        ? [
+            'version',
+            'projectId',
+            'logicalPath',
+            'kind',
+            'expectedAcceptedSourceHash',
+            'expectedWorkspaceDigest',
+          ]
+        : kind === 'move'
+          ? [
+              'version',
+              'projectId',
+              'documentId',
+              'logicalPath',
+              'expectedAcceptedSourceHash',
+              'expectedWorkspaceDigest',
+            ]
+          : [
+              'version',
+              'projectId',
+              'documentId',
+              'expectedAcceptedSourceHash',
+              'expectedWorkspaceDigest',
+            ];
+    const parsed = parseStrictObject(await readJson(c), required);
+    if (!parsed.ok) return authoringError(parsed.code, parsed.message);
+    const body = parsed.value;
+    if (body.projectId !== access.projectId) {
+      return authoringError('INVALID_INPUT', 'The request project does not match its route.');
+    }
+    if (!optionalHash(body.expectedAcceptedSourceHash)) {
+      return authoringError('INVALID_INPUT', 'expectedAcceptedSourceHash must be a hash or null.');
+    }
+    if (!nonEmptyString(body.expectedWorkspaceDigest)) {
+      return authoringError('INVALID_INPUT', 'expectedWorkspaceDigest must be non-empty.');
+    }
+    if (kind === 'create') {
+      if (!nonEmptyString(body.logicalPath)) {
+        return authoringError('INVALID_INPUT', 'logicalPath must be a non-empty manifest path.');
+      }
+      if (body.kind !== 'prose' && body.kind !== 'raw-yaml') {
+        return authoringError('INVALID_INPUT', 'kind must be prose or raw-yaml.');
+      }
+    } else {
+      if (!nonEmptyString(body.documentId)) {
+        return authoringError('INVALID_INPUT', 'documentId must be non-empty.');
+      }
+      if (kind === 'move' && !nonEmptyString(body.logicalPath)) {
+        return authoringError('INVALID_INPUT', 'logicalPath must be a non-empty manifest path.');
+      }
+    }
+    const registry = api.options.mutations;
+    if (registry === undefined || registry === null) {
+      return authoringError(
+        'AUTHORING_UNAVAILABLE',
+        'Working-document lifecycle mutations are unavailable.',
+      );
+    }
+    const port = await registry.get(access.projectId);
+    if (port === null) {
+      return authoringError(
+        'PROJECT_NOT_READY',
+        'Working-document lifecycle is not ready for this project.',
+      );
+    }
+    const caller: AuthoringMutationCaller = { userId: access.principal.userId };
+    try {
+      const expectedAcceptedSourceHash = body.expectedAcceptedSourceHash as string | null;
+      const expectedWorkspaceDigest = body.expectedWorkspaceDigest as string;
+      const outcome =
+        kind === 'create'
+          ? await port.createDocument(
+              {
+                version: AUTHORING_CONTRACT_VERSION,
+                logicalPath: body.logicalPath as string,
+                kind: body.kind as 'prose' | 'raw-yaml',
+                expectedAcceptedSourceHash,
+                expectedWorkspaceDigest,
+              },
+              caller,
+            )
+          : kind === 'move'
+            ? await port.moveDocument(
+                {
+                  version: AUTHORING_CONTRACT_VERSION,
+                  documentId: body.documentId as string,
+                  logicalPath: body.logicalPath as string,
+                  expectedAcceptedSourceHash,
+                  expectedWorkspaceDigest,
+                },
+                caller,
+              )
+            : await port.deleteDocument(
+                {
+                  version: AUTHORING_CONTRACT_VERSION,
+                  documentId: body.documentId as string,
+                  expectedAcceptedSourceHash,
+                  expectedWorkspaceDigest,
+                },
+                caller,
+              );
+      if ('code' in outcome) {
+        const failure = mapMutationFailure(outcome);
+        return authoringError(failure.code, failure.message);
+      }
+      return json(outcome satisfies BrowserAuthoringDocumentMutationResultV1);
+    } catch {
+      return authoringError('INTERNAL', 'The Host could not apply the working-document mutation.');
     }
   };
 }
@@ -782,8 +1070,28 @@ export function createBrowserAuthoringApi(
     { method: 'POST', path: BROWSER_AUTHORING_RECONCILE_PATH, handler: reconcileHandler(api) },
     {
       method: 'POST',
+      path: BROWSER_AUTHORING_OPERATION_CANCEL_PATH,
+      handler: cancelOperationHandler(api),
+    },
+    {
+      method: 'POST',
       path: BROWSER_AUTHORING_REVISION_RESTORE_PATH,
       handler: revisionRestoreHandler(api),
+    },
+    {
+      method: 'POST',
+      path: BROWSER_AUTHORING_DOCUMENT_CREATE_PATH,
+      handler: documentMutationHandler(api, 'create'),
+    },
+    {
+      method: 'POST',
+      path: BROWSER_AUTHORING_DOCUMENT_MOVE_PATH,
+      handler: documentMutationHandler(api, 'move'),
+    },
+    {
+      method: 'POST',
+      path: BROWSER_AUTHORING_DOCUMENT_DELETE_PATH,
+      handler: documentMutationHandler(api, 'delete'),
     },
   ];
   return {
@@ -800,6 +1108,10 @@ export type {
   AuthoringOperationReceiptV1,
   AuthoringStateV1,
   AuthoringSubmitReceiptV1,
+  BrowserAuthoringDocumentCreateRequestV1,
+  BrowserAuthoringDocumentDeleteRequestV1,
+  BrowserAuthoringDocumentMoveRequestV1,
+  BrowserAuthoringDocumentMutationResultV1,
   BrowserAuthoringReconcileRequestV1,
   BrowserAuthoringReconcileResultV1,
   BrowserAuthoringSubmitRequestV1,

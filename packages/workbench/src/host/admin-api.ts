@@ -30,20 +30,25 @@ import {
   BROWSER_ADMIN_NETWORK_PATH,
   BROWSER_ADMIN_OPERATIONS_PATH,
   BROWSER_ADMIN_OVERVIEW_PATH,
+  BROWSER_ADMIN_PLUGINS_DISCOVERED_PATH,
   BROWSER_ADMIN_PROJECTS_PATH,
   BROWSER_ADMIN_PROVIDER_PATH,
+  type ConfigOperationDiagnosticV1,
   type ConfigOperationReceiptV1,
+  normalizeWorkbenchConfiguration,
   PROJECT_ACCESS_ROLES,
   WORKBENCH_CONFIGURATION_VERSION,
   type WorkbenchAdminErrorCode,
   type WorkbenchAdminOverviewV1,
-  type WorkbenchConfigurationV1,
-  type WorkbenchConfigurationV2,
+  type WorkbenchConfigurationInput,
+  type WorkbenchConfigurationV3,
+  type WorkbenchConfigurationVersion,
   type WorkbenchDeviceSafeViewV1,
   type WorkbenchInviteSafeViewV1,
   type WorkbenchProjectSafeViewV1,
+  type WorkbenchProjectValidationV1,
+  type WorkbenchTrustedPluginConfigurationV3,
 } from '../contracts/configuration.js';
-
 import type {
   AuditRecord,
   ConfigurationOperationRecord,
@@ -52,10 +57,17 @@ import type {
 import type { LocalAuthService } from './auth/index.js';
 import type { BrowserPrincipalResolver } from './browser-read-api.js';
 import type { ConfigurationChangeService } from './configuration-service.js';
+import { computeChangedFields, requiresRestart } from './configuration-service.js';
 import type { HostListenerMode, MutationHttpMethod } from './listener.js';
 import type { ProviderCredentialStore } from './providers/credential-store.js';
+import { isValidProviderId } from './providers/credential-store.js';
 import type { HostListenerEnv, HostServer } from './server.js';
-import { resolveNetworkRequest, type SetupStatusBuilder } from './setup-api.js';
+import {
+  maskEndpoint,
+  maskModel,
+  resolveNetworkRequest,
+  type SetupStatusBuilder,
+} from './setup-api.js';
 import type { RuntimeAdminPort } from './workbench-runtime.js';
 
 /** `/api/v1/admin/projects/validate` — one-way project root validation. */
@@ -74,6 +86,12 @@ export const BROWSER_ADMIN_SESSIONS_PATH = `${BROWSER_ADMIN_BASE_PATH}/sessions`
 export const BROWSER_ADMIN_DEVICES_ISSUE_PATH = `${BROWSER_ADMIN_DEVICES_PATH}/issue`;
 /** `GET /api/v1/admin/memberships` — owner-only project membership list. */
 export const BROWSER_ADMIN_MEMBERSHIPS_PATH = `${BROWSER_ADMIN_BASE_PATH}/memberships`;
+/** `GET|PUT|DELETE /api/v1/admin/providers` — V3 provider profile management base. */
+export const BROWSER_ADMIN_PROVIDERS_PATH = `${BROWSER_ADMIN_BASE_PATH}/providers`;
+/** `GET|PUT /api/v1/admin/config/advanced` — V3 config domains (profiles/bindings/limits/plugins/agent). */
+export const BROWSER_ADMIN_CONFIG_ADVANCED_PATH = `${BROWSER_ADMIN_BASE_PATH}/config/advanced`;
+/** `POST /api/v1/admin/config/preview` — validate a V3-domain patch without applying it. */
+export const BROWSER_ADMIN_CONFIG_PREVIEW_PATH = `${BROWSER_ADMIN_BASE_PATH}/config/preview`;
 
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8' };
 
@@ -100,6 +118,7 @@ const ADMIN_ERROR_STATUS: Readonly<Record<WorkbenchAdminErrorCode, number>> = {
   CONFIG_INVALID: 400,
   CONFIG_STALE: 409,
   UNKNOWN_FIELD: 400,
+  PLUGIN_NOT_DISCOVERED: 400,
   INTERNAL: 500,
 };
 
@@ -204,6 +223,30 @@ export interface ListenerPolicyStatus {
   readonly port: number | null;
 }
 
+/**
+ * Browser-safe identity of one plugin the Host discovered on disk. Mirrors
+ * the node-host `DiscoveredNodePlugin` shape: name/version/hashes/hook names
+ * only — never a filesystem path, module code, or remote source.
+ */
+export interface DiscoveredPluginAdminViewV1 {
+  readonly name: string;
+  readonly version: string;
+  readonly manifestHash: string;
+  /** SHA-256 of the plugin `index.js`, or null when the module file is missing. */
+  readonly moduleHash: string | null;
+  readonly hookNames: readonly string[];
+}
+
+/**
+ * Host-side plugin discovery port. The owner admin surface reads the
+ * discovered set through this seam; only discovered triples (name/version/
+ * moduleHash) may ever enter a trustedPlugin allowlist. The port throws a
+ * `Project "<id>" is not registered.` error for unknown projects.
+ */
+export interface PluginDiscoveryAdminPort {
+  discover(input: { readonly projectId: string }): Promise<readonly DiscoveredPluginAdminViewV1[]>;
+}
+
 export interface AdminApiOptions {
   readonly resolver: BrowserPrincipalResolver;
   readonly configuration: ConfigurationChangeService;
@@ -221,6 +264,13 @@ export interface AdminApiOptions {
   } | null>;
   /** Running listener policy for restart-required derivation. */
   readonly listenerStatus: () => ListenerPolicyStatus;
+  /**
+   * Host-discovered plugin identities per project. When present, every
+   * applied trustedPlugin entry must exactly match a discovered plugin;
+   * absent (legacy wiring) skips that check. The owner UI reads discovery
+   * through this port only — no upload, URL, or arbitrary module path.
+   */
+  readonly plugins?: PluginDiscoveryAdminPort | null;
   readonly providerTest?: ProviderTestPort | null;
   /** Directory that resolves `unixSocketName` into an absolute socket path. */
   readonly unixSocketDir?: string;
@@ -258,6 +308,312 @@ function inviteSafeView(invite: {
   };
 }
 
+// ─── V3 configuration domains (browser-safe views and mutation requests) ────
+
+/** Masked provider profile read view; credentials never exist in this DTO. */
+export interface WorkbenchProviderProfileReadViewV1 {
+  readonly profileId: string;
+  readonly kind: 'ai-sdk';
+  /** True when the Host credential store holds a key for `ai-sdk:<profileId>`. */
+  readonly configured: boolean;
+  /** Masked endpoint, or null when unset. */
+  readonly endpoint: string | null;
+  /** Masked model, or null when unset. */
+  readonly model: string | null;
+  readonly lastValidation: WorkbenchProjectValidationV1;
+  readonly lastValidatedAt: string | null;
+}
+
+/** One trusted plugin allowlist entry as the browser may see it (hash, never code). */
+export interface WorkbenchTrustedPluginReadViewV1 {
+  readonly name: string;
+  readonly version: string;
+  readonly moduleHash: string;
+  readonly required: boolean;
+}
+
+/** Per-project V3 binding view: provider profile + trusted plugin allowlist. */
+export interface WorkbenchProjectProfileBindingReadViewV1 {
+  readonly projectId: string;
+  readonly displayName: string;
+  readonly providerProfile: string;
+  readonly trustedPlugins: readonly WorkbenchTrustedPluginReadViewV1[];
+}
+
+/** Browser-safe operation limits read view (`maxConcurrentRendersPerProject` is fixed at 1). */
+export interface WorkbenchOperationLimitsReadViewV1 {
+  readonly maxQueuedPerProject: number;
+  readonly maxConcurrentRendersPerProject: 1;
+  readonly maxConcurrentRendersPerHost: number;
+}
+
+/** Browser-safe agent settings read view. */
+export interface WorkbenchAgentSettingsReadViewV1 {
+  readonly enabled: boolean;
+  readonly maxTurns: number;
+  readonly maxToolCalls: number;
+}
+
+/** Aggregate browser-safe read view of every V3 configuration domain. */
+export interface WorkbenchAdvancedConfigReadViewV1 {
+  readonly version: WorkbenchConfigurationVersion;
+  readonly providers: readonly WorkbenchProviderProfileReadViewV1[];
+  readonly projects: readonly WorkbenchProjectProfileBindingReadViewV1[];
+  readonly operationLimits: WorkbenchOperationLimitsReadViewV1;
+  readonly agent: WorkbenchAgentSettingsReadViewV1;
+  readonly generatedAt: string;
+}
+
+/** Non-applying validation result for a V3-domain patch (preview). */
+export interface WorkbenchAdvancedConfigPreviewViewV1 {
+  readonly version: WorkbenchConfigurationVersion;
+  readonly valid: boolean;
+  readonly diagnostics: readonly ConfigOperationDiagnosticV1[];
+  readonly changedFields: readonly string[];
+  readonly restartRequired: boolean;
+  readonly candidateRevision: string | null;
+}
+
+/**
+ * Browser-safe V3-domain mutation request. Any subset of the domains may be
+ * present; omitted domains are left unchanged by the single CAS apply.
+ */
+export interface AdminAdvancedConfigRequestV1 {
+  readonly version: WorkbenchConfigurationVersion;
+  readonly operationLimits?: {
+    readonly maxQueuedPerProject: number;
+    readonly maxConcurrentRendersPerHost: number;
+  };
+  readonly agent?: {
+    readonly enabled: boolean;
+    readonly maxTurns: number;
+    readonly maxToolCalls: number;
+  };
+  readonly projects?: readonly {
+    readonly projectId: string;
+    readonly providerProfile?: string;
+    readonly trustedPlugins?: readonly WorkbenchTrustedPluginReadViewV1[];
+  }[];
+}
+
+/** Provider profile endpoint/model upsert from the dashboard. Never carries an API key. */
+export interface AdminProviderProfileUpdateRequestV1 {
+  readonly version: WorkbenchConfigurationVersion;
+  readonly kind: 'ai-sdk';
+  readonly baseUrl: string | null;
+  readonly model: string | null;
+}
+
+/** One-way provider profile credential write; the secret never leaves the Host. */
+export interface AdminProviderProfileCredentialRequestV1 {
+  readonly version: WorkbenchConfigurationVersion;
+  readonly apiKey: string;
+}
+
+/** Parsed V3-domain patch after strict request validation. */
+interface AdvancedConfigProjectPatch {
+  readonly projectId: string;
+  readonly providerProfile?: string;
+  readonly trustedPlugins?: readonly WorkbenchTrustedPluginConfigurationV3[];
+}
+
+interface AdvancedConfigPatch {
+  readonly operationLimits?: {
+    readonly maxQueuedPerProject: number;
+    readonly maxConcurrentRendersPerHost: number;
+  };
+  readonly agent?: {
+    readonly enabled: boolean;
+    readonly maxTurns: number;
+    readonly maxToolCalls: number;
+  };
+  readonly projects?: readonly AdvancedConfigProjectPatch[];
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+function isPluginEntry(value: unknown): value is WorkbenchTrustedPluginConfigurationV3 {
+  if (!isRecord(value)) return false;
+  const { name, version, moduleHash, required } = value;
+  return (
+    typeof name === 'string' &&
+    name.length > 0 &&
+    typeof version === 'string' &&
+    version.length > 0 &&
+    typeof moduleHash === 'string' &&
+    moduleHash.length > 0 &&
+    typeof required === 'boolean'
+  );
+}
+
+/** Strict inner parsing of the V3-domain patch; null on any malformed field. */
+function parseAdvancedConfigPatch(body: Record<string, unknown>): AdvancedConfigPatch | null {
+  let operationLimits: AdvancedConfigPatch['operationLimits'] | undefined;
+  if (body.operationLimits !== undefined) {
+    if (!isRecord(body.operationLimits)) return null;
+    const { maxQueuedPerProject, maxConcurrentRendersPerHost } = body.operationLimits;
+    if (
+      !isNonNegativeInteger(maxQueuedPerProject) ||
+      !isNonNegativeInteger(maxConcurrentRendersPerHost)
+    ) {
+      return null;
+    }
+    operationLimits = { maxQueuedPerProject, maxConcurrentRendersPerHost };
+  }
+  let agent: AdvancedConfigPatch['agent'] | undefined;
+  if (body.agent !== undefined) {
+    if (!isRecord(body.agent)) return null;
+    const { enabled, maxTurns, maxToolCalls } = body.agent;
+    if (
+      typeof enabled !== 'boolean' ||
+      !isNonNegativeInteger(maxTurns) ||
+      !isNonNegativeInteger(maxToolCalls)
+    ) {
+      return null;
+    }
+    agent = { enabled, maxTurns, maxToolCalls };
+  }
+  let projects: AdvancedConfigPatch['projects'] | undefined;
+  if (body.projects !== undefined) {
+    if (!Array.isArray(body.projects)) return null;
+    const entries: AdvancedConfigProjectPatch[] = [];
+    for (const entry of body.projects) {
+      if (!isRecord(entry)) return null;
+      const { projectId, providerProfile, trustedPlugins } = entry;
+      if (typeof projectId !== 'string' || projectId.length === 0) return null;
+      if (
+        providerProfile !== undefined &&
+        (typeof providerProfile !== 'string' || providerProfile.length === 0)
+      ) {
+        return null;
+      }
+      let plugins: WorkbenchTrustedPluginConfigurationV3[] | undefined;
+      if (trustedPlugins !== undefined) {
+        if (!Array.isArray(trustedPlugins) || trustedPlugins.some((item) => !isPluginEntry(item))) {
+          return null;
+        }
+        plugins = trustedPlugins.map((item) => ({ ...item }));
+      }
+      entries.push({
+        projectId,
+        ...(providerProfile === undefined ? {} : { providerProfile }),
+        ...(plugins === undefined ? {} : { trustedPlugins: plugins }),
+      });
+    }
+    projects = entries;
+  }
+  return {
+    ...(operationLimits === undefined ? {} : { operationLimits }),
+    ...(agent === undefined ? {} : { agent }),
+    ...(projects === undefined ? {} : { projects }),
+  };
+}
+
+/** Apply a strict V3-domain patch onto the canonical configuration (pure). */
+function buildAdvancedCandidate(
+  current: WorkbenchConfigurationV3,
+  patch: AdvancedConfigPatch,
+): WorkbenchConfigurationV3 {
+  let next = current;
+  if (patch.operationLimits !== undefined) {
+    next = {
+      ...next,
+      operationLimits: {
+        maxQueuedPerProject: patch.operationLimits.maxQueuedPerProject,
+        maxConcurrentRendersPerProject: 1,
+        maxConcurrentRendersPerHost: patch.operationLimits.maxConcurrentRendersPerHost,
+      },
+    };
+  }
+  if (patch.agent !== undefined) {
+    next = {
+      ...next,
+      agent: {
+        enabled: patch.agent.enabled,
+        maxTurns: patch.agent.maxTurns,
+        maxToolCalls: patch.agent.maxToolCalls,
+      },
+    };
+  }
+  if (patch.projects !== undefined) {
+    const patchById = new Map(patch.projects.map((entry) => [entry.projectId, entry]));
+    next = {
+      ...next,
+      projects: next.projects.map((project) => {
+        const entry = patchById.get(project.projectId);
+        if (entry === undefined) return project;
+        return {
+          ...project,
+          ...(entry.providerProfile === undefined
+            ? {}
+            : { providerProfile: entry.providerProfile }),
+          ...(entry.trustedPlugins === undefined
+            ? {}
+            : { trustedPlugins: [...entry.trustedPlugins] }),
+        };
+      }),
+    };
+  }
+  return next;
+}
+
+/**
+ * Reject any trustedPlugin entry that does not exactly match a
+ * Host-discovered plugin (name/version/moduleHash). Returns the first
+ * offending entry, or null when the patch is clean. Skipped entirely when no
+ * discovery port is wired. Entries for projects that are not in the active
+ * configuration are not checked here: the candidate builder drops them and
+ * the apply path rejects unknown projects with PROJECT_NOT_FOUND.
+ */
+async function firstUndiscoveredPlugin(
+  api: AdminApiImpl,
+  patch: AdvancedConfigPatch,
+  configuration: WorkbenchConfigurationV3,
+): Promise<WorkbenchTrustedPluginConfigurationV3 | null> {
+  const discovery = api.options.plugins;
+  if (discovery == null) return null;
+  for (const entry of patch.projects ?? []) {
+    if (entry.trustedPlugins === undefined) continue;
+    if (!configuration.projects.some((project) => project.projectId === entry.projectId)) continue;
+    const discovered = await discovery.discover({ projectId: entry.projectId });
+    for (const plugin of entry.trustedPlugins) {
+      const match = discovered.some(
+        (candidate) =>
+          candidate.moduleHash !== null &&
+          candidate.name === plugin.name &&
+          candidate.version === plugin.version &&
+          candidate.moduleHash === plugin.moduleHash,
+      );
+      if (!match) return plugin;
+    }
+  }
+  return null;
+}
+
+/** Build the masked read view of one provider profile. */
+async function providerProfileView(
+  api: AdminApiImpl,
+  profileId: string,
+  profile: {
+    readonly kind: 'ai-sdk';
+    readonly baseUrl: string | null;
+    readonly model: string | null;
+  },
+): Promise<WorkbenchProviderProfileReadViewV1> {
+  const configured = (await api.options.credentials.get(`ai-sdk:${profileId}`)) !== null;
+  return {
+    profileId,
+    kind: profile.kind,
+    configured,
+    endpoint: maskEndpoint(profile.baseUrl),
+    model: maskModel(profile.model),
+    lastValidation: configured ? 'valid' : 'unvalidated',
+    lastValidatedAt: null,
+  };
+}
+
 /** Derive whether the running listener already honors the configured policy. */
 async function restartRequiredFor(api: AdminApiImpl): Promise<boolean> {
   const active = await api.options.configuration.readActive();
@@ -291,7 +647,7 @@ class AdminApiImpl {
 
   /** Load the current configuration or return a typed CONFIG_INVALID response. */
   async requireConfiguration(): Promise<
-    | { ok: true; active: { configuration: WorkbenchConfigurationV2; revision: string } }
+    | { ok: true; active: { configuration: WorkbenchConfigurationV3; revision: string } }
     | { ok: false; response: Response }
   > {
     const active = await this.options.configuration.readActive();
@@ -338,19 +694,37 @@ function projectValidateHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
     const displayName = typeof parsed.displayName === 'string' ? parsed.displayName : '';
     const root = typeof parsed.root === 'string' ? parsed.root : '';
     const config = await api.options.configuration.readActive();
-    const candidate: WorkbenchConfigurationV1 = {
-      version: 1,
-      projects: [...(config?.configuration.projects ?? []), { projectId, displayName, root }],
-      defaultProjectId: config?.configuration.defaultProjectId ?? null,
-      provider: config?.configuration.provider ?? null,
-      network: config?.configuration.network ?? {
-        mode: 'loopback',
-        port: 8787,
-        allowedHosts: [],
-        allowedOrigins: [],
-        unixSocket: null,
-      },
-    };
+    const base = config === null ? null : normalizeWorkbenchConfiguration(config.configuration);
+    const candidate: WorkbenchConfigurationInput =
+      base === null
+        ? {
+            version: 1,
+            projects: [{ projectId, displayName, root }],
+            defaultProjectId: projectId,
+            provider: null,
+            network: {
+              mode: 'loopback',
+              port: 8787,
+              allowedHosts: [],
+              allowedOrigins: [],
+              unixSocket: null,
+            },
+          }
+        : {
+            ...base,
+            projects: [
+              ...base.projects,
+              {
+                projectId,
+                displayName,
+                root,
+                revisionMirror: { mode: 'disabled' } as const,
+                providerProfile: 'default',
+                trustedPlugins: [],
+              },
+            ],
+            defaultProjectId: base.defaultProjectId ?? projectId,
+          };
     const result = await api.options.configuration.validateCandidate(candidate);
     if (!result.ok) {
       const first = result.diagnostics[0];
@@ -370,7 +744,7 @@ function projectValidateHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
 
 async function applyProjectChange(
   api: AdminApiImpl,
-  mutate: (current: WorkbenchConfigurationV2) => WorkbenchConfigurationV2,
+  mutate: (current: WorkbenchConfigurationV3) => WorkbenchConfigurationV3,
   projectId: string,
   actorId: string,
 ): Promise<Response> {
@@ -432,7 +806,14 @@ function projectCreateHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
           ...current,
           projects: [
             ...current.projects,
-            { projectId, displayName, root, revisionMirror: { mode: 'disabled' } },
+            {
+              projectId,
+              displayName,
+              root,
+              revisionMirror: { mode: 'disabled' },
+              providerProfile: 'default',
+              trustedPlugins: [],
+            },
           ],
           defaultProjectId: current.defaultProjectId ?? projectId,
         };
@@ -631,10 +1012,14 @@ function providerUpdateHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
     const model = parsed.model === null || typeof parsed.model === 'string' ? parsed.model : null;
     const loaded = await api.requireConfiguration();
     if (!loaded.ok) return loaded.response;
+    const normalized = normalizeWorkbenchConfiguration(loaded.active.configuration);
     const receipt = await api.options.configuration.apply({
       candidate: {
-        ...loaded.active.configuration,
-        provider: { kind: 'ai-sdk', baseUrl, model },
+        ...normalized,
+        providers: {
+          ...normalized.providers,
+          default: { kind: 'ai-sdk' as const, baseUrl, model },
+        },
       },
       expectedRevision: loaded.active.revision,
       origin: 'dashboard',
@@ -668,8 +1053,9 @@ function providerTestHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
     }
     const loaded = await api.requireConfiguration();
     if (!loaded.ok) return loaded.response;
-    const provider = loaded.active.configuration.provider;
-    const apiKey = provider === null ? null : await api.options.credentials.get('ai-sdk');
+    const normalized = normalizeWorkbenchConfiguration(loaded.active.configuration);
+    const provider = normalized.providers.default ?? null;
+    const apiKey = provider === null ? null : await api.options.credentials.get('ai-sdk:default');
     const result = await test.test({
       baseUrl: provider?.baseUrl ?? null,
       model: provider?.model ?? null,
@@ -712,7 +1098,7 @@ function credentialSetHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
       return adminError('CREDENTIAL_INVALID', 'A non-empty apiKey is required.');
     }
     try {
-      await api.options.credentials.set('ai-sdk', apiKey);
+      await api.options.credentials.set('ai-sdk:default', apiKey);
     } catch {
       return adminError('CREDENTIAL_INVALID', 'The credential could not be stored.');
     }
@@ -728,11 +1114,350 @@ function credentialClearHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
   return async (c) => {
     const owner = await api.requireOwner(c);
     if (owner instanceof Response) return owner;
-    await api.options.credentials.remove('ai-sdk');
+    await api.options.credentials.remove('ai-sdk:default');
     return json({
       version: WORKBENCH_CONFIGURATION_VERSION,
       providerId: 'ai-sdk',
       configured: false,
+    });
+  };
+}
+
+function pluginsDiscoveredHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
+  return async (c) => {
+    const owner = await api.requireOwner(c);
+    if (owner instanceof Response) return owner;
+    const projectId = c.req.param('projectId');
+    if (projectId === undefined || projectId.length === 0) {
+      return adminError('PROJECT_NOT_FOUND', 'A project id is required.');
+    }
+    const discovery = api.options.plugins;
+    if (discovery == null) {
+      return adminError('PROJECT_NOT_FOUND', 'Plugin discovery is not available on this Host.');
+    }
+    let plugins: readonly DiscoveredPluginAdminViewV1[];
+    try {
+      plugins = await discovery.discover({ projectId });
+    } catch (error) {
+      if (error instanceof Error && error.message === `Project "${projectId}" is not registered.`) {
+        return adminError('PROJECT_NOT_FOUND', `Project "${projectId}" is not registered.`);
+      }
+      return adminError('INTERNAL', `Plugin discovery failed for project "${projectId}".`);
+    }
+    return json({ version: WORKBENCH_CONFIGURATION_VERSION, projectId, plugins });
+  };
+}
+
+function advancedConfigReadHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
+  return async (c) => {
+    const owner = await api.requireOwner(c);
+    if (owner instanceof Response) return owner;
+    const loaded = await api.requireConfiguration();
+    if (!loaded.ok) return loaded.response;
+    const normalized = normalizeWorkbenchConfiguration(loaded.active.configuration);
+    const providers: WorkbenchProviderProfileReadViewV1[] = [];
+    for (const [profileId, profile] of Object.entries(normalized.providers)) {
+      providers.push(await providerProfileView(api, profileId, profile));
+    }
+    const projects: WorkbenchProjectProfileBindingReadViewV1[] = normalized.projects.map(
+      (project) => ({
+        projectId: project.projectId,
+        displayName: project.displayName,
+        providerProfile: project.providerProfile,
+        trustedPlugins: project.trustedPlugins.map((plugin) => ({
+          name: plugin.name,
+          version: plugin.version,
+          moduleHash: plugin.moduleHash,
+          required: plugin.required,
+        })),
+      }),
+    );
+    const view: WorkbenchAdvancedConfigReadViewV1 = {
+      version: WORKBENCH_CONFIGURATION_VERSION,
+      providers,
+      projects,
+      operationLimits: { ...normalized.operationLimits },
+      agent: { ...normalized.agent },
+      generatedAt: api.options.now?.() ?? new Date().toISOString(),
+    };
+    return c.json(view);
+  };
+}
+
+function advancedConfigPreviewHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
+  return async (c) => {
+    const owner = await api.requireOwner(c);
+    if (owner instanceof Response) return owner;
+    const body = await c.req.raw.json().catch(() => null);
+    const parsed = parseRequest(body, ['operationLimits', 'agent', 'projects']);
+    const patch = parsed === null ? null : parseAdvancedConfigPatch(parsed);
+    if (patch === null) {
+      return adminError(
+        'UNKNOWN_FIELD',
+        'config/preview accepts only operationLimits, agent, projects.',
+      );
+    }
+    const loaded = await api.requireConfiguration();
+    if (!loaded.ok) return loaded.response;
+    const normalized = normalizeWorkbenchConfiguration(loaded.active.configuration);
+    const undiscovered = await firstUndiscoveredPlugin(api, patch, normalized);
+    if (undiscovered !== null) {
+      return adminError(
+        'PLUGIN_NOT_DISCOVERED',
+        `Plugin "${undiscovered.name}@${undiscovered.version}" is not discovered on this Host; only Host-discovered plugins can be trusted.`,
+      );
+    }
+    const candidate = buildAdvancedCandidate(normalized, patch);
+    const validated = await api.options.configuration.validateCandidate(candidate);
+    if (!validated.ok) {
+      return json({
+        version: WORKBENCH_CONFIGURATION_VERSION,
+        valid: false,
+        diagnostics: validated.diagnostics,
+        changedFields: [],
+        restartRequired: false,
+        candidateRevision: null,
+      } satisfies WorkbenchAdvancedConfigPreviewViewV1);
+    }
+    const changedFields = computeChangedFields(normalized, candidate);
+    return json({
+      version: WORKBENCH_CONFIGURATION_VERSION,
+      valid: true,
+      diagnostics: [],
+      changedFields,
+      restartRequired: requiresRestart(changedFields),
+      candidateRevision: validated.revision,
+    } satisfies WorkbenchAdvancedConfigPreviewViewV1);
+  };
+}
+
+function advancedConfigApplyHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
+  return async (c) => {
+    const owner = await api.requireOwner(c);
+    if (owner instanceof Response) return owner;
+    const body = await c.req.raw.json().catch(() => null);
+    const parsed = parseRequest(body, ['operationLimits', 'agent', 'projects']);
+    const patch = parsed === null ? null : parseAdvancedConfigPatch(parsed);
+    if (patch === null) {
+      return adminError(
+        'UNKNOWN_FIELD',
+        'config/advanced accepts only operationLimits, agent, projects.',
+      );
+    }
+    const loaded = await api.requireConfiguration();
+    if (!loaded.ok) return loaded.response;
+    const normalized = normalizeWorkbenchConfiguration(loaded.active.configuration);
+    for (const entry of patch.projects ?? []) {
+      if (!normalized.projects.some((project) => project.projectId === entry.projectId)) {
+        return adminError('PROJECT_NOT_FOUND', `Project "${entry.projectId}" is not registered.`);
+      }
+    }
+    const undiscovered = await firstUndiscoveredPlugin(api, patch, normalized);
+    if (undiscovered !== null) {
+      return adminError(
+        'PLUGIN_NOT_DISCOVERED',
+        `Plugin "${undiscovered.name}@${undiscovered.version}" is not discovered on this Host; only Host-discovered plugins can be trusted.`,
+      );
+    }
+    const candidate = buildAdvancedCandidate(normalized, patch);
+    const receipt = await api.options.configuration.apply({
+      candidate,
+      expectedRevision: loaded.active.revision,
+      origin: 'dashboard',
+      actorId: owner.userId,
+    });
+    if (receipt.status === 'stale') {
+      return adminError('CONFIG_STALE', 'The configuration changed; re-read and retry.');
+    }
+    if (receipt.status === 'invalid') {
+      const first = receipt.diagnostics[0];
+      return adminError(
+        (first?.code ?? 'CONFIG_INVALID') as WorkbenchAdminErrorCode,
+        first?.message ?? 'The configuration change was rejected.',
+      );
+    }
+    return json({ version: WORKBENCH_CONFIGURATION_VERSION, receipt });
+  };
+}
+
+function providerProfileUpsertHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
+  return async (c) => {
+    const owner = await api.requireOwner(c);
+    if (owner instanceof Response) return owner;
+    const profileId = c.req.param('profileId');
+    if (profileId === undefined || profileId.length === 0 || !isValidProviderId(profileId)) {
+      return adminError('CONFIG_INVALID', 'A valid provider profile id is required.');
+    }
+    const body = await c.req.raw.json().catch(() => null);
+    const parsed = parseRequest(body, ['kind', 'baseUrl', 'model']);
+    if (parsed === null || parsed.kind !== 'ai-sdk') {
+      return adminError(
+        'UNKNOWN_FIELD',
+        'provider profiles accept only kind "ai-sdk", baseUrl, model.',
+      );
+    }
+    const baseUrl =
+      parsed.baseUrl === null || typeof parsed.baseUrl === 'string' ? parsed.baseUrl : null;
+    const model = parsed.model === null || typeof parsed.model === 'string' ? parsed.model : null;
+    const loaded = await api.requireConfiguration();
+    if (!loaded.ok) return loaded.response;
+    const normalized = normalizeWorkbenchConfiguration(loaded.active.configuration);
+    const receipt = await api.options.configuration.apply({
+      candidate: {
+        ...normalized,
+        providers: {
+          ...normalized.providers,
+          [profileId]: { kind: 'ai-sdk' as const, baseUrl, model },
+        },
+      },
+      expectedRevision: loaded.active.revision,
+      origin: 'dashboard',
+      actorId: owner.userId,
+    });
+    if (receipt.status === 'stale') {
+      return adminError('CONFIG_STALE', 'The configuration changed; re-read and retry.');
+    }
+    if (receipt.status === 'invalid') {
+      const first = receipt.diagnostics[0];
+      return adminError(
+        (first?.code ?? 'CONFIG_INVALID') as WorkbenchAdminErrorCode,
+        first?.message ?? 'The configuration change was rejected.',
+      );
+    }
+    const profile = await providerProfileView(api, profileId, {
+      kind: 'ai-sdk',
+      baseUrl,
+      model,
+    });
+    return json({ version: WORKBENCH_CONFIGURATION_VERSION, profile, receipt });
+  };
+}
+
+function providerProfileDeleteHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
+  return async (c) => {
+    const owner = await api.requireOwner(c);
+    if (owner instanceof Response) return owner;
+    const profileId = c.req.param('profileId');
+    if (profileId === undefined || profileId.length === 0) {
+      return adminError('CONFIG_INVALID', 'A provider profile id is required.');
+    }
+    const loaded = await api.requireConfiguration();
+    if (!loaded.ok) return loaded.response;
+    const normalized = normalizeWorkbenchConfiguration(loaded.active.configuration);
+    if (normalized.providers[profileId] === undefined) {
+      return adminError('CONFIG_INVALID', `Provider profile "${profileId}" does not exist.`);
+    }
+    const referencedBy = normalized.projects.find(
+      (project) => project.providerProfile === profileId,
+    );
+    if (referencedBy !== undefined) {
+      return adminError(
+        'CONFIG_INVALID',
+        `Provider profile "${profileId}" is used by project "${referencedBy.projectId}" and cannot be removed.`,
+      );
+    }
+    const { [profileId]: _removed, ...remaining } = normalized.providers;
+    const receipt = await api.options.configuration.apply({
+      candidate: { ...normalized, providers: remaining },
+      expectedRevision: loaded.active.revision,
+      origin: 'dashboard',
+      actorId: owner.userId,
+    });
+    if (receipt.status === 'stale') {
+      return adminError('CONFIG_STALE', 'The configuration changed; re-read and retry.');
+    }
+    if (receipt.status === 'invalid') {
+      const first = receipt.diagnostics[0];
+      return adminError(
+        (first?.code ?? 'CONFIG_INVALID') as WorkbenchAdminErrorCode,
+        first?.message ?? 'The configuration change was rejected.',
+      );
+    }
+    await api.options.credentials.remove(`ai-sdk:${profileId}`).catch(() => undefined);
+    return json({ version: WORKBENCH_CONFIGURATION_VERSION, profileId, removed: true, receipt });
+  };
+}
+
+function providerProfileCredentialSetHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
+  return async (c) => {
+    const owner = await api.requireOwner(c);
+    if (owner instanceof Response) return owner;
+    const profileId = c.req.param('profileId');
+    if (profileId === undefined || profileId.length === 0) {
+      return adminError('CONFIG_INVALID', 'A provider profile id is required.');
+    }
+    const body = await c.req.raw.json().catch(() => null);
+    const parsed = parseRequest(body, ['apiKey']);
+    const apiKey = parsed?.apiKey;
+    if (parsed === null || typeof apiKey !== 'string' || apiKey.length === 0) {
+      return adminError('CREDENTIAL_INVALID', 'A non-empty apiKey is required.');
+    }
+    try {
+      await api.options.credentials.set(`ai-sdk:${profileId}`, apiKey);
+    } catch {
+      return adminError('CREDENTIAL_INVALID', 'The credential could not be stored.');
+    }
+    return json({ version: WORKBENCH_CONFIGURATION_VERSION, profileId, configured: true });
+  };
+}
+
+function providerProfileCredentialClearHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
+  return async (c) => {
+    const owner = await api.requireOwner(c);
+    if (owner instanceof Response) return owner;
+    const profileId = c.req.param('profileId');
+    if (profileId === undefined || profileId.length === 0) {
+      return adminError('CONFIG_INVALID', 'A provider profile id is required.');
+    }
+    await api.options.credentials.remove(`ai-sdk:${profileId}`);
+    return json({ version: WORKBENCH_CONFIGURATION_VERSION, profileId, configured: false });
+  };
+}
+
+function providerProfileTestHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
+  return async (c) => {
+    const owner = await api.requireOwner(c);
+    if (owner instanceof Response) return owner;
+    const profileId = c.req.param('profileId');
+    if (profileId === undefined || profileId.length === 0) {
+      return adminError('CONFIG_INVALID', 'A provider profile id is required.');
+    }
+    const test = api.options.providerTest;
+    if (test == null) {
+      return adminError(
+        'PROVIDER_VALIDATION_FAILED',
+        'Provider validation is not available on this Host.',
+      );
+    }
+    const loaded = await api.requireConfiguration();
+    if (!loaded.ok) return loaded.response;
+    const normalized = normalizeWorkbenchConfiguration(loaded.active.configuration);
+    const profile = normalized.providers[profileId];
+    if (profile === undefined) {
+      return adminError('CONFIG_INVALID', `Provider profile "${profileId}" does not exist.`);
+    }
+    const apiKey = await api.options.credentials.get(`ai-sdk:${profileId}`);
+    const result = await test.test({
+      baseUrl: profile.baseUrl,
+      model: profile.model,
+      apiKey,
+    });
+    const at = api.options.now?.() ?? new Date().toISOString();
+    if (!result.ok) {
+      return json(
+        {
+          version: WORKBENCH_CONFIGURATION_VERSION,
+          validation: 'invalid',
+          code: result.code,
+          lastValidatedAt: at,
+        },
+        200,
+      );
+    }
+    return json({
+      version: WORKBENCH_CONFIGURATION_VERSION,
+      validation: 'valid',
+      lastValidatedAt: at,
     });
   };
 }
@@ -1093,6 +1818,11 @@ export function createAdminApi(options: AdminApiOptions): AdminApiSurface {
     { path: BROWSER_ADMIN_OPERATIONS_PATH, handler: operationsHandler(api) },
     { path: BROWSER_ADMIN_DEVICES_PATH, handler: devicesListHandler(api) },
     { path: BROWSER_ADMIN_MEMBERSHIPS_PATH, handler: membershipsListHandler(api) },
+    { path: BROWSER_ADMIN_CONFIG_ADVANCED_PATH, handler: advancedConfigReadHandler(api) },
+    {
+      path: `${BROWSER_ADMIN_PLUGINS_DISCOVERED_PATH}/:projectId`,
+      handler: pluginsDiscoveredHandler(api),
+    },
   ];
   const mutations: readonly {
     readonly method: MutationHttpMethod;
@@ -1149,6 +1879,41 @@ export function createAdminApi(options: AdminApiOptions): AdminApiSurface {
       handler: devicesRevokeHandler(api),
     },
     { method: 'PUT', path: BROWSER_ADMIN_NETWORK_PATH, handler: networkUpdateHandler(api) },
+    {
+      method: 'POST',
+      path: BROWSER_ADMIN_CONFIG_PREVIEW_PATH,
+      handler: advancedConfigPreviewHandler(api),
+    },
+    {
+      method: 'PUT',
+      path: BROWSER_ADMIN_CONFIG_ADVANCED_PATH,
+      handler: advancedConfigApplyHandler(api),
+    },
+    {
+      method: 'PUT',
+      path: `${BROWSER_ADMIN_PROVIDERS_PATH}/:profileId`,
+      handler: providerProfileUpsertHandler(api),
+    },
+    {
+      method: 'DELETE',
+      path: `${BROWSER_ADMIN_PROVIDERS_PATH}/:profileId`,
+      handler: providerProfileDeleteHandler(api),
+    },
+    {
+      method: 'POST',
+      path: `${BROWSER_ADMIN_PROVIDERS_PATH}/:profileId/credential`,
+      handler: providerProfileCredentialSetHandler(api),
+    },
+    {
+      method: 'DELETE',
+      path: `${BROWSER_ADMIN_PROVIDERS_PATH}/:profileId/credential`,
+      handler: providerProfileCredentialClearHandler(api),
+    },
+    {
+      method: 'POST',
+      path: `${BROWSER_ADMIN_PROVIDERS_PATH}/:profileId/test`,
+      handler: providerProfileTestHandler(api),
+    },
   ];
 
   return {

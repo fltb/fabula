@@ -6,9 +6,12 @@ import type { ProjectAccessRole } from './configuration.js';
  * non-secret domain DTOs. This module carries host-only state such as password
  * hash records and the typed operation map; never import it from client code.
  * Version 2 adds configuration operation/audit/recovery metadata, authoring
- * coordination metadata, the append-only audit log, MCP device token
+ * metadata, the append-only audit log, MCP device token
  * verifiers, and the dashboard queries over sessions/devices. Version 4 adds
- * durable project membership rows and isolated verifier stores.
+ * durable project membership rows and isolated verifier stores. Version 5
+ * adds the durable project operation queue with worker-enforced status
+ * transitions and per-key idempotency. Version 6 adds the durable per-project
+ * publication repository with CAS status transitions.
  * The worker never stores `workbench.yaml` contents and never stores secrets:
  * provider keys live in the credential store, and device verifiers persist
  * only the SHA-256 hash of the one-time credential (the raw credential is
@@ -541,6 +544,355 @@ export interface RevisionMirrorExportRecord {
   updatedAt: string;
 }
 
+// ─── V5: durable project operation queue ────────────────────────────────────
+
+export const PROJECT_OPERATION_KIND_VALUES = [
+  'authoring-submit',
+  'render',
+  'revise',
+  'render-tree',
+  'review',
+  'release-gate',
+  'publish',
+  'agent-run',
+] as const;
+export type ProjectOperationKindV1 = (typeof PROJECT_OPERATION_KIND_VALUES)[number];
+
+export const PROJECT_OPERATION_STATUS_VALUES = [
+  'queued',
+  'running',
+  'succeeded',
+  'failed',
+  'stale',
+  'cancelled',
+  'interrupted',
+] as const;
+export type ProjectOperationStatusV1 = (typeof PROJECT_OPERATION_STATUS_VALUES)[number];
+
+/** Statuses that never leave the queue again without an explicit retry. */
+export const PROJECT_OPERATION_TERMINAL_STATUS_VALUES = [
+  'succeeded',
+  'failed',
+  'stale',
+  'cancelled',
+  'interrupted',
+] as const;
+export type ProjectOperationTerminalStatusV1 =
+  (typeof PROJECT_OPERATION_TERMINAL_STATUS_VALUES)[number];
+
+/** Durable progress of a long-running operation; `completed` never exceeds `total`. */
+export interface ProjectOperationProgressV1 {
+  readonly completed: number;
+  readonly total: number;
+}
+
+/**
+ * One durable row of the per-project operation queue. Identity fields
+ * (project/operation id, idempotency key, kind, actor, capability version,
+ * source hash, createdAt) are immutable after creation; only status,
+ * progress, acceptedRevisionId, resultRef, errorCode and updatedAt change.
+ * The worker enforces the canonical status transitions and the per-key
+ * idempotency unique constraint; hosts read this table instead of keeping
+ * in-memory operation receipts.
+ */
+export interface ProjectOperationRecordV1 {
+  readonly version: 1;
+  readonly projectId: string;
+  readonly operationId: string;
+  readonly idempotencyKey: string;
+  readonly kind: ProjectOperationKindV1;
+  readonly status: ProjectOperationStatusV1;
+  readonly actorId: string;
+  readonly capabilityVersion: number;
+  readonly sourceHash: string | null;
+  readonly acceptedRevisionId: string | null;
+  readonly progress: ProjectOperationProgressV1 | null;
+  readonly resultRef: string | null;
+  readonly errorCode: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+/** Create or status-transition one project operation row. */
+export interface UpsertProjectOperationInput {
+  /**
+   * Full record: creation requires `status: 'queued'`; updates must preserve
+   * the immutable identity fields (they are validated worker-side).
+   */
+  readonly record: ProjectOperationRecordV1;
+  /**
+   * CAS guard for the update path: when the stored status differs the upsert
+   * is a no-op returning `applied:false` with the stored record. Omit on
+   * create (creation is unconditional; the idempotency unique index is the
+   * only conflict surface).
+   */
+  readonly expectedStatus?: ProjectOperationStatusV1;
+}
+export interface UpsertProjectOperationResult {
+  readonly record: ProjectOperationRecordV1;
+  /** True when this call inserted the row. */
+  readonly created: boolean;
+  /** False only when `expectedStatus` did not match the stored status. */
+  readonly applied: boolean;
+}
+
+/** Paginated read of a project's operation queue, newest-updated first. */
+export interface ListProjectOperationsInput {
+  readonly projectId: string;
+  /** Restrict the page to one status (active views filter `queued`/`running`). */
+  readonly status?: ProjectOperationStatusV1;
+  /** Page size; clamped to 1..100, default 50. */
+  readonly limit?: number;
+  /**
+   * Keyset cursor: `"<updatedAt>|<operationId>"` of the last row of the
+   * previous page. `updatedAt` is the row's last transition time (newest
+   * first, `operationId` breaks ties). Omit for the first page.
+   */
+  readonly before?: string;
+}
+
+// ─── V6: durable publication repository ────────────────────────────────────
+
+export const PUBLICATION_KIND_VALUES = ['canonical', 'custom'] as const;
+export type PublicationKindV1 = (typeof PUBLICATION_KIND_VALUES)[number];
+
+export const PUBLICATION_STATUS_VALUES = ['current', 'stale'] as const;
+export type PublicationStatusV1 = (typeof PUBLICATION_STATUS_VALUES)[number];
+
+/**
+ * Fixed publication id of the canonical novel. Custom branch publications use
+ * `sha256(branchPath/discourseBranch/title identity)` hex ids computed
+ * host-side; the worker validates the hex format.
+ */
+export const CANONICAL_PUBLICATION_ID = 'canonical' as const;
+
+/**
+ * Strict stored value of one publication row. Every field is written by the
+ * Host service that produced the artifact: hashes identify the exact accepted
+ * source/scope and the exact novel bytes on disk, `relativeOutputPath` is the
+ * project-relative file the `FilePublicationWriter` wrote (never an absolute
+ * Host path), and `status` mirrors the row's `current`/`stale` column.
+ */
+export interface PublicationValueV1 {
+  readonly sourceHash: string;
+  readonly scopeHash: string;
+  readonly revisionIds: readonly string[];
+  readonly novelHash: string;
+  readonly relativeOutputPath: string;
+  readonly byteLength: number;
+  readonly actorId: string;
+  readonly operationId: string;
+  readonly createdAt: string;
+  readonly status: PublicationStatusV1;
+}
+
+/**
+ * One durable row of the per-project publication repository
+ * (`project_publications`), keyed by `(projectId, publicationId)`. Identity
+ * fields (project/publication id, kind) are immutable after creation; the
+ * value is replaced wholesale by a re-publication of the same id and
+ * `updatedAt` is the row's last transition time.
+ */
+export interface ProjectPublicationRecordV1 {
+  readonly version: 1;
+  readonly projectId: string;
+  readonly publicationId: string;
+  readonly kind: PublicationKindV1;
+  readonly value: PublicationValueV1;
+  readonly updatedAt: string;
+}
+
+/** Create or replace one publication row. */
+export interface UpsertProjectPublicationInput {
+  /**
+   * Full record: creation is unconditional; updates replace the stored value
+   * (identity fields projectId/publicationId/kind are validated immutable
+   * worker-side).
+   */
+  readonly record: ProjectPublicationRecordV1;
+  /**
+   * CAS guard for the update path (mirrors `upsertProjectOperation`): when
+   * the stored status differs the upsert is a no-op returning
+   * `applied:false` with the stored record. Omit on create.
+   */
+  readonly expectedStatus?: PublicationStatusV1;
+}
+export interface UpsertProjectPublicationResult {
+  readonly record: ProjectPublicationRecordV1;
+  /** True when this call inserted the row. */
+  readonly created: boolean;
+  /** False only when `expectedStatus` did not match the stored status. */
+  readonly applied: boolean;
+}
+
+/** Paginated read of a project's publications, newest-updated first. */
+export interface ListProjectPublicationsInput {
+  readonly projectId: string;
+  /** Page size; clamped to 1..100, default 50. */
+  readonly limit?: number;
+  /**
+   * Keyset cursor: `"<updatedAt>|<publicationId>"` of the last row of the
+   * previous page (newest first, `publicationId` breaks ties). Omit for the
+   * first page.
+   */
+  readonly before?: string;
+}
+
+// ─── V7: durable agent conversations, runs and tool calls ────────────────
+
+/** Durable status of one agent run. There is no `stale`: a run is never
+ * superseded, only cancelled or interrupted by a restart. */
+export const AGENT_RUN_STATUS_VALUES = [
+  'queued',
+  'running',
+  'succeeded',
+  'failed',
+  'cancelled',
+  'interrupted',
+] as const;
+export type AgentRunStatusV1 = (typeof AGENT_RUN_STATUS_VALUES)[number];
+
+/** Append-only status of one tool call within a run. */
+export const AGENT_TOOL_CALL_STATUS_VALUES = ['pending', 'succeeded', 'failed'] as const;
+export type AgentToolCallStatusV1 = (typeof AGENT_TOOL_CALL_STATUS_VALUES)[number];
+
+/**
+ * One durable row of an agent conversation (`agent_conversations`), keyed by
+ * `conversationId`. The row stores principal identity and the project access
+ * role the principal held when the conversation was created; capability
+ * tokens and provider keys are deliberately never persisted.
+ */
+export interface AgentConversationRecordV1 {
+  readonly version: 1;
+  readonly conversationId: string;
+  readonly projectId: string;
+  readonly principalUserId: string;
+  readonly role: ProjectAccessRole;
+  readonly title: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+/**
+ * One durable agent run (`agent_runs`), keyed by `runId`. The run snapshots
+ * the principal identity/role, bounds its work with `maxTurns`/`maxToolCalls`,
+ * and counts progress in `turn`/`toolCalls`. Status follows the canonical
+ * automaton: `queued -> running -> succeeded|failed|cancelled`, with a restart
+ * sweep turning queued/running work into `interrupted` (never auto-replayed).
+ */
+export interface AgentRunRecordV1 {
+  readonly version: 1;
+  readonly runId: string;
+  readonly conversationId: string;
+  readonly projectId: string;
+  readonly operationId: string | null;
+  readonly principalUserId: string;
+  readonly role: ProjectAccessRole;
+  readonly status: AgentRunStatusV1;
+  readonly turn: number;
+  readonly maxTurns: number;
+  readonly toolCalls: number;
+  readonly maxToolCalls: number;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+/**
+ * One append-only tool call of a run (`agent_tool_calls`), keyed by
+ * `(runId, callIndex)`. The ordinal is enforced worker-side: appends must be
+ * strictly sequential with no gaps or overwrites. Only the sanitized argument
+ * hash is stored — never raw arguments, capability tokens or provider keys.
+ */
+export interface AgentToolCallRecordV1 {
+  readonly version: 1;
+  readonly runId: string;
+  readonly callIndex: number;
+  readonly toolName: string;
+  readonly sanitizedArgsHash: string;
+  readonly resultRef: string | null;
+  readonly turn: number;
+  readonly status: AgentToolCallStatusV1;
+  readonly createdAt: string;
+}
+
+/** Append one message to a conversation: bump `updatedAt` and optionally set `title`. */
+export interface AppendAgentConversationInput {
+  readonly conversationId: string;
+  readonly at: string;
+  readonly title?: string;
+}
+
+/** Paginated read of conversations, newest-updated first. */
+export interface ListAgentConversationsInput {
+  readonly projectId?: string;
+  readonly principalUserId?: string;
+  /** Page size; clamped to 1..100, default 50. */
+  readonly limit?: number;
+  /** Keyset cursor: `"<updatedAt>|<conversationId>"` of the last row of the previous page. */
+  readonly before?: string;
+}
+
+/**
+ * Status transition of one agent run (mirrors `upsertProjectOperation`).
+ * `expectedStatus` is a CAS guard: a mismatch returns `applied:false` with
+ * the stored record. `turn`/`toolCalls` counters may be advanced atomically
+ * with the transition; they are monotonic and bounded by maxTurns/maxToolCalls.
+ */
+export interface TransitionAgentRunInput {
+  readonly runId: string;
+  readonly status: AgentRunStatusV1;
+  readonly expectedStatus: AgentRunStatusV1;
+  readonly turn?: number;
+  readonly toolCalls?: number;
+  readonly at: string;
+}
+export interface TransitionAgentRunResult {
+  readonly record: AgentRunRecordV1;
+  /** False only when `expectedStatus` did not match the stored status. */
+  readonly applied: boolean;
+}
+
+/** Counter-only update of an active run (status unchanged). */
+export interface CheckpointAgentRunInput {
+  readonly runId: string;
+  readonly turn?: number;
+  readonly toolCalls?: number;
+  readonly at: string;
+}
+
+/** Paginated read of runs, newest-updated first. */
+export interface ListAgentRunsInput {
+  readonly conversationId?: string;
+  readonly projectId?: string;
+  readonly status?: AgentRunStatusV1;
+  /** Page size; clamped to 1..100, default 50. */
+  readonly limit?: number;
+  /** Keyset cursor: `"<updatedAt>|<runId>"` of the last row of the previous page. */
+  readonly before?: string;
+}
+
+/** Complete a pending tool call: pending -> succeeded|failed, recording the result ref. */
+export interface UpdateAgentToolCallStatusInput {
+  readonly runId: string;
+  readonly callIndex: number;
+  readonly status: 'succeeded' | 'failed';
+  /**
+   * Required on success (the result artifact); may stay null on failure (the
+   * operation record carries the error).
+   */
+  readonly resultRef: string | null;
+  readonly at: string;
+}
+
+/** Paginated read of a run's tool calls in append order. */
+export interface ListAgentToolCallsInput {
+  readonly runId: string;
+  /** Keyset: return rows with call_index greater than `after`. */
+  readonly after?: number;
+  /** Page size; clamped to 1..100, default 50. */
+  readonly limit?: number;
+}
+
 type PersistenceOperationKeyParity = [
   Exclude<keyof PersistencePayloads, keyof PersistenceResults>,
   Exclude<keyof PersistenceResults, keyof PersistencePayloads>,
@@ -628,6 +980,35 @@ export interface PersistencePayloads {
   createRevisionMirrorExport: RevisionMirrorExportRecord;
   checkpointRevisionMirrorExport: RevisionMirrorExportRecord;
   loadRevisionMirrorExport: { projectId: string; revisionId: string; backend: string };
+  // ─── V5: durable project operation queue ─────────────────────────────────
+  upsertProjectOperation: UpsertProjectOperationInput;
+  getProjectOperation: { projectId: string; operationId: string };
+  listProjectOperations: ListProjectOperationsInput;
+  getProjectOperationByIdempotencyKey: {
+    projectId: string;
+    kind: ProjectOperationKindV1;
+    idempotencyKey: string;
+  };
+  markProjectOperationsInterrupted: { projectId: string; at?: string };
+  countProjectOperations: { projectId: string; status?: ProjectOperationStatusV1 };
+  // ─── V6: durable publication repository ─────────────────────────────────
+  upsertProjectPublication: UpsertProjectPublicationInput;
+  getProjectPublication: { projectId: string; publicationId: string };
+  listProjectPublications: ListProjectPublicationsInput;
+  // ─── V7: durable agent records ─────────────────────────────────────────
+  createAgentConversation: AgentConversationRecordV1;
+  appendAgentConversation: AppendAgentConversationInput;
+  getAgentConversation: { conversationId: string };
+  listAgentConversations: ListAgentConversationsInput;
+  createAgentRun: AgentRunRecordV1;
+  transitionAgentRun: TransitionAgentRunInput;
+  checkpointAgentRun: CheckpointAgentRunInput;
+  markAgentRunsInterrupted: { projectId: string; at?: string };
+  getAgentRun: { runId: string };
+  listAgentRuns: ListAgentRunsInput;
+  appendAgentToolCall: AgentToolCallRecordV1;
+  updateAgentToolCallStatus: UpdateAgentToolCallStatusInput;
+  listAgentToolCalls: ListAgentToolCallsInput;
 }
 
 export interface PersistenceResults {
@@ -702,6 +1083,31 @@ export interface PersistenceResults {
   createRevisionMirrorExport: RevisionMirrorExportRecord;
   checkpointRevisionMirrorExport: RevisionMirrorExportRecord;
   loadRevisionMirrorExport: RevisionMirrorExportRecord | null;
+  // ─── V5: durable project operation queue results ─────────────────────────
+  upsertProjectOperation: UpsertProjectOperationResult;
+  getProjectOperation: ProjectOperationRecordV1 | null;
+  listProjectOperations: ProjectOperationRecordV1[];
+  getProjectOperationByIdempotencyKey: ProjectOperationRecordV1 | null;
+  markProjectOperationsInterrupted: { updated: number };
+  countProjectOperations: { count: number };
+  // ─── V6: durable publication repository results ─────────────────────────
+  upsertProjectPublication: UpsertProjectPublicationResult;
+  getProjectPublication: ProjectPublicationRecordV1 | null;
+  listProjectPublications: ProjectPublicationRecordV1[];
+  // ─── V7: durable agent record results ──────────────────────────────────
+  createAgentConversation: AgentConversationRecordV1;
+  appendAgentConversation: AgentConversationRecordV1;
+  getAgentConversation: AgentConversationRecordV1 | null;
+  listAgentConversations: AgentConversationRecordV1[];
+  createAgentRun: AgentRunRecordV1;
+  transitionAgentRun: TransitionAgentRunResult;
+  checkpointAgentRun: AgentRunRecordV1;
+  markAgentRunsInterrupted: { updated: number };
+  getAgentRun: AgentRunRecordV1 | null;
+  listAgentRuns: AgentRunRecordV1[];
+  appendAgentToolCall: AgentToolCallRecordV1;
+  updateAgentToolCallStatus: AgentToolCallRecordV1;
+  listAgentToolCalls: AgentToolCallRecordV1[];
 }
 
 export interface PersistenceError {

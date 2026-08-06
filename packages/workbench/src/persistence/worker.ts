@@ -4,6 +4,11 @@ import { Kysely, SqliteDialect } from 'kysely';
 import { AUTHORING_PHASE_VALUES } from '../contracts/authoring.js';
 import { PROJECT_ACCESS_ROLES } from '../contracts/configuration.js';
 import type {
+  AgentConversationRecordV1,
+  AgentRunRecordV1,
+  AgentRunStatusV1,
+  AgentToolCallRecordV1,
+  AgentToolCallStatusV1,
   AuditRecord,
   AuditSurface,
   AuthoringConflictRecord,
@@ -28,6 +33,12 @@ import type {
   PersistenceResults,
   ProjectMembershipMutationResult,
   ProjectMembershipState,
+  ProjectOperationProgressV1,
+  ProjectOperationRecordV1,
+  ProjectOperationStatusV1,
+  ProjectPublicationRecordV1,
+  PublicationKindV1,
+  PublicationStatusV1,
   RevisionMirrorExportRecord,
   RevokeInviteResult,
   SourceHeadCasResult,
@@ -40,12 +51,19 @@ import type {
   UserRole,
 } from '../contracts/persistence.js';
 import {
+  AGENT_RUN_STATUS_VALUES,
+  AGENT_TOOL_CALL_STATUS_VALUES,
+  CANONICAL_PUBLICATION_ID,
   GIT_SUBMISSION_PHASE_COMPLETE,
   GIT_SUBMISSION_PHASE_CONFLICT,
   GIT_SUBMISSION_PHASE_STALE,
   GIT_SUBMISSION_PHASE_VALUES,
   NATIVE_REVISION_PHASE_VALUES,
   NATIVE_REVISION_TERMINAL_PHASE_VALUES,
+  PROJECT_OPERATION_KIND_VALUES,
+  PROJECT_OPERATION_STATUS_VALUES,
+  PUBLICATION_KIND_VALUES,
+  PUBLICATION_STATUS_VALUES,
 } from '../contracts/persistence.js';
 
 import { createKyselySqliteDatabase, type KyselySqliteBridge } from './kysely-sqlite-bridge.js';
@@ -588,6 +606,817 @@ function mapRevisionMirrorExportRow(row: Record<string, unknown>): RevisionMirro
   };
 }
 
+// ─── V5: project operation queue rows ───────────────────────────────────────
+
+/**
+ * Tolerate any status string a previous Host version may have stored:
+ * canonical statuses pass through unchanged; unknown values read as
+ * `interrupted` so a restart never fabricates an active (queued/running)
+ * operation from an unrecognized one. The transition validator rejects
+ * writes on such rows until the caller reconciles them.
+ */
+const parseProjectOperationStatus = (value: unknown): ProjectOperationStatusV1 =>
+  PROJECT_OPERATION_STATUS_VALUES.find((status) => status === text(value)) ?? 'interrupted';
+
+function mapProjectOperationRow(row: Record<string, unknown>): ProjectOperationRecordV1 {
+  const storedVersion = Number(row.version);
+  if (storedVersion !== 1) {
+    throw new Error('Persistence returned an unknown project operation record version.');
+  }
+  return {
+    version: 1,
+    projectId: text(row.project_id),
+    operationId: text(row.operation_id),
+    idempotencyKey: text(row.idempotency_key),
+    kind: text(row.kind) as ProjectOperationRecordV1['kind'],
+    status: parseProjectOperationStatus(row.status),
+    actorId: text(row.actor_id),
+    capabilityVersion: Number(row.capability_version),
+    sourceHash: row.source_hash != null ? text(row.source_hash) : null,
+    acceptedRevisionId: row.accepted_revision_id != null ? text(row.accepted_revision_id) : null,
+    progress: row.progress != null ? parseJson<ProjectOperationProgressV1>(row.progress) : null,
+    resultRef: row.result_ref != null ? text(row.result_ref) : null,
+    errorCode: row.error_code != null ? text(row.error_code) : null,
+    createdAt: text(row.created_at),
+    updatedAt: text(row.updated_at),
+  };
+}
+
+function operationInputError(
+  code: 'INVALID_INPUT' | 'ILLEGAL_OPERATION_TRANSITION' | 'IDEMPOTENCY_CONFLICT',
+  message: string,
+): never {
+  throw { code, message, retryable: false };
+}
+
+function requireOperationIdentifier(value: unknown, field: string): string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 256) {
+    operationInputError('INVALID_INPUT', `${field} must be a non-empty identifier.`);
+  }
+  return value;
+}
+
+function requireOperationOptionalString(
+  value: unknown,
+  field: string,
+  maxLength: number,
+): string | null {
+  if (value == null) return null;
+  if (typeof value !== 'string' || value.length === 0 || value.length > maxLength) {
+    operationInputError(
+      'INVALID_INPUT',
+      `${field} must be null or a non-empty string of at most ${maxLength} characters.`,
+    );
+  }
+  return value;
+}
+
+function requireOperationProgress(value: unknown): ProjectOperationProgressV1 | null {
+  if (value == null) return null;
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    operationInputError('INVALID_INPUT', 'progress must be null or { completed, total }.');
+  }
+  const progress = value as { completed?: unknown; total?: unknown };
+  if (
+    typeof progress.completed !== 'number' ||
+    !Number.isInteger(progress.completed) ||
+    progress.completed < 0 ||
+    typeof progress.total !== 'number' ||
+    !Number.isInteger(progress.total) ||
+    progress.total < 1 ||
+    progress.completed > progress.total
+  ) {
+    operationInputError(
+      'INVALID_INPUT',
+      'progress requires integer 0 <= completed <= total with total >= 1.',
+    );
+  }
+  return { completed: progress.completed, total: progress.total };
+}
+
+/**
+ * Canonical worker-side status automaton. A new row must be created
+ * `queued`; `interrupted -> queued` is the explicit retry path a Host uses
+ * after restart-recovery marks crashed work interrupted (the same
+ * idempotency key must be able to re-enter the queue), and
+ * `interrupted -> cancelled` lets an operator discard recovered work.
+ * `queued -> cancelled|stale` allow the queue to drop work that is
+ * cancelled or superseded before it ever starts. Every other transition is
+ * rejected with `ILLEGAL_OPERATION_TRANSITION`.
+ */
+const PROJECT_OPERATION_TRANSITIONS: Readonly<
+  Record<ProjectOperationStatusV1, readonly ProjectOperationStatusV1[]>
+> = {
+  queued: ['running', 'cancelled', 'stale', 'interrupted'],
+  running: ['succeeded', 'failed', 'stale', 'cancelled', 'interrupted'],
+  succeeded: [],
+  failed: [],
+  stale: [],
+  cancelled: [],
+  interrupted: ['queued', 'cancelled'],
+};
+
+function requireProjectOperationRecord(value: unknown): ProjectOperationRecordV1 {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    operationInputError('INVALID_INPUT', 'project operation record must be an object.');
+  }
+  const record = value as Record<string, unknown>;
+  if (record.version !== 1) {
+    operationInputError('INVALID_INPUT', 'project operation record version must be 1.');
+  }
+  const projectId = requireOperationIdentifier(record.projectId, 'projectId');
+  const operationId = requireOperationIdentifier(record.operationId, 'operationId');
+  const idempotencyKey = requireOperationIdentifier(record.idempotencyKey, 'idempotencyKey');
+  if (
+    typeof record.kind !== 'string' ||
+    !(PROJECT_OPERATION_KIND_VALUES as readonly string[]).includes(record.kind)
+  ) {
+    operationInputError('INVALID_INPUT', 'kind must be a canonical project operation kind.');
+  }
+  if (
+    typeof record.status !== 'string' ||
+    !(PROJECT_OPERATION_STATUS_VALUES as readonly string[]).includes(record.status)
+  ) {
+    operationInputError('INVALID_INPUT', 'status must be a canonical project operation status.');
+  }
+  const actorId = requireOperationIdentifier(record.actorId, 'actorId');
+  if (
+    typeof record.capabilityVersion !== 'number' ||
+    !Number.isInteger(record.capabilityVersion) ||
+    record.capabilityVersion < 0
+  ) {
+    operationInputError('INVALID_INPUT', 'capabilityVersion must be a non-negative integer.');
+  }
+  const sourceHash = requireOperationOptionalString(record.sourceHash, 'sourceHash', 512);
+  const acceptedRevisionId = requireOperationOptionalString(
+    record.acceptedRevisionId,
+    'acceptedRevisionId',
+    512,
+  );
+  const progress = requireOperationProgress(record.progress);
+  const resultRef = requireOperationOptionalString(record.resultRef, 'resultRef', 1024);
+  const errorCode = requireOperationOptionalString(record.errorCode, 'errorCode', 256);
+  const createdAt = requireOperationOptionalString(record.createdAt, 'createdAt', 64);
+  const updatedAt = requireOperationOptionalString(record.updatedAt, 'updatedAt', 64);
+  if (createdAt === null || updatedAt === null) {
+    operationInputError('INVALID_INPUT', 'createdAt and updatedAt are required timestamps.');
+  }
+  return {
+    version: 1,
+    projectId,
+    operationId,
+    idempotencyKey,
+    kind: record.kind as ProjectOperationRecordV1['kind'],
+    status: record.status as ProjectOperationRecordV1['status'],
+    actorId,
+    capabilityVersion: record.capabilityVersion,
+    sourceHash,
+    acceptedRevisionId,
+    progress,
+    resultRef,
+    errorCode,
+    createdAt,
+    updatedAt,
+  };
+}
+
+/** Immutable identity fields that must match the stored row on every update. */
+function assertOperationIdentityUnchanged(
+  existing: Record<string, unknown>,
+  record: ProjectOperationRecordV1,
+): void {
+  if (
+    text(existing.project_id) !== record.projectId ||
+    text(existing.operation_id) !== record.operationId ||
+    text(existing.idempotency_key) !== record.idempotencyKey ||
+    text(existing.kind) !== record.kind ||
+    text(existing.actor_id) !== record.actorId ||
+    Number(existing.capability_version) !== record.capabilityVersion ||
+    (existing.source_hash ?? null) !== (record.sourceHash ?? null) ||
+    text(existing.created_at) !== record.createdAt
+  ) {
+    operationInputError(
+      'INVALID_INPUT',
+      'Project operation identity fields (projectId, operationId, idempotencyKey, kind, actorId, capabilityVersion, sourceHash, createdAt) are immutable.',
+    );
+  }
+}
+
+const isUniqueConstraintError = (error: unknown): boolean =>
+  error instanceof Error && /UNIQUE constraint failed/i.test(error.message);
+
+/** Parse the `"<updatedAt>|<operationId>"` list cursor into its parts. */
+function parseOperationListCursor(value: string): {
+  updatedAt: string;
+  operationId: string;
+} {
+  const separator = value.lastIndexOf('|');
+  if (separator <= 0 || separator === value.length - 1) {
+    operationInputError(
+      'INVALID_INPUT',
+      'listProjectOperations cursor must be "<updatedAt>|<operationId>".',
+    );
+  }
+  const updatedAt = value.slice(0, separator);
+  const operationId = value.slice(separator + 1);
+  if (updatedAt.length === 0 || operationId.length === 0 || operationId.length > 256) {
+    operationInputError(
+      'INVALID_INPUT',
+      'listProjectOperations cursor must be "<updatedAt>|<operationId>".',
+    );
+  }
+  return { updatedAt, operationId };
+}
+
+// ─── V6: publication repository helpers ────────────────────────────────────
+
+/**
+ * Tolerate any status string a previous Host version may have stored:
+ * canonical statuses pass through unchanged; unknown values read as `stale`
+ * so a restart never fabricates a `current` artifact from an unrecognized
+ * one. The transition validator rejects writes on such rows until the caller
+ * reconciles them.
+ */
+const parsePublicationStatus = (value: unknown): PublicationStatusV1 =>
+  PUBLICATION_STATUS_VALUES.find((status) => status === text(value)) ?? 'stale';
+
+function mapProjectPublicationRow(row: Record<string, unknown>): ProjectPublicationRecordV1 {
+  return {
+    version: 1,
+    projectId: text(row.project_id),
+    publicationId: text(row.publication_id),
+    kind: text(row.kind) as ProjectPublicationRecordV1['kind'],
+    value: {
+      sourceHash: text(row.source_hash),
+      scopeHash: text(row.scope_hash),
+      revisionIds: parseJson<readonly string[]>(row.revision_ids),
+      novelHash: text(row.novel_hash),
+      relativeOutputPath: text(row.relative_output_path),
+      byteLength: Number(row.byte_length),
+      actorId: text(row.actor_id),
+      operationId: text(row.operation_id),
+      createdAt: text(row.created_at),
+      status: parsePublicationStatus(row.status),
+    },
+    updatedAt: text(row.updated_at),
+  };
+}
+
+function publicationInputError(
+  code: 'INVALID_INPUT' | 'ILLEGAL_OPERATION_TRANSITION',
+  message: string,
+): never {
+  throw { code, message, retryable: false };
+}
+
+function requirePublicationIdentifier(value: unknown, field: string): string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 256) {
+    publicationInputError('INVALID_INPUT', `${field} must be a non-empty identifier.`);
+  }
+  return value;
+}
+
+function requirePublicationKind(value: unknown): PublicationKindV1 {
+  if (
+    typeof value !== 'string' ||
+    !(PUBLICATION_KIND_VALUES as readonly string[]).includes(value)
+  ) {
+    publicationInputError('INVALID_INPUT', 'kind must be "canonical" or "custom".');
+  }
+  return value as PublicationKindV1;
+}
+
+function requirePublicationStatus(value: unknown): PublicationStatusV1 {
+  if (
+    typeof value !== 'string' ||
+    !(PUBLICATION_STATUS_VALUES as readonly string[]).includes(value)
+  ) {
+    publicationInputError('INVALID_INPUT', 'status must be "current" or "stale".');
+  }
+  return value as PublicationStatusV1;
+}
+
+function requirePublicationHash(value: unknown, field: string, maxLength: number): string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > maxLength) {
+    publicationInputError(
+      'INVALID_INPUT',
+      `${field} must be a non-empty string of at most ${maxLength} characters.`,
+    );
+  }
+  return value;
+}
+
+function requirePublicationRevisionIds(value: unknown): readonly string[] {
+  if (!Array.isArray(value) || value.length > 1024) {
+    publicationInputError('INVALID_INPUT', 'revisionIds must be an array of at most 1024 ids.');
+  }
+  const revisionIds = value.map((id) => {
+    if (typeof id !== 'string' || id.length === 0 || id.length > 512) {
+      publicationInputError(
+        'INVALID_INPUT',
+        'revisionIds must contain non-empty strings of at most 512 characters.',
+      );
+    }
+    return id;
+  });
+  return revisionIds;
+}
+
+/**
+ * Structural check on the project-relative output path. The exact allowed
+ * shapes (`output/novel.md` canonical, `output/<publicationId>.md` custom)
+ * are enforced by the Node Host `FilePublicationWriter`; the repository
+ * refuses anything that could escape the project root so a bad row can never
+ * masquerade as a readable artifact.
+ */
+function requirePublicationRelativePath(value: unknown): string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 512) {
+    publicationInputError(
+      'INVALID_INPUT',
+      'relativeOutputPath must be a non-empty string of at most 512 characters.',
+    );
+  }
+  const normalized = value.replace(/\\/g, '/');
+  if (
+    normalized.startsWith('/') ||
+    /^[a-zA-Z]:\//.test(normalized) ||
+    normalized.split('/').some((part) => part === '..')
+  ) {
+    publicationInputError(
+      'INVALID_INPUT',
+      'relativeOutputPath must be a project-relative path without traversal.',
+    );
+  }
+  return value;
+}
+
+function requirePublicationByteLength(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+    publicationInputError('INVALID_INPUT', 'byteLength must be a non-negative integer.');
+  }
+  return value;
+}
+
+function requirePublicationTimestamp(value: unknown, field: string): string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 64) {
+    publicationInputError(
+      'INVALID_INPUT',
+      `${field} must be a non-empty string of at most 64 characters.`,
+    );
+  }
+  return value;
+}
+
+/**
+ * Canonical worker-side status automaton. `current` and `stale` may flip in
+ * either direction: demotion marks a superseded artifact, re-activation is
+ * the idempotent re-publication of the same row after it was demoted. The
+ * real write guard is the `expectedStatus` CAS on the update path; this
+ * automaton only rejects statuses outside the canonical set.
+ */
+const PUBLICATION_TRANSITIONS: Readonly<
+  Record<PublicationStatusV1, readonly PublicationStatusV1[]>
+> = {
+  current: ['current', 'stale'],
+  stale: ['stale', 'current'],
+};
+
+function requireProjectPublicationRecord(value: unknown): ProjectPublicationRecordV1 {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    publicationInputError('INVALID_INPUT', 'project publication record must be an object.');
+  }
+  const record = value as Record<string, unknown>;
+  if (record.version !== 1) {
+    publicationInputError('INVALID_INPUT', 'project publication record version must be 1.');
+  }
+  const projectId = requirePublicationIdentifier(record.projectId, 'projectId');
+  const publicationId = requirePublicationIdentifier(record.publicationId, 'publicationId');
+  const kind = requirePublicationKind(record.kind);
+  if (kind === 'canonical' && publicationId !== CANONICAL_PUBLICATION_ID) {
+    publicationInputError(
+      'INVALID_INPUT',
+      'canonical publications must use publicationId "canonical".',
+    );
+  }
+  if (kind === 'custom') {
+    if (publicationId === CANONICAL_PUBLICATION_ID) {
+      publicationInputError(
+        'INVALID_INPUT',
+        'custom publications cannot use publicationId "canonical".',
+      );
+    }
+    if (!/^[0-9a-f]{1,128}$/i.test(publicationId)) {
+      publicationInputError(
+        'INVALID_INPUT',
+        'custom publicationId must be a non-empty hex string.',
+      );
+    }
+  }
+  if (record.value === null || typeof record.value !== 'object' || Array.isArray(record.value)) {
+    publicationInputError('INVALID_INPUT', 'publication value must be an object.');
+  }
+  const valueRecord = record.value as Record<string, unknown>;
+  const sourceHash = requirePublicationHash(valueRecord.sourceHash, 'sourceHash', 512);
+  const scopeHash = requirePublicationHash(valueRecord.scopeHash, 'scopeHash', 512);
+  const revisionIds = requirePublicationRevisionIds(valueRecord.revisionIds);
+  const novelHash = requirePublicationHash(valueRecord.novelHash, 'novelHash', 128);
+  const relativeOutputPath = requirePublicationRelativePath(valueRecord.relativeOutputPath);
+  const byteLength = requirePublicationByteLength(valueRecord.byteLength);
+  const actorId = requirePublicationIdentifier(valueRecord.actorId, 'actorId');
+  const operationId = requirePublicationIdentifier(valueRecord.operationId, 'operationId');
+  const createdAt = requirePublicationTimestamp(valueRecord.createdAt, 'createdAt');
+  const status = requirePublicationStatus(valueRecord.status);
+  const updatedAt = requirePublicationTimestamp(record.updatedAt, 'updatedAt');
+  return {
+    version: 1,
+    projectId,
+    publicationId,
+    kind,
+    value: {
+      sourceHash,
+      scopeHash,
+      revisionIds,
+      novelHash,
+      relativeOutputPath,
+      byteLength,
+      actorId,
+      operationId,
+      createdAt,
+      status,
+    },
+    updatedAt,
+  };
+}
+
+/** Immutable identity fields that must match the stored row on every update. */
+function assertPublicationIdentityUnchanged(
+  existing: Record<string, unknown>,
+  record: ProjectPublicationRecordV1,
+): void {
+  if (
+    text(existing.project_id) !== record.projectId ||
+    text(existing.publication_id) !== record.publicationId ||
+    text(existing.kind) !== record.kind
+  ) {
+    publicationInputError(
+      'INVALID_INPUT',
+      'Publication identity fields (projectId, publicationId, kind) are immutable.',
+    );
+  }
+}
+
+/** Parse the `"<updatedAt>|<publicationId>"` list cursor into its parts. */
+function parsePublicationListCursor(value: string): {
+  updatedAt: string;
+  publicationId: string;
+} {
+  const separator = value.lastIndexOf('|');
+  if (separator <= 0 || separator === value.length - 1) {
+    publicationInputError(
+      'INVALID_INPUT',
+      'listProjectPublications cursor must be "<updatedAt>|<publicationId>".',
+    );
+  }
+  const updatedAt = value.slice(0, separator);
+  const publicationId = value.slice(separator + 1);
+  if (updatedAt.length === 0 || publicationId.length === 0 || publicationId.length > 256) {
+    publicationInputError(
+      'INVALID_INPUT',
+      'listProjectPublications cursor must be "<updatedAt>|<publicationId>".',
+    );
+  }
+  return { updatedAt, publicationId };
+}
+
+// ─── V7: durable agent record helpers ─────────────────────────────────────
+
+/**
+ * Tolerate any status string a previous Host version may have stored:
+ * canonical statuses pass through unchanged; unknown values read as
+ * `interrupted` so a restart never fabricates an active (queued/running) run
+ * from an unrecognized one. The transition validator rejects writes on such
+ * rows until the caller reconciles them.
+ */
+const parseAgentRunStatus = (value: unknown): AgentRunStatusV1 =>
+  AGENT_RUN_STATUS_VALUES.find((status) => status === text(value)) ?? 'interrupted';
+
+function mapAgentConversationRow(row: Record<string, unknown>): AgentConversationRecordV1 {
+  return {
+    version: 1,
+    conversationId: text(row.conversation_id),
+    projectId: text(row.project_id),
+    principalUserId: text(row.principal_user_id),
+    role: text(row.role) as AgentConversationRecordV1['role'],
+    title: row.title != null ? text(row.title) : null,
+    createdAt: text(row.created_at),
+    updatedAt: text(row.updated_at),
+  };
+}
+
+function mapAgentRunRow(row: Record<string, unknown>): AgentRunRecordV1 {
+  return {
+    version: 1,
+    runId: text(row.run_id),
+    conversationId: text(row.conversation_id),
+    projectId: text(row.project_id),
+    operationId: row.operation_id != null ? text(row.operation_id) : null,
+    principalUserId: text(row.principal_user_id),
+    role: text(row.role) as AgentRunRecordV1['role'],
+    status: parseAgentRunStatus(row.status),
+    turn: Number(row.turn),
+    maxTurns: Number(row.max_turns),
+    toolCalls: Number(row.tool_calls),
+    maxToolCalls: Number(row.max_tool_calls),
+    createdAt: text(row.created_at),
+    updatedAt: text(row.updated_at),
+  };
+}
+
+function mapAgentToolCallRow(row: Record<string, unknown>): AgentToolCallRecordV1 {
+  return {
+    version: 1,
+    runId: text(row.run_id),
+    callIndex: Number(row.call_index),
+    toolName: text(row.tool_name),
+    sanitizedArgsHash: text(row.sanitized_args_hash),
+    resultRef: row.result_ref != null ? text(row.result_ref) : null,
+    turn: Number(row.turn),
+    status: text(row.status) as AgentToolCallRecordV1['status'],
+    createdAt: text(row.created_at),
+  };
+}
+
+function agentInputError(
+  code:
+    | 'INVALID_INPUT'
+    | 'CONVERSATION_EXISTS'
+    | 'CONVERSATION_NOT_FOUND'
+    | 'RUN_EXISTS'
+    | 'RUN_NOT_FOUND'
+    | 'TOOL_CALL_NOT_FOUND'
+    | 'ILLEGAL_RUN_TRANSITION'
+    | 'ILLEGAL_TOOL_CALL_TRANSITION'
+    | 'TOOL_CALL_APPEND_VIOLATION',
+  message: string,
+): never {
+  throw { code, message, retryable: false };
+}
+
+function requireAgentIdentifier(value: unknown, field: string): string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 256) {
+    agentInputError('INVALID_INPUT', `${field} must be a non-empty identifier.`);
+  }
+  return value;
+}
+
+function requireAgentOptionalString(
+  value: unknown,
+  field: string,
+  maxLength: number,
+): string | null {
+  if (value == null) return null;
+  if (typeof value !== 'string' || value.length === 0 || value.length > maxLength) {
+    agentInputError(
+      'INVALID_INPUT',
+      `${field} must be null or a non-empty string of at most ${maxLength} characters.`,
+    );
+  }
+  return value;
+}
+
+function requireAgentTimestamp(value: unknown, field: string): string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 64) {
+    agentInputError(
+      'INVALID_INPUT',
+      `${field} must be a non-empty string of at most 64 characters.`,
+    );
+  }
+  return value;
+}
+
+function requireAgentRole(value: unknown): AgentRunRecordV1['role'] {
+  if (typeof value !== 'string' || !(PROJECT_ACCESS_ROLES as readonly string[]).includes(value)) {
+    agentInputError('INVALID_INPUT', 'role must be a canonical project access role.');
+  }
+  return value as AgentRunRecordV1['role'];
+}
+
+function requireAgentRunStatus(value: unknown): AgentRunStatusV1 {
+  if (
+    typeof value !== 'string' ||
+    !(AGENT_RUN_STATUS_VALUES as readonly string[]).includes(value)
+  ) {
+    agentInputError('INVALID_INPUT', 'status must be a canonical agent run status.');
+  }
+  return value as AgentRunStatusV1;
+}
+
+function requireAgentToolCallStatus(value: unknown): AgentToolCallStatusV1 {
+  if (
+    typeof value !== 'string' ||
+    !(AGENT_TOOL_CALL_STATUS_VALUES as readonly string[]).includes(value)
+  ) {
+    agentInputError('INVALID_INPUT', 'status must be "pending", "succeeded" or "failed".');
+  }
+  return value as AgentToolCallStatusV1;
+}
+
+function requireAgentCounter(value: unknown, field: string, max: number): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > max) {
+    agentInputError('INVALID_INPUT', `${field} must be an integer between 0 and ${max}.`);
+  }
+  return value;
+}
+
+function requireAgentBound(value: unknown, field: string, min: number, max: number): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max) {
+    agentInputError('INVALID_INPUT', `${field} must be an integer between ${min} and ${max}.`);
+  }
+  return value;
+}
+
+function requireAgentHash(value: unknown, field: string): string {
+  if (typeof value !== 'string' || !/^[0-9a-f]{1,128}$/i.test(value)) {
+    agentInputError(
+      'INVALID_INPUT',
+      `${field} must be a non-empty hex string of at most 128 characters.`,
+    );
+  }
+  return value;
+}
+
+function requireAgentCallIndex(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 1_000_000) {
+    agentInputError('INVALID_INPUT', 'callIndex must be an integer between 0 and 1000000.');
+  }
+  return value;
+}
+
+function requireAgentConversationRecord(value: unknown): AgentConversationRecordV1 {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    agentInputError('INVALID_INPUT', 'agent conversation record must be an object.');
+  }
+  const record = value as Record<string, unknown>;
+  if (record.version !== 1) {
+    agentInputError('INVALID_INPUT', 'agent conversation record version must be 1.');
+  }
+  const conversationId = requireAgentIdentifier(record.conversationId, 'conversationId');
+  const projectId = requireAgentIdentifier(record.projectId, 'projectId');
+  const principalUserId = requireAgentIdentifier(record.principalUserId, 'principalUserId');
+  const role = requireAgentRole(record.role);
+  const title = requireAgentOptionalString(record.title, 'title', 512);
+  const createdAt = requireAgentTimestamp(record.createdAt, 'createdAt');
+  const updatedAt = requireAgentTimestamp(record.updatedAt, 'updatedAt');
+  return {
+    version: 1,
+    conversationId,
+    projectId,
+    principalUserId,
+    role,
+    title,
+    createdAt,
+    updatedAt,
+  };
+}
+
+function requireAgentRunRecord(value: unknown): AgentRunRecordV1 {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    agentInputError('INVALID_INPUT', 'agent run record must be an object.');
+  }
+  const record = value as Record<string, unknown>;
+  if (record.version !== 1) {
+    agentInputError('INVALID_INPUT', 'agent run record version must be 1.');
+  }
+  const runId = requireAgentIdentifier(record.runId, 'runId');
+  const conversationId = requireAgentIdentifier(record.conversationId, 'conversationId');
+  const projectId = requireAgentIdentifier(record.projectId, 'projectId');
+  const operationId = requireAgentOptionalString(record.operationId, 'operationId', 256);
+  const principalUserId = requireAgentIdentifier(record.principalUserId, 'principalUserId');
+  const role = requireAgentRole(record.role);
+  const status = requireAgentRunStatus(record.status);
+  if (status !== 'queued') {
+    agentInputError('INVALID_INPUT', 'agent runs must be created with status "queued".');
+  }
+  const maxTurns = requireAgentBound(record.maxTurns, 'maxTurns', 1, 1000);
+  const maxToolCalls = requireAgentBound(record.maxToolCalls, 'maxToolCalls', 1, 100000);
+  const turn = requireAgentCounter(record.turn, 'turn', maxTurns);
+  const toolCalls = requireAgentCounter(record.toolCalls, 'toolCalls', maxToolCalls);
+  if (turn !== 0 || toolCalls !== 0) {
+    agentInputError(
+      'INVALID_INPUT',
+      'agent runs must be created with turn and toolCalls counters at 0.',
+    );
+  }
+  const createdAt = requireAgentTimestamp(record.createdAt, 'createdAt');
+  const updatedAt = requireAgentTimestamp(record.updatedAt, 'updatedAt');
+  return {
+    version: 1,
+    runId,
+    conversationId,
+    projectId,
+    operationId,
+    principalUserId,
+    role,
+    status,
+    turn,
+    maxTurns,
+    toolCalls,
+    maxToolCalls,
+    createdAt,
+    updatedAt,
+  };
+}
+
+function requireAgentToolCallRecord(value: unknown): AgentToolCallRecordV1 {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    agentInputError('INVALID_INPUT', 'agent tool call record must be an object.');
+  }
+  const record = value as Record<string, unknown>;
+  if (record.version !== 1) {
+    agentInputError('INVALID_INPUT', 'agent tool call record version must be 1.');
+  }
+  const runId = requireAgentIdentifier(record.runId, 'runId');
+  const callIndex = requireAgentCallIndex(record.callIndex);
+  const toolName = requireAgentIdentifier(record.toolName, 'toolName');
+  const sanitizedArgsHash = requireAgentHash(record.sanitizedArgsHash, 'sanitizedArgsHash');
+  const resultRef = requireAgentOptionalString(record.resultRef, 'resultRef', 1024);
+  const turn = requireAgentCounter(record.turn, 'turn', 1000);
+  const status = requireAgentToolCallStatus(record.status);
+  const createdAt = requireAgentTimestamp(record.createdAt, 'createdAt');
+  return {
+    version: 1,
+    runId,
+    callIndex,
+    toolName,
+    sanitizedArgsHash,
+    resultRef,
+    turn,
+    status,
+    createdAt,
+  };
+}
+
+/**
+ * Canonical worker-side run automaton (mirrors the operation queue without
+ * `stale`): a run is created `queued`; `interrupted -> queued` is the explicit
+ * retry path a Host uses after the restart sweep, and `interrupted -> cancelled`
+ * lets an operator discard recovered work. Every other transition is rejected
+ * with `ILLEGAL_RUN_TRANSITION`.
+ */
+const AGENT_RUN_TRANSITIONS: Readonly<Record<AgentRunStatusV1, readonly AgentRunStatusV1[]>> = {
+  queued: ['running', 'cancelled', 'interrupted'],
+  running: ['succeeded', 'failed', 'cancelled', 'interrupted'],
+  succeeded: [],
+  failed: [],
+  cancelled: [],
+  interrupted: ['queued', 'cancelled'],
+};
+
+/**
+ * Monotonic, bounded counter application shared by the transition and
+ * checkpoint paths. Counters never decrease and never exceed their stored
+ * bounds.
+ */
+function applyAgentRunCounters(
+  existing: Record<string, unknown>,
+  turn: number | undefined,
+  toolCalls: number | undefined,
+): { turn: number; toolCalls: number } {
+  const base = mapAgentRunRow(existing);
+  const nextTurn = turn ?? base.turn;
+  const nextToolCalls = toolCalls ?? base.toolCalls;
+  if (nextTurn < base.turn) {
+    agentInputError('INVALID_INPUT', 'turn counters must not decrease.');
+  }
+  if (nextToolCalls < base.toolCalls) {
+    agentInputError('INVALID_INPUT', 'toolCalls counters must not decrease.');
+  }
+  if (nextTurn > base.maxTurns) {
+    agentInputError('INVALID_INPUT', `turn (${nextTurn}) exceeds maxTurns (${base.maxTurns}).`);
+  }
+  if (nextToolCalls > base.maxToolCalls) {
+    agentInputError(
+      'INVALID_INPUT',
+      `toolCalls (${nextToolCalls}) exceeds maxToolCalls (${base.maxToolCalls}).`,
+    );
+  }
+  return { turn: nextTurn, toolCalls: nextToolCalls };
+}
+
+/** Parse the `"<updatedAt>|<id>"` list cursor into its parts. */
+function parseAgentListCursor(value: string): { updatedAt: string; id: string } {
+  const separator = value.lastIndexOf('|');
+  if (separator <= 0 || separator === value.length - 1) {
+    agentInputError('INVALID_INPUT', 'agent list cursor must be "<updatedAt>|<id>".');
+  }
+  const updatedAt = value.slice(0, separator);
+  const id = value.slice(separator + 1);
+  if (updatedAt.length === 0 || id.length === 0 || id.length > 256) {
+    agentInputError('INVALID_INPUT', 'agent list cursor must be "<updatedAt>|<id>".');
+  }
+  return { updatedAt, id };
+}
+
 /**
  * Exact per-operation payload field allowlist. The typed client makes unknown
  * fields impossible at compile time; this runtime check fails closed for
@@ -849,6 +1678,67 @@ const KNOWN_PAYLOAD_FIELDS: Record<PersistenceOperation, readonly string[]> = {
     'updatedAt',
   ],
   loadRevisionMirrorExport: ['projectId', 'revisionId', 'backend'],
+  // ─── V5: durable project operation queue fields ──────────────────────────
+  upsertProjectOperation: ['record', 'expectedStatus'],
+  getProjectOperation: ['projectId', 'operationId'],
+  listProjectOperations: ['projectId', 'status', 'limit', 'before'],
+  getProjectOperationByIdempotencyKey: ['projectId', 'kind', 'idempotencyKey'],
+  markProjectOperationsInterrupted: ['projectId', 'at'],
+  countProjectOperations: ['projectId', 'status'],
+  // ─── V6: durable publication repository fields ──────────────────────────
+  upsertProjectPublication: ['record', 'expectedStatus'],
+  getProjectPublication: ['projectId', 'publicationId'],
+  listProjectPublications: ['projectId', 'limit', 'before'],
+  // ─── V7: durable agent record fields ────────────────────────────────────
+  // Conversation/run/tool-call records are sent as the payload itself (the
+  // createDeviceVerifier precedent), so the allowlist is the record shape.
+  createAgentConversation: [
+    'version',
+    'conversationId',
+    'projectId',
+    'principalUserId',
+    'role',
+    'title',
+    'createdAt',
+    'updatedAt',
+  ],
+  appendAgentConversation: ['conversationId', 'at', 'title'],
+  getAgentConversation: ['conversationId'],
+  listAgentConversations: ['projectId', 'principalUserId', 'limit', 'before'],
+  createAgentRun: [
+    'version',
+    'runId',
+    'conversationId',
+    'projectId',
+    'operationId',
+    'principalUserId',
+    'role',
+    'status',
+    'turn',
+    'maxTurns',
+    'toolCalls',
+    'maxToolCalls',
+    'createdAt',
+    'updatedAt',
+  ],
+  transitionAgentRun: ['runId', 'status', 'expectedStatus', 'turn', 'toolCalls', 'at'],
+  checkpointAgentRun: ['runId', 'turn', 'toolCalls', 'at'],
+  markAgentRunsInterrupted: ['projectId', 'at'],
+  getAgentRun: ['runId'],
+  listAgentRuns: ['conversationId', 'projectId', 'status', 'limit', 'before'],
+  appendAgentToolCall: [
+    'version',
+    'runId',
+    'callIndex',
+    'toolName',
+    'sanitizedArgsHash',
+    'resultRef',
+    'turn',
+    'status',
+    'createdAt',
+  ],
+  updateAgentToolCallStatus: ['runId', 'callIndex', 'status', 'resultRef', 'at'],
+  listAgentToolCalls: ['runId', 'after', 'limit'],
 };
 
 /** Fail closed on payload fields the operation does not declare. */
@@ -2130,6 +3020,708 @@ function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
           )
           .get(x.projectId, x.revisionId, x.backend) as Record<string, unknown> | undefined;
         return row ? mapRevisionMirrorExportRow(row) : null;
+      }
+      // ─── V5: durable project operation queue ─────────────────────────────
+      case 'upsertProjectOperation': {
+        const x = p as PersistencePayloads['upsertProjectOperation'];
+        const record = requireProjectOperationRecord(x.record);
+        const existing = db
+          .prepare('SELECT * FROM project_operations WHERE project_id=? AND operation_id=?')
+          .get(record.projectId, record.operationId) as Record<string, unknown> | undefined;
+        if (existing === undefined) {
+          if (record.status !== 'queued') {
+            operationInputError(
+              'INVALID_INPUT',
+              'A new project operation must be created in status "queued".',
+            );
+          }
+          try {
+            db.prepare(
+              'INSERT INTO project_operations(project_id,operation_id,idempotency_key,kind,status,actor_id,capability_version,source_hash,accepted_revision_id,progress,result_ref,error_code,version,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            ).run(
+              record.projectId,
+              record.operationId,
+              record.idempotencyKey,
+              record.kind,
+              record.status,
+              record.actorId,
+              record.capabilityVersion,
+              record.sourceHash ?? null,
+              record.acceptedRevisionId ?? null,
+              record.progress !== null ? json(record.progress) : null,
+              record.resultRef ?? null,
+              record.errorCode ?? null,
+              record.version,
+              record.createdAt,
+              record.updatedAt,
+            );
+          } catch (error) {
+            if (isUniqueConstraintError(error)) {
+              operationInputError(
+                'IDEMPOTENCY_CONFLICT',
+                `A project operation with idempotencyKey "${record.idempotencyKey}" already exists for kind "${record.kind}" in project "${record.projectId}".`,
+              );
+            }
+            throw error;
+          }
+          return {
+            record: mapProjectOperationRow(
+              db
+                .prepare('SELECT * FROM project_operations WHERE project_id=? AND operation_id=?')
+                .get(record.projectId, record.operationId) as Record<string, unknown>,
+            ),
+            created: true,
+            applied: true,
+          } satisfies PersistenceResults['upsertProjectOperation'];
+        }
+        if (
+          x.expectedStatus !== undefined &&
+          parseProjectOperationStatus(existing.status) !== x.expectedStatus
+        ) {
+          return {
+            record: mapProjectOperationRow(existing),
+            created: false,
+            applied: false,
+          } satisfies PersistenceResults['upsertProjectOperation'];
+        }
+        assertOperationIdentityUnchanged(existing, record);
+        const from = parseProjectOperationStatus(existing.status);
+        const to = record.status;
+        if (!PROJECT_OPERATION_TRANSITIONS[from].includes(to)) {
+          operationInputError(
+            'ILLEGAL_OPERATION_TRANSITION',
+            `Cannot transition project operation ${record.projectId}/${record.operationId} from ${from} to ${to}.`,
+          );
+        }
+        db.prepare(
+          'UPDATE project_operations SET status=?, progress=?, result_ref=?, error_code=?, accepted_revision_id=?, updated_at=? WHERE project_id=? AND operation_id=?',
+        ).run(
+          record.status,
+          record.progress !== null ? json(record.progress) : null,
+          record.resultRef ?? null,
+          record.errorCode ?? null,
+          record.acceptedRevisionId ?? null,
+          record.updatedAt,
+          record.projectId,
+          record.operationId,
+        );
+        return {
+          record: mapProjectOperationRow(
+            db
+              .prepare('SELECT * FROM project_operations WHERE project_id=? AND operation_id=?')
+              .get(record.projectId, record.operationId) as Record<string, unknown>,
+          ),
+          created: false,
+          applied: true,
+        } satisfies PersistenceResults['upsertProjectOperation'];
+      }
+      case 'getProjectOperation': {
+        const x = p as PersistencePayloads['getProjectOperation'];
+        requireOperationIdentifier(x.projectId, 'projectId');
+        requireOperationIdentifier(x.operationId, 'operationId');
+        const row = db
+          .prepare('SELECT * FROM project_operations WHERE project_id=? AND operation_id=?')
+          .get(x.projectId, x.operationId) as Record<string, unknown> | undefined;
+        return row ? mapProjectOperationRow(row) : null;
+      }
+      case 'listProjectOperations': {
+        const x = p as PersistencePayloads['listProjectOperations'];
+        requireOperationIdentifier(x.projectId, 'projectId');
+        const limit = x.limit != null ? Math.min(Math.max(1, x.limit), 100) : 50;
+        const args: Array<string | number | null> = [x.projectId];
+        let sql = 'SELECT * FROM project_operations WHERE project_id=?';
+        if (x.status !== undefined) {
+          if (!(PROJECT_OPERATION_STATUS_VALUES as readonly string[]).includes(x.status)) {
+            operationInputError('INVALID_INPUT', 'status must be a canonical operation status.');
+          }
+          sql += ' AND status=?';
+          args.push(x.status);
+        }
+        if (x.before !== undefined) {
+          const cursor = parseOperationListCursor(x.before);
+          sql += ' AND (updated_at < ? OR (updated_at = ? AND operation_id < ?))';
+          args.push(cursor.updatedAt, cursor.updatedAt, cursor.operationId);
+        }
+        sql += ' ORDER BY updated_at DESC, operation_id DESC LIMIT ?';
+        args.push(limit);
+        const rows = db.prepare(sql).all(...args) as Record<string, unknown>[];
+        return rows.map(mapProjectOperationRow);
+      }
+      case 'getProjectOperationByIdempotencyKey': {
+        const x = p as PersistencePayloads['getProjectOperationByIdempotencyKey'];
+        requireOperationIdentifier(x.projectId, 'projectId');
+        requireOperationIdentifier(x.idempotencyKey, 'idempotencyKey');
+        if (!(PROJECT_OPERATION_KIND_VALUES as readonly string[]).includes(x.kind)) {
+          operationInputError('INVALID_INPUT', 'kind must be a canonical operation kind.');
+        }
+        const row = db
+          .prepare(
+            'SELECT * FROM project_operations WHERE project_id=? AND kind=? AND idempotency_key=?',
+          )
+          .get(x.projectId, x.kind, x.idempotencyKey) as Record<string, unknown> | undefined;
+        return row ? mapProjectOperationRow(row) : null;
+      }
+      case 'markProjectOperationsInterrupted': {
+        const x = p as PersistencePayloads['markProjectOperationsInterrupted'];
+        requireOperationIdentifier(x.projectId, 'projectId');
+        const at =
+          x.at === undefined
+            ? new Date().toISOString()
+            : typeof x.at === 'string' && x.at.length > 0 && x.at.length <= 64
+              ? x.at
+              : operationInputError('INVALID_INPUT', 'at must be a non-empty timestamp.');
+        const result = db
+          .prepare(
+            "UPDATE project_operations SET status='interrupted', updated_at=? WHERE project_id=? AND status IN ('queued','running')",
+          )
+          .run(at, x.projectId);
+        return {
+          updated: Number(result.changes),
+        } satisfies PersistenceResults['markProjectOperationsInterrupted'];
+      }
+      case 'countProjectOperations': {
+        const x = p as PersistencePayloads['countProjectOperations'];
+        requireOperationIdentifier(x.projectId, 'projectId');
+        if (x.status !== undefined) {
+          if (!(PROJECT_OPERATION_STATUS_VALUES as readonly string[]).includes(x.status)) {
+            operationInputError('INVALID_INPUT', 'status must be a canonical operation status.');
+          }
+        }
+        const row = (
+          x.status !== undefined
+            ? db
+                .prepare(
+                  'SELECT COUNT(*) AS count FROM project_operations WHERE project_id=? AND status=?',
+                )
+                .get(x.projectId, x.status)
+            : db
+                .prepare('SELECT COUNT(*) AS count FROM project_operations WHERE project_id=?')
+                .get(x.projectId)
+        ) as Record<string, unknown>;
+        return { count: Number(row.count) } satisfies PersistenceResults['countProjectOperations'];
+      }
+      // ─── V6: durable publication repository ─────────────────────────────
+      case 'upsertProjectPublication': {
+        const x = p as PersistencePayloads['upsertProjectPublication'];
+        const record = requireProjectPublicationRecord(x.record);
+        const existing = db
+          .prepare('SELECT * FROM project_publications WHERE project_id=? AND publication_id=?')
+          .get(record.projectId, record.publicationId) as Record<string, unknown> | undefined;
+        const readRow = (): ProjectPublicationRecordV1 =>
+          mapProjectPublicationRow(
+            db
+              .prepare('SELECT * FROM project_publications WHERE project_id=? AND publication_id=?')
+              .get(record.projectId, record.publicationId) as Record<string, unknown>,
+          );
+        if (existing === undefined) {
+          db.prepare(
+            'INSERT INTO project_publications(project_id,publication_id,kind,status,source_hash,scope_hash,revision_ids,novel_hash,relative_output_path,byte_length,actor_id,operation_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+          ).run(
+            record.projectId,
+            record.publicationId,
+            record.kind,
+            record.value.status,
+            record.value.sourceHash,
+            record.value.scopeHash,
+            json(record.value.revisionIds),
+            record.value.novelHash,
+            record.value.relativeOutputPath,
+            record.value.byteLength,
+            record.value.actorId,
+            record.value.operationId,
+            record.value.createdAt,
+            record.updatedAt,
+          );
+          return {
+            record: readRow(),
+            created: true,
+            applied: true,
+          } satisfies PersistenceResults['upsertProjectPublication'];
+        }
+        if (
+          x.expectedStatus !== undefined &&
+          parsePublicationStatus(existing.status) !== x.expectedStatus
+        ) {
+          return {
+            record: mapProjectPublicationRow(existing),
+            created: false,
+            applied: false,
+          } satisfies PersistenceResults['upsertProjectPublication'];
+        }
+        assertPublicationIdentityUnchanged(existing, record);
+        const from = parsePublicationStatus(existing.status);
+        const to = record.value.status;
+        if (!PUBLICATION_TRANSITIONS[from].includes(to)) {
+          publicationInputError(
+            'ILLEGAL_OPERATION_TRANSITION',
+            `Cannot transition publication ${record.projectId}/${record.publicationId} from ${from} to ${to}.`,
+          );
+        }
+        db.prepare(
+          'UPDATE project_publications SET status=?, source_hash=?, scope_hash=?, revision_ids=?, novel_hash=?, relative_output_path=?, byte_length=?, actor_id=?, operation_id=?, created_at=?, updated_at=? WHERE project_id=? AND publication_id=?',
+        ).run(
+          record.value.status,
+          record.value.sourceHash,
+          record.value.scopeHash,
+          json(record.value.revisionIds),
+          record.value.novelHash,
+          record.value.relativeOutputPath,
+          record.value.byteLength,
+          record.value.actorId,
+          record.value.operationId,
+          record.value.createdAt,
+          record.updatedAt,
+          record.projectId,
+          record.publicationId,
+        );
+        return {
+          record: readRow(),
+          created: false,
+          applied: true,
+        } satisfies PersistenceResults['upsertProjectPublication'];
+      }
+      case 'getProjectPublication': {
+        const x = p as PersistencePayloads['getProjectPublication'];
+        requirePublicationIdentifier(x.projectId, 'projectId');
+        requirePublicationIdentifier(x.publicationId, 'publicationId');
+        const row = db
+          .prepare('SELECT * FROM project_publications WHERE project_id=? AND publication_id=?')
+          .get(x.projectId, x.publicationId) as Record<string, unknown> | undefined;
+        return row ? mapProjectPublicationRow(row) : null;
+      }
+      case 'listProjectPublications': {
+        const x = p as PersistencePayloads['listProjectPublications'];
+        requirePublicationIdentifier(x.projectId, 'projectId');
+        const limit = x.limit != null ? Math.min(Math.max(1, x.limit), 100) : 50;
+        const args: Array<string | number | null> = [x.projectId];
+        let sql = 'SELECT * FROM project_publications WHERE project_id=?';
+        if (x.before !== undefined) {
+          const cursor = parsePublicationListCursor(x.before);
+          sql += ' AND (updated_at < ? OR (updated_at = ? AND publication_id < ?))';
+          args.push(cursor.updatedAt, cursor.updatedAt, cursor.publicationId);
+        }
+        sql += ' ORDER BY updated_at DESC, publication_id DESC LIMIT ?';
+        args.push(limit);
+        const rows = db.prepare(sql).all(...args) as Record<string, unknown>[];
+        return rows.map(mapProjectPublicationRow);
+      }
+      // ─── V7: durable agent records ─────────────────────────────────────
+      case 'createAgentConversation': {
+        const x = p as PersistencePayloads['createAgentConversation'];
+        const record = requireAgentConversationRecord(x);
+        const existing = db
+          .prepare('SELECT conversation_id FROM agent_conversations WHERE conversation_id=?')
+          .get(record.conversationId);
+        if (existing !== undefined) {
+          agentInputError(
+            'CONVERSATION_EXISTS',
+            `Agent conversation ${record.conversationId} already exists.`,
+          );
+        }
+        db.prepare(
+          'INSERT INTO agent_conversations(conversation_id,project_id,principal_user_id,role,title,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',
+        ).run(
+          record.conversationId,
+          record.projectId,
+          record.principalUserId,
+          record.role,
+          record.title,
+          record.createdAt,
+          record.updatedAt,
+        );
+        return mapAgentConversationRow(
+          db
+            .prepare('SELECT * FROM agent_conversations WHERE conversation_id=?')
+            .get(record.conversationId) as Record<string, unknown>,
+        );
+      }
+      case 'appendAgentConversation': {
+        const x = p as PersistencePayloads['appendAgentConversation'];
+        const conversationId = requireAgentIdentifier(x.conversationId, 'conversationId');
+        const at = requireAgentTimestamp(x.at, 'at');
+        const title =
+          x.title === undefined ? undefined : requireAgentOptionalString(x.title, 'title', 512);
+        const existing = db
+          .prepare('SELECT * FROM agent_conversations WHERE conversation_id=?')
+          .get(conversationId) as Record<string, unknown> | undefined;
+        if (existing === undefined) {
+          agentInputError(
+            'CONVERSATION_NOT_FOUND',
+            `Agent conversation ${conversationId} not found.`,
+          );
+        }
+        if (title === undefined) {
+          db.prepare('UPDATE agent_conversations SET updated_at=? WHERE conversation_id=?').run(
+            at,
+            conversationId,
+          );
+        } else {
+          db.prepare(
+            'UPDATE agent_conversations SET title=?, updated_at=? WHERE conversation_id=?',
+          ).run(title, at, conversationId);
+        }
+        return mapAgentConversationRow(
+          db
+            .prepare('SELECT * FROM agent_conversations WHERE conversation_id=?')
+            .get(conversationId) as Record<string, unknown>,
+        );
+      }
+      case 'getAgentConversation': {
+        const x = p as PersistencePayloads['getAgentConversation'];
+        const conversationId = requireAgentIdentifier(x.conversationId, 'conversationId');
+        const row = db
+          .prepare('SELECT * FROM agent_conversations WHERE conversation_id=?')
+          .get(conversationId) as Record<string, unknown> | undefined;
+        return row ? mapAgentConversationRow(row) : null;
+      }
+      case 'listAgentConversations': {
+        const x = p as PersistencePayloads['listAgentConversations'];
+        if (x.projectId !== undefined) requireAgentIdentifier(x.projectId, 'projectId');
+        if (x.principalUserId !== undefined) {
+          requireAgentIdentifier(x.principalUserId, 'principalUserId');
+        }
+        const limit = x.limit != null ? Math.min(Math.max(1, x.limit), 100) : 50;
+        const args: Array<string | number | null> = [];
+        const where: string[] = [];
+        if (x.projectId !== undefined) {
+          where.push('project_id=?');
+          args.push(x.projectId);
+        }
+        if (x.principalUserId !== undefined) {
+          where.push('principal_user_id=?');
+          args.push(x.principalUserId);
+        }
+        let sql = 'SELECT * FROM agent_conversations';
+        if (where.length > 0) sql += ` WHERE ${where.join(' AND ')}`;
+        if (x.before !== undefined) {
+          const cursor = parseAgentListCursor(x.before);
+          sql += `${where.length > 0 ? ' AND' : ' WHERE'} (updated_at < ? OR (updated_at = ? AND conversation_id < ?))`;
+          args.push(cursor.updatedAt, cursor.updatedAt, cursor.id);
+        }
+        sql += ' ORDER BY updated_at DESC, conversation_id DESC LIMIT ?';
+        args.push(limit);
+        const rows = db.prepare(sql).all(...args) as Record<string, unknown>[];
+        return rows.map(mapAgentConversationRow);
+      }
+      case 'createAgentRun': {
+        const x = p as PersistencePayloads['createAgentRun'];
+        const record = requireAgentRunRecord(x);
+        const conversation = db
+          .prepare('SELECT project_id FROM agent_conversations WHERE conversation_id=?')
+          .get(record.conversationId) as { project_id: unknown } | undefined;
+        if (conversation === undefined) {
+          agentInputError(
+            'CONVERSATION_NOT_FOUND',
+            `Agent conversation ${record.conversationId} not found; cannot create run ${record.runId}.`,
+          );
+        }
+        if (text(conversation.project_id) !== record.projectId) {
+          agentInputError(
+            'INVALID_INPUT',
+            `Agent run projectId ${record.projectId} does not match conversation ${record.conversationId} projectId ${text(conversation.project_id)}.`,
+          );
+        }
+        const existing = db
+          .prepare('SELECT run_id FROM agent_runs WHERE run_id=?')
+          .get(record.runId);
+        if (existing !== undefined) {
+          agentInputError('RUN_EXISTS', `Agent run ${record.runId} already exists.`);
+        }
+        db.prepare(
+          'INSERT INTO agent_runs(run_id,conversation_id,project_id,operation_id,principal_user_id,role,status,turn,max_turns,tool_calls,max_tool_calls,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',
+        ).run(
+          record.runId,
+          record.conversationId,
+          record.projectId,
+          record.operationId,
+          record.principalUserId,
+          record.role,
+          record.status,
+          record.turn,
+          record.maxTurns,
+          record.toolCalls,
+          record.maxToolCalls,
+          record.createdAt,
+          record.updatedAt,
+        );
+        return mapAgentRunRow(
+          db.prepare('SELECT * FROM agent_runs WHERE run_id=?').get(record.runId) as Record<
+            string,
+            unknown
+          >,
+        );
+      }
+      case 'transitionAgentRun': {
+        const x = p as PersistencePayloads['transitionAgentRun'];
+        const runId = requireAgentIdentifier(x.runId, 'runId');
+        const status = requireAgentRunStatus(x.status);
+        const expectedStatus = requireAgentRunStatus(x.expectedStatus);
+        const at = requireAgentTimestamp(x.at, 'at');
+        const turn = x.turn === undefined ? undefined : requireAgentCounter(x.turn, 'turn', 1000);
+        const toolCalls =
+          x.toolCalls === undefined
+            ? undefined
+            : requireAgentCounter(x.toolCalls, 'toolCalls', 100000);
+        const existing = db.prepare('SELECT * FROM agent_runs WHERE run_id=?').get(runId) as
+          | Record<string, unknown>
+          | undefined;
+        if (existing === undefined) {
+          agentInputError('RUN_NOT_FOUND', `Agent run ${runId} not found.`);
+        }
+        if (parseAgentRunStatus(existing.status) !== expectedStatus) {
+          return {
+            record: mapAgentRunRow(existing),
+            applied: false,
+          } satisfies PersistenceResults['transitionAgentRun'];
+        }
+        const from = parseAgentRunStatus(existing.status);
+        if (!AGENT_RUN_TRANSITIONS[from].includes(status)) {
+          agentInputError(
+            'ILLEGAL_RUN_TRANSITION',
+            `Cannot transition agent run ${runId} from ${from} to ${status}.`,
+          );
+        }
+        const counters = applyAgentRunCounters(existing, turn, toolCalls);
+        db.prepare(
+          'UPDATE agent_runs SET status=?, turn=?, tool_calls=?, updated_at=? WHERE run_id=?',
+        ).run(status, counters.turn, counters.toolCalls, at, runId);
+        return {
+          record: mapAgentRunRow(
+            db.prepare('SELECT * FROM agent_runs WHERE run_id=?').get(runId) as Record<
+              string,
+              unknown
+            >,
+          ),
+          applied: true,
+        } satisfies PersistenceResults['transitionAgentRun'];
+      }
+      case 'checkpointAgentRun': {
+        const x = p as PersistencePayloads['checkpointAgentRun'];
+        const runId = requireAgentIdentifier(x.runId, 'runId');
+        const at = requireAgentTimestamp(x.at, 'at');
+        const turn = x.turn === undefined ? undefined : requireAgentCounter(x.turn, 'turn', 1000);
+        const toolCalls =
+          x.toolCalls === undefined
+            ? undefined
+            : requireAgentCounter(x.toolCalls, 'toolCalls', 100000);
+        if (turn === undefined && toolCalls === undefined) {
+          agentInputError(
+            'INVALID_INPUT',
+            'checkpointAgentRun requires at least one counter update.',
+          );
+        }
+        const existing = db.prepare('SELECT * FROM agent_runs WHERE run_id=?').get(runId) as
+          | Record<string, unknown>
+          | undefined;
+        if (existing === undefined) {
+          agentInputError('RUN_NOT_FOUND', `Agent run ${runId} not found.`);
+        }
+        const status = parseAgentRunStatus(existing.status);
+        if (status !== 'queued' && status !== 'running' && status !== 'interrupted') {
+          agentInputError(
+            'ILLEGAL_RUN_TRANSITION',
+            `Cannot checkpoint counters of agent run ${runId} in terminal status ${status}.`,
+          );
+        }
+        const counters = applyAgentRunCounters(existing, turn, toolCalls);
+        db.prepare('UPDATE agent_runs SET turn=?, tool_calls=?, updated_at=? WHERE run_id=?').run(
+          counters.turn,
+          counters.toolCalls,
+          at,
+          runId,
+        );
+        return mapAgentRunRow(
+          db.prepare('SELECT * FROM agent_runs WHERE run_id=?').get(runId) as Record<
+            string,
+            unknown
+          >,
+        );
+      }
+      case 'markAgentRunsInterrupted': {
+        const x = p as PersistencePayloads['markAgentRunsInterrupted'];
+        requireAgentIdentifier(x.projectId, 'projectId');
+        const at =
+          x.at === undefined ? new Date().toISOString() : requireAgentTimestamp(x.at, 'at');
+        const result = db
+          .prepare(
+            "UPDATE agent_runs SET status='interrupted', updated_at=? WHERE project_id=? AND status IN ('queued','running')",
+          )
+          .run(at, x.projectId);
+        return {
+          updated: Number(result.changes),
+        } satisfies PersistenceResults['markAgentRunsInterrupted'];
+      }
+      case 'getAgentRun': {
+        const x = p as PersistencePayloads['getAgentRun'];
+        const runId = requireAgentIdentifier(x.runId, 'runId');
+        const row = db.prepare('SELECT * FROM agent_runs WHERE run_id=?').get(runId) as
+          | Record<string, unknown>
+          | undefined;
+        return row ? mapAgentRunRow(row) : null;
+      }
+      case 'listAgentRuns': {
+        const x = p as PersistencePayloads['listAgentRuns'];
+        if (x.conversationId !== undefined)
+          requireAgentIdentifier(x.conversationId, 'conversationId');
+        if (x.projectId !== undefined) requireAgentIdentifier(x.projectId, 'projectId');
+        if (x.status !== undefined) requireAgentRunStatus(x.status);
+        const limit = x.limit != null ? Math.min(Math.max(1, x.limit), 100) : 50;
+        const args: Array<string | number | null> = [];
+        const where: string[] = [];
+        if (x.conversationId !== undefined) {
+          where.push('conversation_id=?');
+          args.push(x.conversationId);
+        }
+        if (x.projectId !== undefined) {
+          where.push('project_id=?');
+          args.push(x.projectId);
+        }
+        if (x.status !== undefined) {
+          where.push('status=?');
+          args.push(x.status);
+        }
+        let sql = 'SELECT * FROM agent_runs';
+        if (where.length > 0) sql += ` WHERE ${where.join(' AND ')}`;
+        if (x.before !== undefined) {
+          const cursor = parseAgentListCursor(x.before);
+          sql += `${where.length > 0 ? ' AND' : ' WHERE'} (updated_at < ? OR (updated_at = ? AND run_id < ?))`;
+          args.push(cursor.updatedAt, cursor.updatedAt, cursor.id);
+        }
+        sql += ' ORDER BY updated_at DESC, run_id DESC LIMIT ?';
+        args.push(limit);
+        const rows = db.prepare(sql).all(...args) as Record<string, unknown>[];
+        return rows.map(mapAgentRunRow);
+      }
+      case 'appendAgentToolCall': {
+        const x = p as PersistencePayloads['appendAgentToolCall'];
+        const record = requireAgentToolCallRecord(x);
+        if (record.status !== 'pending' || record.resultRef !== null) {
+          agentInputError(
+            'INVALID_INPUT',
+            'appended tool calls must be pending with no resultRef; use updateAgentToolCallStatus to record completion.',
+          );
+        }
+        const run = db.prepare('SELECT * FROM agent_runs WHERE run_id=?').get(record.runId) as
+          | Record<string, unknown>
+          | undefined;
+        if (run === undefined) {
+          agentInputError('RUN_NOT_FOUND', `Agent run ${record.runId} not found.`);
+        }
+        const runStatus = parseAgentRunStatus(run.status);
+        if (runStatus !== 'running') {
+          agentInputError(
+            'ILLEGAL_RUN_TRANSITION',
+            `Cannot append tool calls to agent run ${record.runId} in status ${runStatus}; the run must be running.`,
+          );
+        }
+        if (record.turn > Number(run.max_turns)) {
+          agentInputError(
+            'INVALID_INPUT',
+            `tool call turn (${record.turn}) exceeds maxTurns (${text(run.max_turns)}) of run ${record.runId}.`,
+          );
+        }
+        const countRow = db
+          .prepare('SELECT COUNT(*) AS count FROM agent_tool_calls WHERE run_id=?')
+          .get(record.runId) as { count: unknown };
+        const expectedIndex = Number(countRow.count);
+        if (record.callIndex !== expectedIndex) {
+          agentInputError(
+            'TOOL_CALL_APPEND_VIOLATION',
+            `tool call callIndex ${record.callIndex} must equal the next ordinal ${expectedIndex} for run ${record.runId}; appends are strictly sequential.`,
+          );
+        }
+        if (Number(run.tool_calls) !== expectedIndex) {
+          agentInputError(
+            'INVALID_INPUT',
+            `tool call counter (${text(run.tool_calls)}) of run ${record.runId} does not match its appended call count (${expectedIndex}); the counter is kept in sync by appends.`,
+          );
+        }
+        const nextToolCalls = expectedIndex + 1;
+        if (nextToolCalls > Number(run.max_tool_calls)) {
+          agentInputError(
+            'INVALID_INPUT',
+            `tool call append would exceed maxToolCalls (${text(run.max_tool_calls)}) of run ${record.runId}.`,
+          );
+        }
+        db.prepare(
+          'INSERT INTO agent_tool_calls(run_id,call_index,tool_name,sanitized_args_hash,result_ref,turn,status,created_at) VALUES(?,?,?,?,?,?,?,?)',
+        ).run(
+          record.runId,
+          record.callIndex,
+          record.toolName,
+          record.sanitizedArgsHash,
+          record.resultRef,
+          record.turn,
+          record.status,
+          record.createdAt,
+        );
+        db.prepare('UPDATE agent_runs SET tool_calls=?, updated_at=? WHERE run_id=?').run(
+          nextToolCalls,
+          record.createdAt,
+          record.runId,
+        );
+        return mapAgentToolCallRow(
+          db
+            .prepare('SELECT * FROM agent_tool_calls WHERE run_id=? AND call_index=?')
+            .get(record.runId, record.callIndex) as Record<string, unknown>,
+        );
+      }
+      case 'updateAgentToolCallStatus': {
+        const x = p as PersistencePayloads['updateAgentToolCallStatus'];
+        const runId = requireAgentIdentifier(x.runId, 'runId');
+        const callIndex = requireAgentCallIndex(x.callIndex);
+        const status = requireAgentToolCallStatus(x.status);
+        const resultRef = requireAgentOptionalString(x.resultRef, 'resultRef', 1024);
+        const at = requireAgentTimestamp(x.at, 'at');
+        if (status === 'pending') {
+          agentInputError(
+            'INVALID_INPUT',
+            'updateAgentToolCallStatus target must be succeeded or failed.',
+          );
+        }
+        if (status === 'succeeded' && resultRef === null) {
+          agentInputError(
+            'INVALID_INPUT',
+            'resultRef is required when marking a tool call succeeded.',
+          );
+        }
+        const existing = db
+          .prepare('SELECT * FROM agent_tool_calls WHERE run_id=? AND call_index=?')
+          .get(runId, callIndex) as Record<string, unknown> | undefined;
+        if (existing === undefined) {
+          agentInputError('TOOL_CALL_NOT_FOUND', `Tool call ${runId}#${callIndex} not found.`);
+        }
+        const from = requireAgentToolCallStatus(existing.status);
+        if (from !== 'pending') {
+          agentInputError(
+            'ILLEGAL_TOOL_CALL_TRANSITION',
+            `Cannot transition tool call ${runId}#${callIndex} from ${from} to ${status}; only pending calls may complete.`,
+          );
+        }
+        db.prepare(
+          'UPDATE agent_tool_calls SET status=?, result_ref=? WHERE run_id=? AND call_index=?',
+        ).run(status, resultRef, runId, callIndex);
+        return mapAgentToolCallRow(
+          db
+            .prepare('SELECT * FROM agent_tool_calls WHERE run_id=? AND call_index=?')
+            .get(runId, callIndex) as Record<string, unknown>,
+        );
+      }
+      case 'listAgentToolCalls': {
+        const x = p as PersistencePayloads['listAgentToolCalls'];
+        const runId = requireAgentIdentifier(x.runId, 'runId');
+        const limit = x.limit != null ? Math.min(Math.max(1, x.limit), 100) : 50;
+        const args: Array<string | number> = [runId];
+        let sql = 'SELECT * FROM agent_tool_calls WHERE run_id=?';
+        if (x.after !== undefined) {
+          const after = requireAgentCallIndex(x.after);
+          sql += ' AND call_index > ?';
+          args.push(after);
+        }
+        sql += ' ORDER BY call_index ASC LIMIT ?';
+        args.push(limit);
+        const rows = db.prepare(sql).all(...args) as Record<string, unknown>[];
+        return rows.map(mapAgentToolCallRow);
       }
       default: {
         // Unreachable per the typed union, but reachable for malformed wire

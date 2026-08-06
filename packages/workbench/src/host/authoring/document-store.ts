@@ -1,5 +1,5 @@
 /**
- * Production Yjs working-document store: the Host-internal Agent document
+ * Production Yjs working-document store: the scoped working-document mutation
  * port, the authoring materializer, and the coordinator's window into the
  * working layer — all over ONE shared per-key working-document core.
  *
@@ -11,12 +11,12 @@
  *
  * Responsibilities:
  *
- *  - `AgentDocumentPort`: `load`, atomic `applyScopedUpdate` (state-vector
- *    CAS + human-presence generation guard + compensating-update derivation)
- *    and conditional `applyCompensatingUpdate`. A moved document or a human
- *    presence transition rejects the mutation and applies nothing; a revert
- *    only ever compensates the exact effect's changes, never a whole-document
- *    rewind.
+ *  - Scoped working-document port: `load`, atomic `applyScopedUpdate`
+ *    (state-vector CAS + human-presence generation guard + compensating-update
+ *    derivation) and conditional `applyCompensatingUpdate`. A moved document
+ *    or a human presence transition rejects the mutation and applies nothing;
+ *    a revert only ever compensates the exact effect's changes, never a
+ *    whole-document rewind.
  *  - Document identity: the per-project catalog maps `documentId` →
  *    manifest-relative `logicalPath` + kind. Catalog documents are seeded
  *    from the accepted source snapshot (`seedFromAccepted`) and never carry
@@ -50,7 +50,6 @@ import type {
   WorkingDocumentState,
   YjsDocumentKey,
 } from '../../contracts/persistence.js';
-import type { AgentAppliedTicket, AgentDocumentPort } from '../agent/edit-service.js';
 import type { YjsWorkingDocumentCore } from '../yjs/gateway.js';
 import { classifyAuthoringPath, ROOT_AUTHORING_FILES } from './manifest.js';
 import type { AuthoringDocumentMaterializer } from './types.js';
@@ -58,7 +57,7 @@ import type { AuthoringDocumentMaterializer } from './types.js';
 /** The Yjs text type every working document uses (prose and raw YAML alike). */
 export const WORKING_TEXT_TYPE = 'prose';
 
-/** Typed failure thrown by the document store; the Agent service maps `code` to a failed effect. */
+/** Typed failure thrown by the document store; callers map `code` to a typed outcome. */
 export class AuthoringDocumentStoreError extends Error {
   readonly code: string;
   constructor(code: string, message: string) {
@@ -83,6 +82,75 @@ export interface AuthoringDocumentDescriptor {
 export interface AuthoringDocumentCatalogPort {
   list(projectId: string): Promise<readonly AuthoringWorkingDocumentRecord[]>;
   upsert(record: AuthoringWorkingDocumentRecord): Promise<AuthoringWorkingDocumentRecord>;
+}
+
+/** One applied scoped effect; the host derives the compensating update at apply time. */
+export interface AgentAppliedTicket {
+  /** Live document state vector after the effect applied. */
+  readonly stateVector: Uint8Array;
+  /** Full persisted working-document update after the effect. */
+  readonly update: Uint8Array;
+  /** Compensating (inverse) update reverting exactly this effect's changes. */
+  readonly compensatingUpdate: Uint8Array;
+}
+
+/**
+ * Working-layer Yjs document operations. The store owns the Yjs mechanics
+ * (merge, diff, compensating-update derivation); callers only ever see opaque
+ * byte payloads and state vectors, and never touch files, Git, or the
+ * accepted Core projection.
+ */
+export interface AgentDocumentPort {
+  /** Load the persisted working document; null when it has no working state yet. */
+  load(key: YjsDocumentKey): Promise<WorkingDocumentState | null>;
+  /**
+   * Apply a scoped update under a compare-and-swap guard: the live document
+   * state vector must equal `expectedBaseVector` AND the human-presence
+   * generation must still equal `expectedHumanPresenceGeneration` (observed
+   * when the caller prechecked presence). Both are validated atomically
+   * inside the document's own mutation critical section. The host derives and
+   * returns the compensating update for exactly this effect. A moved vector
+   * returns a stale verdict; a presence transition returns a paused verdict;
+   * nothing is applied and nothing is rewound.
+   */
+  applyScopedUpdate(input: {
+    readonly projectId: string;
+    readonly documentId: string;
+    readonly expectedBaseVector: Uint8Array;
+    readonly update: Uint8Array;
+    /** Human-presence generation observed at precheck time; a newer one rejects the mutation. */
+    readonly expectedHumanPresenceGeneration: number;
+  }): Promise<
+    | { readonly ok: true; readonly ticket: AgentAppliedTicket }
+    | { readonly ok: false; readonly reason: 'stale-vector'; readonly liveStateVector: Uint8Array }
+    | {
+        readonly ok: false;
+        readonly reason: 'human-presence-changed';
+        readonly liveStateVector: Uint8Array;
+      }
+  >;
+  /**
+   * Apply the compensating update for one previously applied effect, guarded
+   * by the post-effect state vector CAS and the same atomic human-presence
+   * generation check. Only the effect's own changes are compensated — never a
+   * whole-document rewind.
+   */
+  applyCompensatingUpdate(input: {
+    readonly projectId: string;
+    readonly documentId: string;
+    readonly expectedVector: Uint8Array;
+    readonly compensatingUpdate: Uint8Array;
+    /** Human-presence generation observed at precheck time; a newer one rejects the mutation. */
+    readonly expectedHumanPresenceGeneration: number;
+  }): Promise<
+    | { readonly ok: true; readonly stateVector: Uint8Array }
+    | { readonly ok: false; readonly reason: 'stale-vector'; readonly liveStateVector: Uint8Array }
+    | {
+        readonly ok: false;
+        readonly reason: 'human-presence-changed';
+        readonly liveStateVector: Uint8Array;
+      }
+  >;
 }
 
 export interface AuthoringWorkingDocumentStoreOptions {
@@ -110,10 +178,10 @@ export interface AuthoringWorkingLayerChange {
 /**
  * The production working-document store. Implements the Phase-0
  * {@link AuthoringDocumentMaterializer} (logical path resolution +
- * materialization) plus the `AgentDocumentPort` and the coordinator-facing
- * catalog/digest surface. All mutation enters the shared core's per-key
- * serialized sections; nothing here touches files, Git, or the accepted
- * Core projection.
+ * materialization) plus the scoped working-document mutation port and the
+ * coordinator-facing catalog/digest surface. All mutation enters the shared
+ * core's per-key serialized sections; nothing here touches files, Git, or the
+ * accepted Core projection.
  */
 export interface AuthoringWorkingDocumentStore
   extends AuthoringDocumentMaterializer,
@@ -648,7 +716,7 @@ function createAuthoringDocumentStoreImpl(
       return { entries };
     },
 
-    // ── AgentDocumentPort ────────────────────────────────────────────────
+    // ── Scoped working-document mutation port ───────────────────────────
 
     async load(key) {
       if (key.projectId !== projectId) return null;

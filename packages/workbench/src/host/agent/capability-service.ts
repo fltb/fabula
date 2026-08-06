@@ -186,6 +186,15 @@ export class CapabilityInputError extends Error {
 const ISSUE_FIELDS = ['userId', 'projectId', 'scopes', 'ttlMs'] as const;
 const VALIDATE_FIELDS = ['token', 'projectId', 'scopes'] as const;
 const CHECK_FIELDS = ['capabilityId', 'projectId', 'scopes', 'expectedVersion'] as const;
+const PERSIST_FIELDS = [
+  'capabilityId',
+  'userId',
+  'projectId',
+  'scope',
+  'version',
+  'expiresAt',
+  'revokedAt',
+] as const;
 
 const FAILURE_MESSAGES: Record<AgentCapabilityFailureCode, string> = {
   INVALID_TOKEN: 'The presented capability token is not recognized.',
@@ -357,6 +366,45 @@ export class AgentCapabilityService {
     if (input.scopes.some((scope) => !state.scope.includes(scope)))
       return { allowed: false, reason: 'SCOPE_MISMATCH' };
     return { allowed: true, grant: this.#project(state) };
+  }
+
+  /**
+   * Persists a server-derived grant row directly into the durable capability
+   * store — the exact row {@link checkGrant} re-loads for every effect.
+   * Unlike {@link issue}, no token or verifier row is produced: the caller's
+   * identity was already proven server-side (e.g. an owner-paired device
+   * credential), so the persisted metadata alone is the grant. The input is
+   * the full `CapabilityState` with the same fail-closed discipline as
+   * `issue` — unknown keys are rejected and the documented fields are
+   * required — and the upsert is idempotent: re-persisting with a new
+   * expiry/scope/version overwrites the previous row.
+   */
+  async persistGrant(state: CapabilityState): Promise<CapabilityState> {
+    this.#rejectUnknownKeys(state, PERSIST_FIELDS, 'persistGrant');
+    if (
+      state.capabilityId.length === 0 ||
+      state.userId.length === 0 ||
+      state.projectId.length === 0
+    ) {
+      throw new CapabilityInputError('capabilityId, userId, and projectId must be non-empty.');
+    }
+    if (
+      !Array.isArray(state.scope) ||
+      state.scope.length === 0 ||
+      state.scope.some((scope) => typeof scope !== 'string' || scope.length === 0)
+    ) {
+      throw new CapabilityInputError('A capability must grant at least one non-empty scope.');
+    }
+    if (!Number.isSafeInteger(state.version) || state.version <= 0) {
+      throw new CapabilityInputError('version must be a positive integer.');
+    }
+    if (typeof state.expiresAt !== 'string' || Number.isNaN(Date.parse(state.expiresAt))) {
+      throw new CapabilityInputError('expiresAt must be a valid timestamp string.');
+    }
+    if (state.revokedAt !== undefined && typeof state.revokedAt !== 'string') {
+      throw new CapabilityInputError('revokedAt must be a string when present.');
+    }
+    return this.#persistence.upsertCapability(state);
   }
 
   /** Durable revocation. The digest entry is kept so later validates report REVOKED from persisted state. */

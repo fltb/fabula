@@ -26,8 +26,13 @@ import { lstatSync, readdirSync, readFileSync, type Stats, unlinkSync } from 'no
 import { lstat, mkdir, open, readFile, rename, rm, unlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import type { ProjectSourceSnapshotV1 } from '@novalistically/core';
-import { computeSourceDocumentHash } from '@novalistically/core/source';
-import { FileProjectSourceLoader } from '@novalistically/node-host';
+import { buildSourceSnapshot, computeSourceDocumentHash } from '@novalistically/core/source';
+import {
+  FileProjectSourceLoader,
+  ProjectAuthorityTokenError,
+  type ProjectAuthorityTokenV1,
+  type ProjectWriteCoordinator,
+} from '@novalistically/node-host';
 import { classifyAuthoringPath, ROOT_AUTHORING_FILES } from './manifest.js';
 import type {
   AuthoringMaterializeOutcome,
@@ -267,6 +272,15 @@ export interface FileSourceViewMaterializerOptions {
   readonly projectRoot: string;
   /** Timestamp source; defaults to the host clock. */
   readonly now?: () => string;
+  /**
+   * Project authority lease. When both this and {@link authorityToken} are
+   * present every materialization runs inside
+   * `coordinator.withWorkbenchMutation(token)`; a lost/expired lease returns
+   * `recovery-required` before any write. Absent (standalone/tests) the
+   * materializer keeps its own `.write.lock` behaviour unchanged.
+   */
+  readonly coordinator?: ProjectWriteCoordinator;
+  readonly authorityToken?: ProjectAuthorityTokenV1;
 }
 
 /**
@@ -282,6 +296,8 @@ export function createFileSourceViewMaterializer(
   const root = resolve(options.projectRoot);
   const lockDirectory = join(root, '.nova', 'locks');
   const now = options.now ?? (() => new Date().toISOString());
+  const coordinator = options.coordinator;
+  const authorityToken = options.authorityToken;
 
   const loader = new FileProjectSourceLoader();
 
@@ -317,8 +333,13 @@ export function createFileSourceViewMaterializer(
 
     async materialize(input): Promise<AuthoringMaterializeOutcome> {
       const { expectedMaterializedRevisionId, expectedTreeHash, bundle } = input;
-      const release = await acquireLock(root, lockDirectory);
-      try {
+      // The CAS + write + verify + marker critical section. Under the
+      // project authority lease (production launch) it runs inside
+      // `withWorkbenchMutation`, whose directory lock already serializes
+      // writers — acquiring the same `.write.lock` again there would
+      // self-deadlock. Standalone/tests keep the file lock exactly as
+      // before.
+      const executeLocked = async (): Promise<AuthoringMaterializeOutcome> => {
         // Re-inspect immediately before any write.
         const preInspect = inspectUnlocked();
 
@@ -416,11 +437,25 @@ export function createFileSourceViewMaterializer(
           };
         }
 
-        // The source hash must match the expected tree hash.
-        if (verified.sourceHash !== expectedTreeHash) {
+        // The source hash must match the tree this bundle materializes (the
+        // write target), not the pre-write tree: working-layer submits change
+        // the tree, so only the pre-write CAS above may reference the current
+        // tree. The canonical source hash of the bundle entries is the one
+        // FileProjectSourceLoader derives from the written files.
+        const bundleSourceHash = buildSourceSnapshot(
+          bundle.entries.map((entry) => ({
+            version: 1 as const,
+            logicalPath: entry.logicalPath,
+            content: entry.content,
+            contentHash: computeSourceDocumentHash(entry.content),
+            parseResult: { status: 'parsed' as const, value: null },
+            diagnostics: [],
+          })),
+        ).sourceHash;
+        if (verified.sourceHash !== bundleSourceHash) {
           return {
             status: 'external-candidate',
-            reason: `Materialized tree hash ${verified.sourceHash} does not match expected ${expectedTreeHash}`,
+            reason: `Materialized tree hash ${verified.sourceHash} does not match expected ${bundleSourceHash}`,
           };
         }
 
@@ -452,6 +487,26 @@ export function createFileSourceViewMaterializer(
         await writeMarkerAsync(root, expectedMaterializedRevisionId, verified.sourceHash, now());
 
         return { status: 'completed', treeHash: verified.sourceHash };
+      };
+      if (coordinator !== undefined && authorityToken !== undefined) {
+        try {
+          return await coordinator.withWorkbenchMutation(authorityToken, executeLocked);
+        } catch (error) {
+          // Lease lost or expired: the authority gate refused the mutation
+          // before any write. Surface recovery-required and never touch the
+          // tree.
+          if (error instanceof ProjectAuthorityTokenError) {
+            return {
+              status: 'recovery-required',
+              reason: 'project authority lease lost; recovery required',
+            };
+          }
+          throw error;
+        }
+      }
+      const release = await acquireLock(root, lockDirectory);
+      try {
+        return await executeLocked();
       } finally {
         await release();
       }

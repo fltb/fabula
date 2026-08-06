@@ -102,6 +102,7 @@ export function createMcpAuthoringCoordinatorPort(options: {
       kind,
       capabilityId: grant.grant.capabilityId,
       scope: ['mcp:author'],
+      expectedVersion: grant.grant.version,
       run: async (context) => {
         const state = coordinator.getState();
         if (state.acceptedSourceHash !== input.expectedAcceptedSourceHash) {
@@ -345,6 +346,7 @@ export function createMcpAuthoringCoordinatorPort(options: {
         kind: 'mcp.authoring.apply',
         capabilityId: grant.grant.capabilityId,
         scope: ['mcp:author'],
+        expectedVersion: grant.grant.version,
         run: async () => {
           const state = coordinator.getState();
           if (state.acceptedSourceHash !== input.expectedAcceptedSourceHash) {
@@ -436,6 +438,7 @@ export function createMcpAuthoringCoordinatorPort(options: {
         actorId: caller.userId,
         capabilityId: grant.grant.capabilityId,
         capabilityScopes: ['mcp:submit'],
+        expectedVersion: grant.grant.version,
       });
       if (
         receipt.status === 'completed' &&
@@ -474,7 +477,7 @@ export function createMcpAuthoringCoordinatorPort(options: {
       const response: McpOperationGetOutputV1 = {
         version: AUTHORING_CONTRACT_VERSION,
         operationId: input.operationId,
-        receipt: coordinator.getOperation(input.operationId),
+        receipt: await coordinator.getOperation(input.operationId),
       };
       return response;
     },
@@ -487,6 +490,7 @@ export function createMcpAuthoringCoordinatorPort(options: {
         actorId: caller.userId,
         capabilityId: grant.grant.capabilityId,
         capabilityScopes: ['mcp:submit'],
+        expectedVersion: grant.grant.version,
       });
       return receipt.status === 'completed'
         ? { status: 'completed', receipt }
@@ -500,5 +504,73 @@ export function createMcpAuthoringCoordinatorPort(options: {
               ),
             };
     },
+    async validateWorking(input: {
+      readonly expectedWorkspaceDigest: string;
+      readonly expectedAcceptedSourceHash: string | null;
+    }) {
+      return coordinator.validateWorking(input);
+    },
+  };
+}
+
+/**
+ * Minimal server-derived caller identity for the shared document lifecycle
+ * mutation service. The MCP adapter only ever reads `userId` (capability
+ * issuance happens inside the service), so browser callers carry exactly the
+ * authenticated user id and nothing else — no grant, token, actor or scope
+ * ever crosses the browser boundary.
+ */
+export interface AuthoringMutationCaller {
+  readonly userId: string;
+}
+
+/**
+ * Browser-scoped document lifecycle surface over the SAME mutation service
+ * the MCP tools use (`createMcpAuthoringCoordinatorPort`). Stale/conflict
+ * outcomes surface the identical typed failure codes as the MCP path.
+ */
+export interface BrowserAuthoringMutationPort {
+  createDocument(
+    input: McpAuthoringDocumentCreateInputV1,
+    caller: AuthoringMutationCaller,
+  ): Promise<McpAuthoringDocumentMutationOutputV1 | AuthoringFailureV1>;
+  moveDocument(
+    input: McpAuthoringDocumentMoveInputV1,
+    caller: AuthoringMutationCaller,
+  ): Promise<McpAuthoringDocumentMutationOutputV1 | AuthoringFailureV1>;
+  deleteDocument(
+    input: McpAuthoringDocumentDeleteInputV1,
+    caller: AuthoringMutationCaller,
+  ): Promise<McpAuthoringDocumentMutationOutputV1 | AuthoringFailureV1>;
+}
+
+/**
+ * Create the browser-facing document lifecycle port for one project. It is a
+ * thin caller-narrowing wrapper over `createMcpAuthoringCoordinatorPort`; the
+ * CAS checks, capability issuance and session operation queue are shared with
+ * the MCP path, never duplicated. The narrowed caller is safe because the
+ * adapter reads only `userId`.
+ */
+export function createBrowserAuthoringMutationPort(options: {
+  readonly session: ProjectSession;
+  readonly coordinator: AuthoringCoordinator;
+  readonly documents: AuthoringWorkingDocumentStore;
+  readonly capabilities: AgentCapabilityService;
+}): BrowserAuthoringMutationPort {
+  const port = createMcpAuthoringCoordinatorPort(options);
+  // The port interface declares the lifecycle seams optional for absent
+  // projects; this builder always supplies them.
+  const lifecycle = port as Required<
+    Pick<McpAuthoringCoordinatorPort, 'createDocument' | 'moveDocument' | 'deleteDocument'>
+  >;
+  return {
+    // The shared adapter only reads `caller.userId`; the narrowed caller is
+    // widened here so the port satisfies the MCP registry interface.
+    createDocument: (input, caller) =>
+      lifecycle.createDocument(input, caller as unknown as McpAuthorizedCaller),
+    moveDocument: (input, caller) =>
+      lifecycle.moveDocument(input, caller as unknown as McpAuthorizedCaller),
+    deleteDocument: (input, caller) =>
+      lifecycle.deleteDocument(input, caller as unknown as McpAuthorizedCaller),
   };
 }

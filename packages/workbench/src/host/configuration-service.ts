@@ -5,10 +5,11 @@
  * Every adapter — setup wizard, owner dashboard, owner MCP, filesystem
  * watcher and dotenv import — funnels through this service. It enforces the
  * revision CAS (`expectedRevision: null` is permitted only while the file
- * does not exist), validates every candidate against the strict version-1
+ * does not exist), validates every candidate against the strict canonical
  * shape plus Host-side root accessibility, computes typed changed-field
  * paths, and decides whether a change requires a controlled restart. Listener
- * policy, provider construction, project roots and MCP default routing are
+ * policy, provider profiles and bindings, project roots, trusted plugin
+ * allowlists, operation limits, agent settings and MCP default routing are
  * captured at Host startup, so changes to any of them are `restart-required`.
  * An invalid or stale candidate never touches the file; a busy project removal is refused; the watcher path never rewrites a
  * hand-edited file, it only validates and reports.
@@ -24,7 +25,8 @@ import type {
   ConfigOperationDiagnosticV1,
   ConfigOperationReceiptV1,
   WorkbenchConfigurationInput,
-  WorkbenchConfigurationV2,
+  WorkbenchConfigurationV3,
+  WorkbenchTrustedPluginConfigurationV3,
 } from '../contracts/configuration.js';
 import {
   type ConfigurationFileStore,
@@ -67,7 +69,7 @@ export interface ConfigurationServiceOptions {
 }
 
 export interface ActiveConfiguration {
-  readonly configuration: WorkbenchConfigurationV2;
+  readonly configuration: WorkbenchConfigurationV3;
   readonly revision: string;
 }
 
@@ -92,74 +94,133 @@ function arraysEqual(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((entry, index) => b[index] === entry);
 }
 
-/** Stable ordered changed-field paths between two configurations. */
+/** Stable allowlist equality: entries compare positionally by identity fields. */
+function trustedPluginsEqual(
+  a: readonly WorkbenchTrustedPluginConfigurationV3[],
+  b: readonly WorkbenchTrustedPluginConfigurationV3[],
+): boolean {
+  return (
+    a.length === b.length &&
+    a.every((plugin, index) => {
+      const other = b[index];
+      return (
+        other !== undefined &&
+        plugin.name === other.name &&
+        plugin.version === other.version &&
+        plugin.moduleHash === other.moduleHash &&
+        plugin.required === other.required
+      );
+    })
+  );
+}
+
+/**
+ * Stable ordered changed-field paths between two configurations. Legacy V1/V2
+ * inputs are normalized to the canonical V3 shape first, so a legacy `provider`
+ * change reports `providers.default` and every V3 domain (provider profiles,
+ * project profile binding, trusted plugin allowlists, operation limits and
+ * agent settings) is compared with the same semantics as the persisted file.
+ */
 export function computeChangedFields(
   previous: WorkbenchConfigurationInput | null,
   next: WorkbenchConfigurationInput,
 ): readonly string[] {
   if (previous === null) {
-    return ['projects', 'defaultProjectId', 'provider', 'network', 'referenceLimits'];
+    return [
+      'projects',
+      'defaultProjectId',
+      'providers',
+      'network',
+      'referenceLimits',
+      'operationLimits',
+      'agent',
+    ];
   }
+  const before = normalizeWorkbenchConfiguration(previous);
+  const after = normalizeWorkbenchConfiguration(next);
   const changed: string[] = [];
-  const previousIds = new Set(previous.projects.map((project) => project.projectId));
-  const nextIds = new Set(next.projects.map((project) => project.projectId));
+  const previousIds = new Set(before.projects.map((project) => project.projectId));
+  const nextIds = new Set(after.projects.map((project) => project.projectId));
   for (const id of nextIds) {
     if (!previousIds.has(id)) changed.push(`projects.${id}`);
   }
   for (const id of previousIds) {
     if (!nextIds.has(id)) changed.push(`projects.${id}`);
   }
-  for (const project of next.projects) {
-    const other = previous.projects.find((entry) => entry.projectId === project.projectId);
-    if (other !== undefined) {
-      const otherMirror: WorkbenchConfigurationV2['projects'][number]['revisionMirror'] =
-        previous.version === 2 && 'revisionMirror' in other
-          ? (other.revisionMirror as WorkbenchConfigurationV2['projects'][number]['revisionMirror'])
-          : { mode: 'disabled' };
-      const nextMirror: WorkbenchConfigurationV2['projects'][number]['revisionMirror'] =
-        next.version === 2 && 'revisionMirror' in project
-          ? (project.revisionMirror as WorkbenchConfigurationV2['projects'][number]['revisionMirror'])
-          : { mode: 'disabled' };
-      const mirrorChanged =
-        otherMirror.mode !== nextMirror.mode ||
-        (otherMirror.mode === 'git-best-effort' &&
-          nextMirror.mode === 'git-best-effort' &&
-          otherMirror.ref !== nextMirror.ref);
-      if (
-        other.displayName !== project.displayName ||
-        other.root !== project.root ||
-        mirrorChanged
-      ) {
-        changed.push(`projects.${project.projectId}`);
-      }
+  for (const project of after.projects) {
+    const other = before.projects.find((entry) => entry.projectId === project.projectId);
+    if (other === undefined) continue;
+    const mirrorChanged =
+      other.revisionMirror.mode !== project.revisionMirror.mode ||
+      (other.revisionMirror.mode === 'git-best-effort' &&
+        project.revisionMirror.mode === 'git-best-effort' &&
+        other.revisionMirror.ref !== project.revisionMirror.ref);
+    if (other.displayName !== project.displayName || other.root !== project.root || mirrorChanged) {
+      changed.push(`projects.${project.projectId}`);
+    }
+    if (other.providerProfile !== project.providerProfile) {
+      changed.push(`projects.${project.projectId}.providerProfile`);
+    }
+    if (!trustedPluginsEqual(other.trustedPlugins, project.trustedPlugins)) {
+      changed.push(`projects.${project.projectId}.trustedPlugins`);
     }
   }
-  if (previous.defaultProjectId !== next.defaultProjectId) changed.push('defaultProjectId');
-  if ((previous.provider === null) !== (next.provider === null)) {
-    changed.push('provider');
-  } else if (previous.provider !== null && next.provider !== null) {
-    if (previous.provider.baseUrl !== next.provider.baseUrl) changed.push('provider.baseUrl');
-    if (previous.provider.model !== next.provider.model) changed.push('provider.model');
+  if (before.defaultProjectId !== after.defaultProjectId) changed.push('defaultProjectId');
+  const previousProfileIds = Object.keys(before.providers);
+  const nextProfileIds = Object.keys(after.providers);
+  for (const id of nextProfileIds) {
+    if (before.providers[id] === undefined) changed.push(`providers.${id}`);
   }
-  if (previous.network.mode !== next.network.mode) changed.push('network.mode');
-  if (previous.network.port !== next.network.port) changed.push('network.port');
-  if (!arraysEqual(previous.network.allowedHosts, next.network.allowedHosts)) {
+  for (const id of previousProfileIds) {
+    if (after.providers[id] === undefined) changed.push(`providers.${id}`);
+  }
+  for (const id of nextProfileIds) {
+    const otherProfile = before.providers[id];
+    const currentProfile = after.providers[id];
+    if (otherProfile === undefined || currentProfile === undefined) continue;
+    if (otherProfile.kind !== currentProfile.kind) changed.push(`providers.${id}.kind`);
+    if (otherProfile.baseUrl !== currentProfile.baseUrl) changed.push(`providers.${id}.baseUrl`);
+    if (otherProfile.model !== currentProfile.model) changed.push(`providers.${id}.model`);
+  }
+  if (before.network.mode !== after.network.mode) changed.push('network.mode');
+  if (before.network.port !== after.network.port) changed.push('network.port');
+  if (!arraysEqual(before.network.allowedHosts, after.network.allowedHosts)) {
     changed.push('network.allowedHosts');
   }
-  if (!arraysEqual(previous.network.allowedOrigins, next.network.allowedOrigins)) {
+  if (!arraysEqual(before.network.allowedOrigins, after.network.allowedOrigins)) {
     changed.push('network.allowedOrigins');
   }
-  if (previous.network.unixSocket !== next.network.unixSocket) {
+  if (before.network.unixSocket !== after.network.unixSocket) {
     changed.push('network.unixSocket');
   }
+  if (before.operationLimits.maxQueuedPerProject !== after.operationLimits.maxQueuedPerProject) {
+    changed.push('operationLimits.maxQueuedPerProject');
+  }
+  if (
+    before.operationLimits.maxConcurrentRendersPerProject !==
+    after.operationLimits.maxConcurrentRendersPerProject
+  ) {
+    changed.push('operationLimits.maxConcurrentRendersPerProject');
+  }
+  if (
+    before.operationLimits.maxConcurrentRendersPerHost !==
+    after.operationLimits.maxConcurrentRendersPerHost
+  ) {
+    changed.push('operationLimits.maxConcurrentRendersPerHost');
+  }
+  if (before.agent.enabled !== after.agent.enabled) changed.push('agent.enabled');
+  if (before.agent.maxTurns !== after.agent.maxTurns) changed.push('agent.maxTurns');
+  if (before.agent.maxToolCalls !== after.agent.maxToolCalls) changed.push('agent.maxToolCalls');
   return changed;
 }
 
 /**
- * The running Host captures listener policy, providers, project roots and MCP
- * default routing at startup. Any change to those fields is persisted but
- * requires a controlled restart; continuing with a partial live rebuild would
- * split Browser, Yjs, MCP, Agent and controlled-Git state across generations.
+ * The running Host captures listener policy, provider profiles, project
+ * roots, per-project provider bindings, trusted plugin allowlists, operation
+ * limits and agent settings at startup. Any change to those fields is
+ * persisted but requires a controlled restart; continuing with a partial live
+ * rebuild would split Browser, Yjs, MCP, Agent and controlled-Git state
+ * across generations.
  */
 export function requiresRestart(changedFields: readonly string[]): boolean {
   return changedFields.some(
@@ -168,9 +229,15 @@ export function requiresRestart(changedFields: readonly string[]): boolean {
       field.startsWith(`${NETWORK_PREFIX}.`) ||
       field === 'provider' ||
       field.startsWith('provider.') ||
+      field === 'providers' ||
+      field.startsWith('providers.') ||
       field === 'projects' ||
       field.startsWith('projects.') ||
-      field === 'defaultProjectId',
+      field === 'defaultProjectId' ||
+      field === 'operationLimits' ||
+      field.startsWith('operationLimits.') ||
+      field === 'agent' ||
+      field.startsWith('agent.'),
   );
 }
 

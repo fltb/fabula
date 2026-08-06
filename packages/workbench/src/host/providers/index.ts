@@ -18,8 +18,11 @@ export {
   assertValidProviderId,
   CredentialStoreError,
   createProviderCredentialStore,
+  DEFAULT_PROVIDER_PROFILE,
   isValidProviderId,
+  LEGACY_AI_SDK_CREDENTIAL_KEY,
   PROVIDER_ID_PATTERN,
+  providerCredentialKey,
   resolveXdgConfigDir,
   XdgCredentialFileStore,
 } from './credential-store.js';

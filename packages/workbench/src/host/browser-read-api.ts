@@ -1,6 +1,6 @@
 /**
- * Host browser read surface: five authenticated GET routes mounted through
- * the listener's guarded pre-start read seam. Every route resolves identity
+ * Host browser read surface: guarded GET routes mounted through the
+ * listener's guarded pre-start read seam. Every route resolves identity
  * server-side from the request (the `x-fabula-session` header) through an
  * injected principal resolver and then gates project reads through an
  * injected authorization port — the caller never supplies an actor, project
@@ -21,6 +21,7 @@ import type { Context, Handler } from 'hono';
 import {
   BROWSER_API_VERSION,
   BROWSER_GRAPH_ROUTE_QUERY,
+  BROWSER_PROJECT_CAPABILITIES_PATH,
   BROWSER_PROJECT_GRAPHS_PATH,
   BROWSER_PROJECT_OVERVIEW_PATH,
   BROWSER_PROJECT_REFERENCES_PATH,
@@ -29,6 +30,7 @@ import {
   BROWSER_SESSION_PATH,
   type BrowserApiErrorV1,
   type BrowserGraphRouteSelectorV1,
+  type BrowserProjectCapabilitiesV1,
   type BrowserProjectListV1,
   type BrowserProjectOverviewV1,
   type BrowserProjectReferenceListQueryV1,
@@ -139,6 +141,17 @@ export interface BrowserProjectOverviewSource {
 }
 
 /**
+ * Per-project capability projection source for one project. Returns null
+ * when the project is not in the caller's catalog (404 — a second membership
+ * boundary after the route's own gate). The feature list is derived by the
+ * Host from already-registered services, never from front-end constants or
+ * configuration alone.
+ */
+export interface BrowserProjectCapabilitiesSource {
+  loadCapabilities(projectId: string): Promise<BrowserProjectCapabilitiesV1 | null>;
+}
+
+/**
  * Canonical graph projector. Produces the detached compiler-owned graph
  * projection for one strict route selector; the API never compiles or parses
  * client bytes and never rebuilds graph/route semantics.
@@ -181,6 +194,12 @@ export interface BrowserReadApiOptions {
   readonly overview: BrowserProjectOverviewSource;
   readonly graph: BrowserGraphProjector;
   readonly source: BrowserSourceStudioSource;
+  /**
+   * Per-project capability projection. Optional until the Host wires a
+   * capability source; the capabilities route is registered only when the
+   * port is present (mirroring the optional references port).
+   */
+  readonly capabilities?: BrowserProjectCapabilitiesSource;
   /** Optional until the durable reference port is configured for the project. */
   readonly references?: BrowserReferenceLibrarySource;
 }
@@ -191,7 +210,10 @@ export interface BrowserReadRoute {
   readonly handler: Handler<HostListenerEnv>;
 }
 
-/** The mounted browser read surface: exactly the five fixed GET routes. */
+/**
+ * The mounted browser read surface: the five fixed GET routes plus the
+ * optional references and capabilities routes when their ports are present.
+ */
 export interface BrowserReadApi {
   readonly routes: readonly BrowserReadRoute[];
 }
@@ -210,6 +232,22 @@ const BROWSER_ERROR_STATUS: Readonly<Record<BrowserApiErrorV1['error']['code'], 
   REFERENCE_INVALID: 400,
   REFERENCE_UNAVAILABLE: 503,
   REFERENCE_CONFLICT: 409,
+  REVIEW_COMMENT_NOT_FOUND: 404,
+  REVIEW_INVALID: 400,
+  REVIEW_UNAVAILABLE: 503,
+  GATE_NOT_FOUND: 404,
+  GATE_NOT_OPEN: 409,
+  GATE_DECISION_INVALID: 400,
+  PUBLICATION_NOT_FOUND: 404,
+  PUBLICATION_INVALID: 400,
+  PUBLICATION_UNAVAILABLE: 503,
+  PUBLICATION_CONFLICT: 409,
+  AGENT_CHAT_UNAVAILABLE: 503,
+  AGENT_CHAT_CONVERSATION_NOT_FOUND: 404,
+  AGENT_CHAT_RUN_NOT_FOUND: 404,
+  AGENT_CHAT_INVALID: 400,
+  AGENT_CHAT_RUN_TERMINAL: 409,
+  AGENT_CHAT_QUEUE_FULL: 409,
 };
 
 function errorResponse(code: BrowserApiErrorV1['error']['code'], message: string): Response {
@@ -481,6 +519,33 @@ function overviewHandler(api: BrowserReadApiImpl): Handler<HostListenerEnv> {
   };
 }
 
+function capabilitiesHandler(api: BrowserReadApiImpl): Handler<HostListenerEnv> {
+  return async (c) => {
+    // Strict order: identity, authorization, catalog membership, then the
+    // capability port — an authorized-but-unlisted project never reaches it.
+    const principal = await resolveOrDeny(api, c);
+    if (principal instanceof Response) return principal;
+    const projectId = c.req.param('projectId');
+    if (projectId === undefined || projectId.length === 0) {
+      return errorResponse('PROJECT_NOT_FOUND', "The project is not in this session's catalog.");
+    }
+    if (!(await canAccess(api, principal, projectId))) {
+      return errorResponse('PROJECT_MISMATCH', 'The session is not authorized for this project.');
+    }
+    if (!(await projectIsListed(api, principal, projectId))) {
+      return errorResponse('PROJECT_NOT_FOUND', "The project is not in this session's catalog.");
+    }
+    if (api.options.capabilities === undefined) {
+      return errorResponse('PROJECT_NOT_FOUND', "The project is not in this session's catalog.");
+    }
+    const capabilities = await api.options.capabilities.loadCapabilities(projectId);
+    if (capabilities === null) {
+      return errorResponse('PROJECT_NOT_FOUND', "The project is not in this session's catalog.");
+    }
+    return c.json(capabilities);
+  };
+}
+
 function graphsHandler(api: BrowserReadApiImpl): Handler<HostListenerEnv> {
   return async (c) => {
     const principal = await resolveOrDeny(api, c);
@@ -664,6 +729,9 @@ export function createBrowserReadApi(options: BrowserReadApiOptions): BrowserRea
       { path: BROWSER_SESSION_PATH, handler: sessionHandler(api) },
       { path: BROWSER_PROJECTS_PATH, handler: projectsHandler(api) },
       { path: BROWSER_PROJECT_OVERVIEW_PATH, handler: overviewHandler(api) },
+      ...(options.capabilities === undefined
+        ? []
+        : [{ path: BROWSER_PROJECT_CAPABILITIES_PATH, handler: capabilitiesHandler(api) }]),
       { path: BROWSER_PROJECT_GRAPHS_PATH, handler: graphsHandler(api) },
       { path: BROWSER_PROJECT_SOURCE_PATH, handler: sourceStudioHandler(api) },
       ...(options.references === undefined

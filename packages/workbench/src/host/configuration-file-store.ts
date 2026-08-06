@@ -32,10 +32,15 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import {
   normalizeWorkbenchConfiguration,
   WORKBENCH_CONFIGURATION_VERSION_V2,
+  WORKBENCH_CONFIGURATION_VERSION_V3,
   type WorkbenchConfigurationInput,
   type WorkbenchConfigurationV2,
+  type WorkbenchConfigurationV3,
   type WorkbenchProjectConfigurationV2,
+  type WorkbenchProjectConfigurationV3,
+  type WorkbenchProviderConfigurationV2,
   type WorkbenchRevisionMirrorConfigurationV2,
+  type WorkbenchTrustedPluginConfigurationV3,
 } from '@novalistically/workbench-protocol';
 import YAML from 'yaml';
 import {
@@ -77,6 +82,21 @@ const NETWORK_KEYS = ['mode', 'port', 'allowedHosts', 'allowedOrigins', 'unixSoc
 const PROVIDER_KEYS = ['kind', 'baseUrl', 'model'] as const;
 const PROJECT_KEYS_V1 = ['projectId', 'displayName', 'root'] as const;
 const PROJECT_KEYS_V2 = ['projectId', 'displayName', 'root', 'revisionMirror'] as const;
+const PROJECT_KEYS_V3 = [
+  'projectId',
+  'displayName',
+  'root',
+  'revisionMirror',
+  'providerProfile',
+  'trustedPlugins',
+] as const;
+const TRUSTED_PLUGIN_KEYS = ['name', 'version', 'moduleHash', 'required'] as const;
+const OPERATION_LIMIT_KEYS = [
+  'maxQueuedPerProject',
+  'maxConcurrentRendersPerProject',
+  'maxConcurrentRendersPerHost',
+] as const;
+const AGENT_KEYS = ['enabled', 'maxTurns', 'maxToolCalls'] as const;
 const REFERENCE_LIMIT_KEYS = [
   'enabled',
   'maxFileBytes',
@@ -98,11 +118,21 @@ const CONFIGURATION_KEYS_V1 = [
   'network',
 ] as const;
 const CONFIGURATION_KEYS_V2 = [...CONFIGURATION_KEYS_V1, 'referenceLimits'] as const;
+const CONFIGURATION_KEYS_V3 = [
+  'version',
+  'projects',
+  'defaultProjectId',
+  'providers',
+  'network',
+  'referenceLimits',
+  'operationLimits',
+  'agent',
+] as const;
 
-/** Stable plain-object projection; key order is the canonical V2 YAML order. */
-function toPlain(configuration: WorkbenchConfigurationV2): Record<string, unknown> {
+/** Stable plain-object projection; key order is the canonical V3 YAML order. */
+function toPlain(configuration: WorkbenchConfigurationV3): Record<string, unknown> {
   return {
-    version: WORKBENCH_CONFIGURATION_VERSION_V2,
+    version: WORKBENCH_CONFIGURATION_VERSION_V3,
     projects: configuration.projects.map((project) => ({
       projectId: project.projectId,
       displayName: project.displayName,
@@ -111,16 +141,25 @@ function toPlain(configuration: WorkbenchConfigurationV2): Record<string, unknow
         project.revisionMirror.mode === 'git-best-effort'
           ? { mode: project.revisionMirror.mode, ref: project.revisionMirror.ref }
           : { mode: project.revisionMirror.mode },
+      providerProfile: project.providerProfile,
+      trustedPlugins: project.trustedPlugins.map((plugin) => ({
+        name: plugin.name,
+        version: plugin.version,
+        moduleHash: plugin.moduleHash,
+        required: plugin.required,
+      })),
     })),
     defaultProjectId: configuration.defaultProjectId,
-    provider:
-      configuration.provider === null
-        ? null
-        : {
-            kind: configuration.provider.kind,
-            baseUrl: configuration.provider.baseUrl,
-            model: configuration.provider.model,
-          },
+    providers: Object.fromEntries(
+      Object.entries(configuration.providers).map(([profileId, provider]) => [
+        profileId,
+        {
+          kind: provider.kind,
+          baseUrl: provider.baseUrl,
+          model: provider.model,
+        },
+      ]),
+    ),
     network: {
       mode: configuration.network.mode,
       port: configuration.network.port,
@@ -142,15 +181,25 @@ function toPlain(configuration: WorkbenchConfigurationV2): Record<string, unknow
       extractionTimeoutMs: configuration.referenceLimits.extractionTimeoutMs,
       mcpImportChunkBytes: configuration.referenceLimits.mcpImportChunkBytes,
     },
+    operationLimits: {
+      maxQueuedPerProject: configuration.operationLimits.maxQueuedPerProject,
+      maxConcurrentRendersPerProject: configuration.operationLimits.maxConcurrentRendersPerProject,
+      maxConcurrentRendersPerHost: configuration.operationLimits.maxConcurrentRendersPerHost,
+    },
+    agent: {
+      enabled: configuration.agent.enabled,
+      maxTurns: configuration.agent.maxTurns,
+      maxToolCalls: configuration.agent.maxToolCalls,
+    },
   };
 }
 
-/** Serialize either input version to canonical V2 YAML; this never writes to disk. */
+/** Serialize any input version to canonical V3 YAML; this never writes to disk. */
 export function serializeConfigurationYaml(configuration: WorkbenchConfigurationInput): string {
   return YAML.stringify(toPlain(normalizeWorkbenchConfiguration(configuration)), { lineWidth: 0 });
 }
 
-/** Content-hash revision of a configuration's canonical V2 YAML bytes. */
+/** Content-hash revision of a configuration's canonical V3 YAML bytes. */
 export function configurationRevision(configuration: WorkbenchConfigurationInput): string {
   return createHash('sha256')
     .update(serializeConfigurationYaml(configuration), 'utf8')
@@ -165,7 +214,10 @@ const LOOPBACK_MODES: readonly string[] = ['loopback', 'lan', 'unix'];
 export type ConfigurationShapeResult =
   | {
       readonly ok: true;
-      readonly configuration: WorkbenchConfigurationV1 | WorkbenchConfigurationV2;
+      readonly configuration:
+        | WorkbenchConfigurationV1
+        | WorkbenchConfigurationV2
+        | WorkbenchConfigurationV3;
     }
   | { readonly ok: false; readonly diagnostics: readonly ConfigOperationDiagnosticV1[] };
 
@@ -201,6 +253,30 @@ function stringField(
     return null;
   }
   return raw;
+}
+
+/**
+ * Trusted plugin identities are exact-match keys into the Host-discovered
+ * set; they must be non-empty and pathless. Rejects upload-style values, URLs
+ * (scheme/authority) and arbitrary module paths in `name`, `version` or
+ * `moduleHash` before any identity can enter an allowlist.
+ */
+function pluginIdentityString(
+  value: string | null,
+  where: string,
+  diagnostics: ConfigOperationDiagnosticV1[],
+): string | null {
+  if (value === null) return null;
+  if (value.trim() === '' || /[\\/:]/.test(value) || /\s/.test(value)) {
+    diagnostics.push(
+      diagnostic(
+        'CONFIG_INVALID',
+        `Field "${where}" must be a non-empty pathless plugin identity (no "/", "\\", ":", or whitespace).`,
+      ),
+    );
+    return null;
+  }
+  return value;
 }
 
 function nullableStringField(
@@ -332,7 +408,7 @@ function validateConfigurationV2Shape(value: Record<string, unknown>): Configura
       version: WORKBENCH_CONFIGURATION_VERSION_V2,
       projects: sourceProjects,
       defaultProjectId: base.configuration.defaultProjectId,
-      provider: base.configuration.provider,
+      provider: 'provider' in base.configuration ? base.configuration.provider : null,
       network: base.configuration.network,
       referenceLimits: {
         enabled: limits.enabled as boolean,
@@ -351,12 +427,293 @@ function validateConfigurationV2Shape(value: Record<string, unknown>): Configura
   };
 }
 
+function validateConfigurationV3Shape(value: Record<string, unknown>): ConfigurationShapeResult {
+  const diagnostics: ConfigOperationDiagnosticV1[] = [];
+  rejectUnknownKeys(value, CONFIGURATION_KEYS_V3, 'workbench.yaml', diagnostics);
+  if (value.version !== WORKBENCH_CONFIGURATION_VERSION_V3) {
+    diagnostics.push(
+      diagnostic('CONFIG_INVALID', 'Unsupported configuration version; expected 3.'),
+    );
+  }
+  const sourceProjects: WorkbenchProjectConfigurationV3[] = [];
+  const baseProjects: Array<{ projectId: string; displayName: string; root: string }> = [];
+  if (!Array.isArray(value.projects)) {
+    diagnostics.push(diagnostic('CONFIG_INVALID', 'Field "projects" must be an array.'));
+  } else {
+    value.projects.forEach((entry, index) => {
+      const where = `projects[${index}]`;
+      if (!isRecord(entry)) {
+        diagnostics.push(diagnostic('CONFIG_INVALID', `Field "${where}" must be a mapping.`));
+        return;
+      }
+      rejectUnknownKeys(entry, PROJECT_KEYS_V3, where, diagnostics);
+      const projectId = stringField(entry, 'projectId', where, diagnostics);
+      const displayName = stringField(entry, 'displayName', where, diagnostics);
+      const root = stringField(entry, 'root', where, diagnostics);
+      const mirror = entry.revisionMirror;
+      if (projectId === null || displayName === null || root === null || !isRecord(mirror)) {
+        if (!isRecord(mirror))
+          diagnostics.push(
+            diagnostic('CONFIG_INVALID', `Field "${where}.revisionMirror" must be a mapping.`),
+          );
+        return;
+      }
+      rejectUnknownKeys(mirror, ['mode', 'ref'], `${where}.revisionMirror`, diagnostics);
+      const mode = stringField(mirror, 'mode', `${where}.revisionMirror`, diagnostics);
+      let revisionMirror: WorkbenchRevisionMirrorConfigurationV2 | null = null;
+      if (mode === 'disabled') {
+        if ('ref' in mirror)
+          diagnostics.push(
+            diagnostic(
+              'CONFIG_INVALID',
+              `${where}.revisionMirror.ref is not allowed when disabled.`,
+            ),
+          );
+        revisionMirror = { mode: 'disabled' };
+      } else if (mode === 'git-best-effort') {
+        if (mirror.ref !== 'refs/heads/workbench') {
+          diagnostics.push(
+            diagnostic(
+              'CONFIG_INVALID',
+              `${where}.revisionMirror.ref must be refs/heads/workbench.`,
+            ),
+          );
+        } else {
+          revisionMirror = { mode: 'git-best-effort', ref: 'refs/heads/workbench' };
+        }
+      } else if (mode !== null) {
+        diagnostics.push(
+          diagnostic('CONFIG_INVALID', `${where}.revisionMirror.mode is unsupported.`),
+        );
+      }
+      const providerProfile = stringField(entry, 'providerProfile', where, diagnostics);
+      if (providerProfile !== null && providerProfile.trim() === '') {
+        diagnostics.push(
+          diagnostic('CONFIG_INVALID', `Field "${where}.providerProfile" must not be empty.`),
+        );
+      }
+      const rawTrustedPlugins = entry.trustedPlugins;
+      let trustedPlugins: WorkbenchTrustedPluginConfigurationV3[] | null = null;
+      if (!Array.isArray(rawTrustedPlugins)) {
+        diagnostics.push(
+          diagnostic('CONFIG_INVALID', `Field "${where}.trustedPlugins" must be an array.`),
+        );
+      } else {
+        trustedPlugins = [];
+        rawTrustedPlugins.forEach((plugin, pluginIndex) => {
+          const pluginWhere = `${where}.trustedPlugins[${pluginIndex}]`;
+          if (!isRecord(plugin)) {
+            diagnostics.push(
+              diagnostic('CONFIG_INVALID', `Field "${pluginWhere}" must be a mapping.`),
+            );
+            return;
+          }
+          rejectUnknownKeys(plugin, TRUSTED_PLUGIN_KEYS, pluginWhere, diagnostics);
+          const name = pluginIdentityString(
+            stringField(plugin, 'name', pluginWhere, diagnostics),
+            `${pluginWhere}.name`,
+            diagnostics,
+          );
+          const version = pluginIdentityString(
+            stringField(plugin, 'version', pluginWhere, diagnostics),
+            `${pluginWhere}.version`,
+            diagnostics,
+          );
+          const moduleHash = pluginIdentityString(
+            stringField(plugin, 'moduleHash', pluginWhere, diagnostics),
+            `${pluginWhere}.moduleHash`,
+            diagnostics,
+          );
+          const required = plugin.required;
+          if (typeof required !== 'boolean') {
+            diagnostics.push(
+              diagnostic('CONFIG_INVALID', `Field "${pluginWhere}.required" must be a boolean.`),
+            );
+          }
+          if (
+            name !== null &&
+            version !== null &&
+            moduleHash !== null &&
+            typeof required === 'boolean'
+          ) {
+            trustedPlugins?.push({ name, version, moduleHash, required });
+          }
+        });
+      }
+      if (revisionMirror === null || providerProfile === null || trustedPlugins === null) return;
+      baseProjects.push({ projectId, displayName, root });
+      sourceProjects.push({
+        projectId,
+        displayName,
+        root,
+        revisionMirror,
+        providerProfile,
+        trustedPlugins,
+      });
+    });
+  }
+  const {
+    providers: _providers,
+    operationLimits: _operationLimits,
+    agent: _agent,
+    referenceLimits: _referenceLimits,
+    ...baseValue
+  } = value;
+  const base = validateConfigurationShape({
+    ...baseValue,
+    version: WORKBENCH_CONFIGURATION_VERSION,
+    projects: baseProjects,
+    provider: null,
+  });
+  if (!base.ok) diagnostics.push(...base.diagnostics);
+  const parsedProviders: Record<string, WorkbenchProviderConfigurationV2> = {};
+  if (!isRecord(value.providers)) {
+    diagnostics.push(diagnostic('CONFIG_INVALID', 'Field "providers" must be a mapping.'));
+  } else {
+    for (const [profileId, rawProvider] of Object.entries(value.providers)) {
+      const providerWhere = `providers.${profileId}`;
+      if (!isRecord(rawProvider)) {
+        diagnostics.push(
+          diagnostic('CONFIG_INVALID', `Field "${providerWhere}" must be a mapping.`),
+        );
+        continue;
+      }
+      rejectUnknownKeys(rawProvider, PROVIDER_KEYS, providerWhere, diagnostics);
+      const kind = stringField(rawProvider, 'kind', providerWhere, diagnostics);
+      const baseUrl = nullableStringField(rawProvider, 'baseUrl', providerWhere, diagnostics);
+      const model = nullableStringField(rawProvider, 'model', providerWhere, diagnostics);
+      if (kind === 'ai-sdk' && baseUrl !== null && model !== null) {
+        if (baseUrl.length > 0 && !/^https?:\/\//.test(baseUrl)) {
+          diagnostics.push(
+            diagnostic(
+              'CONFIG_INVALID',
+              `${providerWhere}.baseUrl must be an http(s) URL or null.`,
+            ),
+          );
+        }
+        parsedProviders[profileId] = {
+          kind: 'ai-sdk',
+          baseUrl: baseUrl.length === 0 ? null : baseUrl,
+          model: model.length === 0 ? null : model,
+        };
+      } else if (kind !== 'ai-sdk' && kind !== null) {
+        diagnostics.push(
+          diagnostic(
+            'CONFIG_INVALID',
+            `Unsupported provider kind "${kind}"; only "ai-sdk" is valid.`,
+          ),
+        );
+      }
+    }
+  }
+  const operationLimits = value.operationLimits;
+  if (!isRecord(operationLimits)) {
+    diagnostics.push(diagnostic('CONFIG_INVALID', 'Field "operationLimits" must be a mapping.'));
+  } else {
+    rejectUnknownKeys(operationLimits, OPERATION_LIMIT_KEYS, 'operationLimits', diagnostics);
+    for (const key of OPERATION_LIMIT_KEYS) {
+      const item = operationLimits[key];
+      if (typeof item !== 'number' || !Number.isSafeInteger(item) || item < 0) {
+        diagnostics.push(
+          diagnostic('CONFIG_INVALID', `operationLimits.${key} must be a non-negative integer.`),
+        );
+      }
+    }
+    if (operationLimits.maxConcurrentRendersPerProject !== 1) {
+      diagnostics.push(
+        diagnostic(
+          'CONFIG_INVALID',
+          'operationLimits.maxConcurrentRendersPerProject must be exactly 1.',
+        ),
+      );
+    }
+  }
+  const agent = value.agent;
+  if (!isRecord(agent)) {
+    diagnostics.push(diagnostic('CONFIG_INVALID', 'Field "agent" must be a mapping.'));
+  } else {
+    rejectUnknownKeys(agent, AGENT_KEYS, 'agent', diagnostics);
+    if (typeof agent.enabled !== 'boolean') {
+      diagnostics.push(diagnostic('CONFIG_INVALID', 'agent.enabled must be a boolean.'));
+    }
+    for (const key of ['maxTurns', 'maxToolCalls'] as const) {
+      const item = agent[key];
+      if (typeof item !== 'number' || !Number.isSafeInteger(item) || item < 0) {
+        diagnostics.push(
+          diagnostic('CONFIG_INVALID', `agent.${key} must be a non-negative integer.`),
+        );
+      }
+    }
+  }
+  const limits = value.referenceLimits;
+  if (!isRecord(limits)) {
+    diagnostics.push(diagnostic('CONFIG_INVALID', 'Field "referenceLimits" must be a mapping.'));
+  } else {
+    rejectUnknownKeys(limits, REFERENCE_LIMIT_KEYS, 'referenceLimits', diagnostics);
+    if (typeof limits.enabled !== 'boolean') {
+      diagnostics.push(diagnostic('CONFIG_INVALID', 'referenceLimits.enabled must be a boolean.'));
+    }
+    for (const key of REFERENCE_LIMIT_KEYS) {
+      if (key === 'enabled') continue;
+      const item = limits[key];
+      if (typeof item !== 'number' || !Number.isSafeInteger(item) || item < 0) {
+        diagnostics.push(
+          diagnostic('CONFIG_INVALID', `referenceLimits.${key} must be a non-negative integer.`),
+        );
+      }
+    }
+  }
+  if (
+    diagnostics.length > 0 ||
+    !base.ok ||
+    !isRecord(value.providers) ||
+    !isRecord(operationLimits) ||
+    !isRecord(agent) ||
+    !isRecord(limits)
+  ) {
+    return { ok: false, diagnostics };
+  }
+  return {
+    ok: true,
+    configuration: {
+      version: WORKBENCH_CONFIGURATION_VERSION_V3,
+      projects: sourceProjects,
+      defaultProjectId: base.configuration.defaultProjectId,
+      providers: parsedProviders,
+      network: base.configuration.network,
+      referenceLimits: {
+        enabled: limits.enabled as boolean,
+        maxFileBytes: limits.maxFileBytes as number,
+        maxBytesPerProject: limits.maxBytesPerProject as number,
+        maxItemsPerProject: limits.maxItemsPerProject as number,
+        maxPendingJobsPerProject: limits.maxPendingJobsPerProject as number,
+        maxChunksPerProject: limits.maxChunksPerProject as number,
+        maxExtractedCharactersPerProject: limits.maxExtractedCharactersPerProject as number,
+        maxChunkCharacters: limits.maxChunkCharacters as number,
+        chunkOverlapCharacters: limits.chunkOverlapCharacters as number,
+        extractionTimeoutMs: limits.extractionTimeoutMs as number,
+        mcpImportChunkBytes: limits.mcpImportChunkBytes as number,
+      },
+      operationLimits: {
+        maxQueuedPerProject: operationLimits.maxQueuedPerProject as number,
+        maxConcurrentRendersPerProject: operationLimits.maxConcurrentRendersPerProject as 1,
+        maxConcurrentRendersPerHost: operationLimits.maxConcurrentRendersPerHost as number,
+      },
+      agent: {
+        enabled: agent.enabled as boolean,
+        maxTurns: agent.maxTurns as number,
+        maxToolCalls: agent.maxToolCalls as number,
+      },
+    },
+  };
+}
+
 /**
- * Parse and strictly validate one YAML document into the version-1
- * configuration shape. Unknown keys anywhere, duplicate project ids, non
- * absolute roots, a default project id that is not registered, malformed
- * provider/listener values and any invalid listener policy are all rejected
- * with typed diagnostics; nothing is silently defaulted.
+ * Parse and strictly validate one YAML document into the versioned
+ * configuration shape (V1/V2/V3). Unknown keys anywhere, duplicate project
+ * ids, non absolute roots, a default project id that is not registered,
+ * malformed provider/listener values and any invalid listener policy are all
+ * rejected with typed diagnostics; nothing is silently defaulted.
  */
 export function parseConfigurationYaml(content: string): ConfigurationShapeResult {
   let value: unknown;
@@ -384,6 +741,9 @@ export function validateConfigurationShape(value: unknown): ConfigurationShapeRe
         diagnostic('CONFIG_INVALID', 'workbench.yaml must be a mapping at the top level.'),
       ],
     };
+  }
+  if (value.version === WORKBENCH_CONFIGURATION_VERSION_V3) {
+    return validateConfigurationV3Shape(value);
   }
   if (value.version === WORKBENCH_CONFIGURATION_VERSION_V2) {
     return validateConfigurationV2Shape(value);
@@ -665,7 +1025,7 @@ export interface ConfigurationFileStoreOptions {
 }
 
 export interface StoredConfigurationFile {
-  readonly configuration: WorkbenchConfigurationV2;
+  readonly configuration: WorkbenchConfigurationV3;
   /** Content-hash revision of the canonical serialization. */
   readonly revision: string;
 }

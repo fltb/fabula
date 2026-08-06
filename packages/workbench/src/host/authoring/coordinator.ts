@@ -8,7 +8,11 @@
  * it never accepts source.
  */
 import { createHash, randomUUID } from 'node:crypto';
-import type { ProjectSourceSnapshotV1 } from '@novalistically/core';
+import {
+  type PluginExtensionSchemaRegistrar,
+  type ProjectSourceSnapshotV1,
+  validateNovel,
+} from '@novalistically/core';
 import { compareLogicalPaths } from '@novalistically/core/source';
 import {
   AUTHORING_CONTRACT_VERSION,
@@ -18,11 +22,19 @@ import {
   type AuthoringExternalCandidateV1,
   type AuthoringOperationKindV1,
   type AuthoringOperationReceiptV1,
+  type AuthoringOperationStatusV1,
   type AuthoringPhaseV1,
   type AuthoringStateV1,
   type AuthoringSubmitBlockReasonV1,
+  type WorkingValidationResultV1,
 } from '../../contracts/authoring.js';
-import type { AuthoringStateRecord } from '../../contracts/persistence.js';
+import type {
+  AuthoringStateRecord,
+  ProjectOperationKindV1,
+  ProjectOperationRecordV1,
+  ProjectOperationStatusV1,
+} from '../../contracts/persistence.js';
+import type { ProjectOperationStore } from '../../persistence/project-operation-store.js';
 import type { SourceRefreshResult } from '../project-session.js';
 import type { AuthoringWorkingDocumentStore } from './document-store.js';
 import type { AuthoringCandidateStore } from './filesystem-observer.js';
@@ -34,10 +46,11 @@ import type {
   AuthoringSubmitInput,
 } from './types.js';
 
-const MAX_RETAINED_OPERATIONS = 64;
 const KIND_SUBMIT: AuthoringOperationKindV1 = 'submit';
 const KIND_RECONCILE: AuthoringOperationKindV1 = 'reconcile-external';
 const KIND_RESOLVE_CONFLICT: AuthoringOperationKindV1 = 'resolve-conflict';
+/** Durable queue kind for every coordinator mutation (submit/reconcile/resolve). */
+const RECORD_KIND_AUTHORING: ProjectOperationKindV1 = 'authoring-submit';
 const EMPTY_DIAGNOSTICS: readonly AuthoringDiagnosticV1[] = [];
 
 type NativeStateRecord = AuthoringStateRecord & {
@@ -59,16 +72,33 @@ type SubmissionRunResult =
   | { readonly status: 'recovery'; readonly message: string }
   | { readonly status: 'adopt-failed'; readonly message: string };
 
+/** Typed failure for a working-layer validation that cannot proceed. */
+export class WorkingValidationFailure extends Error {
+  override readonly name = 'WorkingValidationFailure';
+  readonly code: 'ACCEPTED_HASH_MISMATCH' | 'WORKSPACE_STALE' | 'INTERNAL';
+  constructor(code: WorkingValidationFailure['code'], message: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
 export interface AuthoringCoordinatorAssembly extends AuthoringCoordinatorOptions {
   readonly documents: AuthoringWorkingDocumentStore;
   readonly staging: AuthoringCandidateStore;
   readonly revisionContentStore: AuthoringRevisionContentStore;
   readonly persistence: AuthoringCoordinatorPersistence;
+  readonly operationStore: ProjectOperationStore;
   readonly buildSnapshot: (input: {
     readonly projectId: string;
     readonly entries: readonly { readonly logicalPath: string; readonly content: string }[];
   }) => ProjectSourceSnapshotV1;
   readonly validate: (candidate: ProjectSourceSnapshotV1) => readonly AuthoringDiagnosticV1[];
+  /**
+   * Enabled-plugin extension gate (plan 7.5). When present, working-layer
+   * validation reports unknown/disabled EventFile `extensions` namespaces as
+   * error-severity source diagnostics; absent → legacy behavior.
+   */
+  readonly extensionRegistrar?: PluginExtensionSchemaRegistrar;
   readonly adopt: (input: {
     readonly projectId: string;
     readonly candidate: ProjectSourceSnapshotV1;
@@ -106,6 +136,89 @@ function hashBundle(
     .digest('hex');
 }
 
+/** Map an authoring receipt status onto the durable queue status vocabulary. */
+function recordStatusFor(status: AuthoringOperationStatusV1): ProjectOperationStatusV1 {
+  switch (status) {
+    case 'queued':
+      return 'queued';
+    case 'running':
+      return 'running';
+    case 'completed':
+      return 'succeeded';
+    case 'conflict':
+      // The durable queue has no dedicated conflict status; a conflict is
+      // represented as `stale` with the CONFLICT_REQUIRES_RESOLUTION error
+      // code so the receipt derivation can restore the client-facing
+      // `conflict` status unchanged.
+      return 'stale';
+    case 'stale':
+      return 'stale';
+    case 'failed':
+      return 'failed';
+    case 'cancelled':
+      return 'cancelled';
+    case 'interrupted':
+      return 'interrupted';
+  }
+}
+
+/** Map a durable record status back onto the client-facing receipt status. */
+function receiptStatusFor(
+  status: ProjectOperationStatusV1,
+  errorCode: string | null,
+): AuthoringOperationStatusV1 {
+  switch (status) {
+    case 'queued':
+      return 'queued';
+    case 'running':
+      return 'running';
+    case 'succeeded':
+      return 'completed';
+    case 'failed':
+      return 'failed';
+    case 'cancelled':
+      return 'cancelled';
+    case 'interrupted':
+      return 'interrupted';
+    case 'stale':
+      return errorCode === 'CONFLICT_REQUIRES_RESOLUTION' ? 'conflict' : 'stale';
+  }
+}
+
+/** Map a durable queue kind onto the client-facing receipt kind. */
+function receiptKindFor(kind: ProjectOperationKindV1): AuthoringOperationKindV1 {
+  return kind === RECORD_KIND_AUTHORING ? 'submit' : kind;
+}
+
+/**
+ * Derive the client-facing receipt from one durable record. The record is the
+ * single source of truth: the receipt never carries identity fields
+ * (actor/capability version/idempotency key) and never contradicts the stored
+ * status. `acceptedSourceHash` is the immutable base source the operation was
+ * CAS-bound to at creation (the post-submit hash travels via the separate
+ * `submit-receipt` event and the authoring state).
+ */
+export function receiptFromRecord(record: ProjectOperationRecordV1): AuthoringOperationReceiptV1 {
+  const active = record.status === 'queued' || record.status === 'running';
+  return {
+    version: AUTHORING_CONTRACT_VERSION,
+    operationId: record.operationId,
+    projectId: record.projectId,
+    kind: receiptKindFor(record.kind),
+    status: receiptStatusFor(record.status, record.errorCode),
+    acceptedSourceHash: record.sourceHash,
+    acceptedRevisionId: record.acceptedRevisionId,
+    pendingOperationId: active ? record.operationId : null,
+    revisionId: record.status === 'succeeded' ? record.acceptedRevisionId : null,
+    receiptHash: record.status === 'succeeded' ? record.resultRef : null,
+    errorCode: record.errorCode,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    progress: record.progress,
+    resultRef: record.resultRef,
+  };
+}
+
 export async function createAuthoringCoordinator(
   assembly: AuthoringCoordinatorAssembly,
 ): Promise<AuthoringCoordinator> {
@@ -121,9 +234,11 @@ export async function createAuthoringCoordinator(
     staging,
     revisionContentStore,
     persistence,
+    operationStore,
     buildSnapshot,
     validate,
     adopt,
+    extensionRegistrar,
   } = assembly;
   if (typeof projectId !== 'string' || projectId.length === 0)
     throw new TypeError('AuthoringCoordinator requires a non-empty projectId');
@@ -138,6 +253,7 @@ export async function createAuthoringCoordinator(
     ['staging', staging],
     ['revisionContentStore', revisionContentStore],
     ['persistence', persistence],
+    ['operationStore', operationStore],
     ['buildSnapshot', buildSnapshot],
     ['validate', validate],
     ['adopt', adopt],
@@ -167,7 +283,6 @@ export async function createAuthoringCoordinator(
   let recoveryPhase: string | null = null;
   let disposed = false;
   let restoredTerminalPhase: Extract<AuthoringPhaseV1, 'stale' | 'conflict'> | null = null;
-  const operations = new Map<string, AuthoringOperationReceiptV1>();
   let lockTail: Promise<void> = Promise.resolve();
   let notifyTimer: ReturnType<typeof setTimeout> | null = null;
   const notifyWaiters: (() => void)[] = [];
@@ -224,48 +339,78 @@ export async function createAuthoringCoordinator(
     );
     return slot;
   }
-  function newReceipt(
-    kind: AuthoringOperationKindV1,
-    status: AuthoringOperationReceiptV1['status'],
-    operationId: string,
-    createdAt: string,
-  ): AuthoringOperationReceiptV1 {
-    const receipt: AuthoringOperationReceiptV1 = {
-      version: AUTHORING_CONTRACT_VERSION,
-      operationId,
+  /**
+   * Create and persist a `queued` operation record. The durable row is the
+   * single source of truth; the returned receipt is derived from it. No event
+   * is broadcast for the creation (matching the previous in-memory behavior —
+   * clients observe the operation through its first transition or the list).
+   */
+  async function createOperationRecord(input: {
+    readonly operationId: string;
+    readonly actorId: string;
+    readonly capabilityVersion: number;
+    readonly createdAt: string;
+  }): Promise<ProjectOperationRecordV1> {
+    const record: ProjectOperationRecordV1 = {
+      version: 1,
       projectId,
-      kind,
-      status,
-      acceptedSourceHash,
+      operationId: input.operationId,
+      // Authoring operations are one-shot: the operation id itself is the
+      // unique per-kind idempotency key, so a retry always enqueues a fresh
+      // operation (exactly like the previous in-memory behavior).
+      idempotencyKey: input.operationId,
+      kind: RECORD_KIND_AUTHORING,
+      status: 'queued',
+      actorId: input.actorId,
+      capabilityVersion: input.capabilityVersion,
+      sourceHash: acceptedSourceHash,
       acceptedRevisionId,
-      pendingOperationId,
-      revisionId: null,
-      receiptHash: null,
+      progress: null,
+      resultRef: null,
       errorCode: null,
-      createdAt,
-      updatedAt: createdAt,
+      createdAt: input.createdAt,
+      updatedAt: input.createdAt,
     };
-    operations.set(operationId, receipt);
-    while (operations.size > MAX_RETAINED_OPERATIONS) {
-      const oldest = operations.keys().next().value;
-      if (oldest === undefined) break;
-      operations.delete(oldest);
-    }
-    return receipt;
+    const persisted = await operationStore.upsert({ record });
+    return persisted.record;
   }
-  function updateReceipt(
-    receipt: AuthoringOperationReceiptV1,
-    patch: Partial<AuthoringOperationReceiptV1>,
-  ): AuthoringOperationReceiptV1 {
-    const updated = { ...receipt, ...patch, updatedAt: now() };
-    operations.set(receipt.operationId, updated);
+  /**
+   * Transition a persisted record and broadcast the derived receipt ONLY after
+   * the transition is durably stored (plan 4.7: no receipt before its record).
+   * On a CAS mismatch (`applied:false`) the stored record wins and is what gets
+   * broadcast.
+   */
+  async function transitionRecord(
+    record: ProjectOperationRecordV1,
+    patch: {
+      readonly status: ProjectOperationStatusV1;
+      readonly errorCode?: string | null;
+      readonly acceptedRevisionId?: string | null;
+      readonly resultRef?: string | null;
+    },
+  ): Promise<ProjectOperationRecordV1> {
+    const updated: ProjectOperationRecordV1 = {
+      ...record,
+      ...(patch.errorCode === undefined ? {} : { errorCode: patch.errorCode }),
+      ...(patch.acceptedRevisionId === undefined
+        ? {}
+        : { acceptedRevisionId: patch.acceptedRevisionId }),
+      ...(patch.resultRef === undefined ? {} : { resultRef: patch.resultRef }),
+      status: patch.status,
+      updatedAt: now(),
+    };
+    const result = await operationStore.upsert({
+      record: updated,
+      expectedStatus: record.status,
+    });
+    const persisted = result.record;
     events.publish({
       type: 'operation-updated',
       projectId,
-      receipt: updated,
-      at: updated.updatedAt,
+      receipt: receiptFromRecord(persisted),
+      at: persisted.updatedAt,
     });
-    return updated;
+    return persisted;
   }
   function submitBlockReason(): AuthoringSubmitBlockReasonV1 {
     if (recoveryPhase !== null) return 'recovery-required';
@@ -428,12 +573,14 @@ export async function createAuthoringCoordinator(
     readonly actorId: string;
     readonly entries: readonly { readonly logicalPath: string; readonly content: string }[];
     readonly sourceHash: string;
+    readonly expectedVersion?: number;
   }): Promise<SubmissionRunResult> {
     let outcome: SubmissionRunResult = { status: 'recovery', message: 'submission did not run' };
     const result = await sessions.enqueue({
       projectId,
       capabilityId: input.capabilityId,
       scopes: input.scopes,
+      expectedVersion: input.expectedVersion,
       kind: input.kind,
       run: async () => {
         const inspected = await sourceViewMaterializer.inspect(projectId);
@@ -535,6 +682,15 @@ export async function createAuthoringCoordinator(
     await captureWorkingIdentity();
     recomputePhase('accepted');
     await persistState();
+  }
+  /**
+   * Publish the durable `submit-receipt` event. Called by submit/reconcile
+   * ONLY after the operation record reached its terminal transition, so no
+   * receipt is ever broadcast before its record persists.
+   */
+  function publishSubmitReceipt(
+    outcome: Extract<SubmissionRunResult, { status: 'accepted' }>,
+  ): void {
     events.publish({
       type: 'submit-receipt',
       projectId,
@@ -544,65 +700,95 @@ export async function createAuthoringCoordinator(
       at: now(),
     });
   }
-  function receiptFromOutcome(
-    receipt: AuthoringOperationReceiptV1,
+  /**
+   * Transition the operation record to the outcome's terminal status. The
+   * durable queue has no `conflict` status, so a conflict is stored as `stale`
+   * with the CONFLICT_REQUIRES_RESOLUTION code; the receipt derivation maps it
+   * back to the client-facing `conflict` status unchanged.
+   */
+  async function recordFromOutcome(
+    record: ProjectOperationRecordV1,
     outcome: SubmissionRunResult,
-  ): AuthoringOperationReceiptV1 {
+  ): Promise<ProjectOperationRecordV1> {
     if (outcome.status === 'accepted')
-      return updateReceipt(receipt, {
-        status: 'completed',
-        acceptedSourceHash: outcome.sourceHash,
+      return transitionRecord(record, {
+        status: 'succeeded',
         acceptedRevisionId: outcome.revisionId,
-        pendingOperationId: null,
-        revisionId: outcome.revisionId,
-        receiptHash: outcome.receiptHash,
+        resultRef: outcome.receiptHash,
         errorCode: null,
       });
     if (outcome.status === 'stale') {
       phase = 'stale';
-      return updateReceipt(receipt, { status: 'stale', errorCode: 'WORKSPACE_STALE' });
+      return transitionRecord(record, { status: 'stale', errorCode: 'WORKSPACE_STALE' });
     }
     if (outcome.status === 'conflict') {
       phase = 'conflict';
-      return updateReceipt(receipt, {
-        status: 'conflict',
+      return transitionRecord(record, {
+        status: 'stale',
         errorCode: 'CONFLICT_REQUIRES_RESOLUTION',
       });
     }
     if (outcome.status === 'invalid') {
       phase = 'candidate-invalid';
-      return updateReceipt(receipt, { status: 'failed', errorCode: outcome.code });
+      return transitionRecord(record, { status: 'failed', errorCode: outcome.code });
     }
     phase = 'recovery-required';
     recoveryPhase = outcome.message;
-    return updateReceipt(receipt, { status: 'failed', errorCode: 'INTERNAL' });
+    return transitionRecord(record, { status: 'failed', errorCode: 'INTERNAL' });
   }
 
   const submit = async (input: AuthoringSubmitInput): Promise<AuthoringOperationReceiptV1> =>
     locked(async () => {
       const operationId = newId();
-      let receipt = newReceipt('submit', 'queued', operationId, now());
-      if (disposed) return updateReceipt(receipt, { status: 'failed', errorCode: 'INTERNAL' });
+      let record = await createOperationRecord({
+        operationId,
+        actorId: input.actorId,
+        capabilityVersion: input.expectedVersion ?? 0,
+        createdAt: now(),
+      });
+      if (disposed)
+        return receiptFromRecord(
+          await transitionRecord(record, { status: 'stale', errorCode: 'INTERNAL' }),
+        );
       const reason = submitBlockReason();
       if (reason !== 'none')
-        return updateReceipt(receipt, {
-          status: 'failed',
-          errorCode:
-            reason === 'conflict-requires-resolution'
-              ? 'CONFLICT_REQUIRES_RESOLUTION'
-              : reason === 'candidate-invalid'
-                ? 'CANDIDATE_INVALID'
-                : 'SUBMIT_BLOCKED',
-        });
+        return receiptFromRecord(
+          await transitionRecord(record, {
+            status: 'stale',
+            errorCode:
+              reason === 'conflict-requires-resolution'
+                ? 'CONFLICT_REQUIRES_RESOLUTION'
+                : reason === 'candidate-invalid'
+                  ? 'CANDIDATE_INVALID'
+                  : 'SUBMIT_BLOCKED',
+          }),
+        );
       if (input.expectedAcceptedSourceHash !== acceptedSourceHash)
-        return updateReceipt(receipt, { status: 'failed', errorCode: 'ACCEPTED_HASH_MISMATCH' });
+        return receiptFromRecord(
+          await transitionRecord(record, {
+            status: 'stale',
+            errorCode: 'ACCEPTED_HASH_MISMATCH',
+          }),
+        );
+      if (
+        input.expectedAcceptedRevisionId !== undefined &&
+        input.expectedAcceptedRevisionId !== acceptedRevisionId
+      )
+        return receiptFromRecord(
+          await transitionRecord(record, {
+            status: 'stale',
+            errorCode: 'ACCEPTED_HASH_MISMATCH',
+          }),
+        );
       const digest = await documents.workspaceDigest();
       if (digest === null || digest.digest !== input.expectedWorkspaceDigest)
-        return updateReceipt(receipt, { status: 'failed', errorCode: 'WORKSPACE_STALE' });
+        return receiptFromRecord(
+          await transitionRecord(record, { status: 'stale', errorCode: 'WORKSPACE_STALE' }),
+        );
       phase = 'submitting';
       pendingOperationId = operationId;
       await emitState();
-      receipt = updateReceipt(receipt, { status: 'running', pendingOperationId: operationId });
+      record = await transitionRecord(record, { status: 'running' });
       const descriptors = documents.descriptors();
       const materialized = await documents.materialize({
         projectId,
@@ -616,11 +802,9 @@ export async function createAuthoringCoordinator(
         pendingOperationId = null;
         phase = 'candidate-invalid';
         await persistState();
-        return updateReceipt(receipt, {
-          status: 'failed',
-          errorCode: 'CANDIDATE_INVALID',
-          pendingOperationId: null,
-        });
+        return receiptFromRecord(
+          await transitionRecord(record, { status: 'failed', errorCode: 'CANDIDATE_INVALID' }),
+        );
       }
       const outcome = await runNativeSubmission({
         kind: KIND_SUBMIT,
@@ -630,12 +814,14 @@ export async function createAuthoringCoordinator(
         actorId: input.actorId,
         entries: materialized.entries,
         sourceHash: snapshot.sourceHash,
+        expectedVersion: input.expectedVersion,
       });
       if (outcome.status === 'accepted') await acceptSubmission(outcome);
       else await captureWorkingIdentity();
-      receipt = receiptFromOutcome(receipt, outcome);
+      record = await recordFromOutcome(record, outcome);
       await emitState();
-      return receipt;
+      if (outcome.status === 'accepted') publishSubmitReceipt(outcome);
+      return receiptFromRecord(record);
     });
 
   const reconcileExternal = async (
@@ -643,28 +829,53 @@ export async function createAuthoringCoordinator(
   ): Promise<AuthoringOperationReceiptV1> =>
     locked(async () => {
       const operationId = newId();
-      let receipt = newReceipt(
-        input.choice === 'keep-working' ? 'reconcile-external' : 'resolve-conflict',
-        'queued',
+      let record = await createOperationRecord({
         operationId,
-        now(),
-      );
+        actorId: input.actorId,
+        capabilityVersion: input.expectedVersion ?? 0,
+        createdAt: now(),
+      });
       if (disposed || candidate === null)
-        return updateReceipt(receipt, { status: 'failed', errorCode: 'INVALID_INPUT' });
+        return receiptFromRecord(
+          await transitionRecord(record, { status: 'stale', errorCode: 'INVALID_INPUT' }),
+        );
       if (input.candidateHash !== null && input.candidateHash !== candidate.candidateHash)
-        return updateReceipt(receipt, { status: 'failed', errorCode: 'WORKSPACE_STALE' });
+        return receiptFromRecord(
+          await transitionRecord(record, { status: 'stale', errorCode: 'WORKSPACE_STALE' }),
+        );
       if (input.expectedAcceptedSourceHash !== acceptedSourceHash)
-        return updateReceipt(receipt, { status: 'failed', errorCode: 'ACCEPTED_HASH_MISMATCH' });
+        return receiptFromRecord(
+          await transitionRecord(record, {
+            status: 'stale',
+            errorCode: 'ACCEPTED_HASH_MISMATCH',
+          }),
+        );
+      if (
+        input.expectedAcceptedRevisionId !== undefined &&
+        input.expectedAcceptedRevisionId !== acceptedRevisionId
+      )
+        return receiptFromRecord(
+          await transitionRecord(record, {
+            status: 'stale',
+            errorCode: 'ACCEPTED_HASH_MISMATCH',
+          }),
+        );
       if (input.choice === 'keep-working') {
+        // keep-working still runs inside the authoring session lane, so the
+        // durable record moves through queued -> running -> succeeded/failed.
+        record = await transitionRecord(record, { status: 'running' });
         const result = await sessions.enqueue({
           projectId,
           capabilityId: input.capabilityId,
           scopes: input.capabilityScopes,
+          expectedVersion: input.expectedVersion,
           kind: KIND_RECONCILE,
           run: async () => undefined,
         });
         if (result.status !== 'completed')
-          return updateReceipt(receipt, { status: 'failed', errorCode: 'SUBMIT_BLOCKED' });
+          return receiptFromRecord(
+            await transitionRecord(record, { status: 'failed', errorCode: 'SUBMIT_BLOCKED' }),
+          );
         await staging
           .delete({ projectId, candidateHash: candidate.candidateHash })
           .catch(() => undefined);
@@ -673,37 +884,47 @@ export async function createAuthoringCoordinator(
         conflicts = [];
         recomputePhase();
         await emitState();
-        return updateReceipt(receipt, { status: 'completed' });
+        return receiptFromRecord(await transitionRecord(record, { status: 'succeeded' }));
       }
       const staged = await staging.get({ projectId, candidateHash: candidate.candidateHash });
       if (staged === null)
-        return updateReceipt(receipt, { status: 'failed', errorCode: 'INTERNAL' });
+        return receiptFromRecord(
+          await transitionRecord(record, { status: 'stale', errorCode: 'INTERNAL' }),
+        );
       let entries = staged.entries;
       if (input.choice === 'apply-proposed-disjoint-merge') {
         if (conflicts.length > 0)
-          return updateReceipt(receipt, {
-            status: 'failed',
-            errorCode: 'CONFLICT_REQUIRES_RESOLUTION',
-          });
+          return receiptFromRecord(
+            await transitionRecord(record, {
+              status: 'stale',
+              errorCode: 'CONFLICT_REQUIRES_RESOLUTION',
+            }),
+          );
         const merged = await buildDisjointMerge(staged.entries);
         if (merged === null)
-          return updateReceipt(receipt, {
-            status: 'failed',
-            errorCode: 'CONFLICT_REQUIRES_RESOLUTION',
-          });
+          return receiptFromRecord(
+            await transitionRecord(record, {
+              status: 'stale',
+              errorCode: 'CONFLICT_REQUIRES_RESOLUTION',
+            }),
+          );
         entries = merged;
       }
       const snapshot = buildSnapshot({ projectId, entries });
       if (hasErrorSeverity(validate(snapshot))) {
         phase = 'candidate-invalid';
         await emitState();
-        return updateReceipt(receipt, { status: 'failed', errorCode: 'CANDIDATE_INVALID' });
+        return receiptFromRecord(
+          await transitionRecord(record, { status: 'stale', errorCode: 'CANDIDATE_INVALID' }),
+        );
       }
       const digest = await documents.workspaceDigest();
       if (digest === null)
-        return updateReceipt(receipt, { status: 'failed', errorCode: 'WORKSPACE_STALE' });
+        return receiptFromRecord(
+          await transitionRecord(record, { status: 'stale', errorCode: 'WORKSPACE_STALE' }),
+        );
       phase = 'submitting';
-      receipt = updateReceipt(receipt, { status: 'running', pendingOperationId: operationId });
+      record = await transitionRecord(record, { status: 'running' });
       const outcome = await runNativeSubmission({
         kind:
           input.choice === 'apply-proposed-disjoint-merge' ? KIND_RESOLVE_CONFLICT : KIND_RECONCILE,
@@ -713,12 +934,14 @@ export async function createAuthoringCoordinator(
         actorId: input.actorId,
         entries,
         sourceHash: snapshot.sourceHash,
+        expectedVersion: input.expectedVersion,
       });
       if (outcome.status === 'accepted') await acceptSubmission(outcome);
       else await captureWorkingIdentity();
-      receipt = receiptFromOutcome(receipt, outcome);
+      record = await recordFromOutcome(record, outcome);
       await emitState();
-      return receipt;
+      if (outcome.status === 'accepted') publishSubmitReceipt(outcome);
+      return receiptFromRecord(record);
     });
 
   const refreshAccepted = async (input: { readonly expectedSourceHash: string }): Promise<void> =>
@@ -808,12 +1031,66 @@ export async function createAuthoringCoordinator(
     return merged;
   }
 
+  const validateWorking = async (input: {
+    readonly expectedWorkspaceDigest: string;
+    readonly expectedAcceptedSourceHash: string | null;
+  }): Promise<WorkingValidationResultV1> =>
+    locked(async () => {
+      if (disposed) {
+        throw new WorkingValidationFailure('INTERNAL', 'The authoring coordinator is disposed.');
+      }
+      if (input.expectedAcceptedSourceHash !== acceptedSourceHash) {
+        throw new WorkingValidationFailure(
+          'ACCEPTED_HASH_MISMATCH',
+          'The accepted source changed; re-read before validating the working layer.',
+        );
+      }
+      const digest = await documents.workspaceDigest();
+      if (digest === null || digest.digest !== input.expectedWorkspaceDigest) {
+        throw new WorkingValidationFailure(
+          'WORKSPACE_STALE',
+          'The working layer changed; re-read before validating.',
+        );
+      }
+      const descriptors = documents.descriptors();
+      const materialized = await documents.materialize({
+        projectId,
+        documents: descriptors.map((descriptor) => ({
+          documentId: descriptor.documentId,
+          logicalPath: descriptor.logicalPath,
+        })),
+      });
+      const snapshot = buildSnapshot({ projectId, entries: materialized.entries });
+      const validation = await validateNovel(
+        snapshot,
+        undefined,
+        extensionRegistrar === undefined ? undefined : { extensionRegistrar },
+      );
+      return {
+        version: AUTHORING_CONTRACT_VERSION,
+        layer: 'working',
+        projectId,
+        workspaceDigest: digest.digest,
+        acceptedSourceHash,
+        candidateSourceHash: snapshot.sourceHash,
+        passed: validation.passed,
+        diagnostics: validate(snapshot),
+        iss: validation.iss,
+        results: Object.fromEntries(validation.results),
+      };
+    });
+
   return {
     projectId,
     getState: state,
-    listOperations: () =>
-      [...operations.values()].sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1)),
-    getOperation: (operationId) => operations.get(operationId) ?? null,
+    listOperations: async () => {
+      const records = await operationStore.list({ projectId, limit: 100 });
+      return records.map(receiptFromRecord);
+    },
+    getOperation: async (operationId) => {
+      const record = await operationStore.get(projectId, operationId);
+      return record === null ? null : receiptFromRecord(record);
+    },
     isAgentPaused: () =>
       phase === 'dual-conflict' ||
       phase === 'candidate-invalid' ||
@@ -847,10 +1124,10 @@ export async function createAuthoringCoordinator(
       notifyTimer = null;
       for (const waiter of notifyWaiters.splice(0)) waiter();
       await lockTail;
-      operations.clear();
     },
     submit,
     reconcileExternal,
+    validateWorking,
     refreshAccepted,
   };
 }

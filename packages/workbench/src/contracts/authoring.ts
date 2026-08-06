@@ -18,6 +18,7 @@
  */
 
 import { BROWSER_API_BASE_PATH } from './browser-api.js';
+import type { ProjectOperationKindV1, ProjectOperationProgressV1 } from './persistence.js';
 
 /** Version of the authoring coordination contract. */
 export const AUTHORING_CONTRACT_VERSION = 2 as const;
@@ -146,8 +147,18 @@ export interface AuthoringMirrorStatusV2 {
 
 // ─── Operation receipts ─────────────────────────────────────────────────────
 
-/** Async authoring operation kinds the Operation Center tracks. */
-export type AuthoringOperationKindV1 = 'submit' | 'reconcile-external' | 'resolve-conflict';
+/**
+ * Async operation kinds the Operation Center tracks. The authoring-specific
+ * kinds (`submit`/`reconcile-external`/`resolve-conflict`) are produced by the
+ * coordinator; the remaining kinds come from the durable per-project operation
+ * queue (render/revise/render-tree/review/release-gate/publish/agent-run) and
+ * are surfaced through the same unified receipt DTO.
+ */
+export type AuthoringOperationKindV1 =
+  | 'submit'
+  | 'reconcile-external'
+  | 'resolve-conflict'
+  | ProjectOperationKindV1;
 
 /** Lifecycle status of one queued authoring operation. */
 export type AuthoringOperationStatusV1 =
@@ -156,7 +167,9 @@ export type AuthoringOperationStatusV1 =
   | 'completed'
   | 'failed'
   | 'stale'
-  | 'conflict';
+  | 'conflict'
+  | 'cancelled'
+  | 'interrupted';
 
 /** Secret-free receipt of one async native revision operation. */
 export interface AuthoringOperationReceiptV1 {
@@ -173,6 +186,10 @@ export interface AuthoringOperationReceiptV1 {
   readonly errorCode: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
+  /** Durable queue progress (completed/total); present for long-running operations. */
+  readonly progress?: ProjectOperationProgressV1 | null;
+  /** Safe result reference from the durable record (e.g. revision/artifact link). */
+  readonly resultRef?: string | null;
 }
 
 /** Durable native revision receipt projection (non-secret). */
@@ -252,6 +269,55 @@ export type BrowserAuthoringReconcileResultV1 =
   | { readonly status: 'rejected'; readonly failure: AuthoringFailureV1 }
   | { readonly status: 'completed'; readonly receipt: AuthoringOperationReceiptV1 };
 
+// ─── Working-document lifecycle (create/move/delete) ────────────────────────
+
+/**
+ * Explicit browser working-document create request. Mutates only the Yjs
+ * working layer; the accepted layer changes exclusively via submit. Logical
+ * paths are manifest-relative (`scenes/E1.md`, `nova.yaml`), never Host
+ * filesystem paths.
+ */
+export interface BrowserAuthoringDocumentCreateRequestV1 {
+  readonly version: AuthoringContractVersion;
+  readonly projectId: string;
+  /** Manifest-relative logical path for the new working document. */
+  readonly logicalPath: string;
+  readonly kind: 'prose' | 'raw-yaml';
+  /** CAS on the accepted source; a moved projection rejects before any work. */
+  readonly expectedAcceptedSourceHash: string | null;
+  /** CAS on the working layer; a changed digest is `WORKSPACE_STALE`. */
+  readonly expectedWorkspaceDigest: string;
+}
+
+/** Explicit browser working-document move request. */
+export interface BrowserAuthoringDocumentMoveRequestV1 {
+  readonly version: AuthoringContractVersion;
+  readonly projectId: string;
+  readonly documentId: string;
+  /** Manifest-relative logical path the working document moves to. */
+  readonly logicalPath: string;
+  readonly expectedAcceptedSourceHash: string | null;
+  readonly expectedWorkspaceDigest: string;
+}
+
+/** Explicit browser working-document delete request. */
+export interface BrowserAuthoringDocumentDeleteRequestV1 {
+  readonly version: AuthoringContractVersion;
+  readonly projectId: string;
+  readonly documentId: string;
+  readonly expectedAcceptedSourceHash: string | null;
+  readonly expectedWorkspaceDigest: string;
+}
+
+/** Successful browser working-document lifecycle mutation; identity is Host allocated. */
+export interface BrowserAuthoringDocumentMutationResultV1 {
+  readonly status: 'applied';
+  readonly operationId: string;
+  readonly documentId: string;
+  readonly logicalPath: string;
+  readonly workspaceDigest: string;
+}
+
 // ─── Safe activity events (SSE stream) ──────────────────────────────────────
 
 /** Typed authoring activity events broadcast to connected clients. */
@@ -312,10 +378,18 @@ export const BROWSER_AUTHORING_STATE_PATH = `${BROWSER_AUTHORING_BASE_PATH}/stat
 export const BROWSER_AUTHORING_SUBMIT_PATH = `${BROWSER_AUTHORING_BASE_PATH}/submit`;
 /** `POST .../authoring/reconcile` — external candidate reconcile / conflict resolution. */
 export const BROWSER_AUTHORING_RECONCILE_PATH = `${BROWSER_AUTHORING_BASE_PATH}/reconcile`;
+/** `POST .../authoring/documents/create` — create one working document. */
+export const BROWSER_AUTHORING_DOCUMENT_CREATE_PATH = `${BROWSER_AUTHORING_BASE_PATH}/documents/create`;
+/** `POST .../authoring/documents/move` — move one working document to a new logical path. */
+export const BROWSER_AUTHORING_DOCUMENT_MOVE_PATH = `${BROWSER_AUTHORING_BASE_PATH}/documents/move`;
+/** `POST .../authoring/documents/delete` — delete one working document. */
+export const BROWSER_AUTHORING_DOCUMENT_DELETE_PATH = `${BROWSER_AUTHORING_BASE_PATH}/documents/delete`;
 /** `GET .../authoring/operations` — operation list. */
 export const BROWSER_AUTHORING_OPERATIONS_PATH = `${BROWSER_AUTHORING_BASE_PATH}/operations`;
 /** `GET .../authoring/operations/:operationId` — one operation receipt. */
 export const BROWSER_AUTHORING_OPERATION_PATH = `${BROWSER_AUTHORING_BASE_PATH}/operations/:operationId`;
+/** `POST .../authoring/operations/:operationId/cancel` — cancel one durable operation. */
+export const BROWSER_AUTHORING_OPERATION_CANCEL_PATH = `${BROWSER_AUTHORING_BASE_PATH}/operations/:operationId/cancel`;
 /** `GET .../authoring/events` — guarded activity stream. */
 export const BROWSER_AUTHORING_EVENTS_PATH = `${BROWSER_AUTHORING_BASE_PATH}/events`;
 /** `GET .../authoring/revisions` — native revision history metadata. */
@@ -405,11 +479,23 @@ export interface McpAuthoringStatusInputV1 {
   readonly version: AuthoringContractVersion;
   readonly projectId: string;
 }
+/**
+ * Deterministic next working-layer action for the authoring loop; null when
+ * nothing is pending. The coordinator state does not track a passing
+ * `validateWorking` on the current digest yet (plan Step 5), so SUBMIT_WORKING
+ * is produced only once that state exists.
+ */
+export type AuthoringNextWorkingActionV1 =
+  | 'VALIDATE_WORKING'
+  | 'SUBMIT_WORKING'
+  | 'RESOLVE_CONFLICT';
 /** `nova_authoring_status` output. */
 export interface McpAuthoringStatusOutputV1 {
   readonly version: AuthoringContractVersion;
   readonly projectId: string;
   readonly state: AuthoringStateV1;
+  /** Next deterministic working-layer action derived from the state. */
+  readonly nextWorkingAction: AuthoringNextWorkingActionV1 | null;
   readonly generatedAt: string;
 }
 /** Bounded MCP working-document descriptor; logical paths are manifest paths, never host paths. */
@@ -603,3 +689,77 @@ export type McpConflictResolveOutputV1 =
   | { readonly status: 'queued'; readonly receipt: AuthoringOperationReceiptV1 }
   | { readonly status: 'rejected'; readonly failure: AuthoringFailureV1 }
   | { readonly status: 'completed'; readonly receipt: AuthoringOperationReceiptV1 };
+
+// ─── Working-layer validation ────────────────────────────────────────────────
+
+/** One working-layer validation issue (wire shape of Core `ValidationIssue`). */
+export interface WorkingValidationIssueV1 {
+  readonly validator: string;
+  readonly severity: 'error' | 'warning' | 'info';
+  readonly kind: string;
+  readonly event: string;
+  readonly entity: string;
+  readonly attribute?: string;
+  readonly message: string;
+  readonly fixSuggestion: string;
+  readonly fixAction: string;
+  readonly fixTarget: {
+    readonly file: string;
+    readonly field?: string;
+    readonly value?: unknown;
+  };
+  readonly observationRef?: {
+    readonly field: string;
+    readonly analysisPointer?: string;
+  };
+}
+
+/** One event's working-layer validation summary (same wire shape as `nova_validate` results). */
+export interface WorkingValidationEventResultV1 {
+  readonly passed: boolean;
+  readonly errors: readonly WorkingValidationIssueV1[];
+  readonly warnings: readonly WorkingValidationIssueV1[];
+  readonly infos: readonly WorkingValidationIssueV1[];
+}
+
+/** ISS snapshot carried by a working-layer validation (same wire shape as `nova_validate`). */
+export interface WorkingValidationIssSnapshotV1 {
+  readonly overall: number;
+  readonly target: number;
+  readonly dimensions: readonly {
+    readonly name: string;
+    readonly score: number;
+    readonly max: number;
+    readonly threshold: number;
+    readonly status: 'green' | 'yellow' | 'red';
+    readonly gaps: readonly {
+      readonly entity?: string;
+      readonly id?: string;
+      readonly file?: string;
+      readonly suggestion: string;
+      readonly fixAction: 'create_file' | 'edit_file' | 'add_field' | 'change_value';
+      readonly fixTarget: string;
+      readonly template?: string;
+    }[];
+  }[];
+}
+
+/**
+ * Result of validating the materialized working layer without accepting it.
+ * `layer:'working'` is fixed and never inferred: `nova_validate` always
+ * validates the accepted layer, `nova_authoring_validate` always validates
+ * the working layer. Validation never freezes, submits, materializes the
+ * accepted tree, or changes the authoring phase.
+ */
+export interface WorkingValidationResultV1 {
+  readonly version: AuthoringContractVersion;
+  readonly layer: 'working';
+  readonly projectId: string;
+  readonly workspaceDigest: string;
+  readonly acceptedSourceHash: string | null;
+  readonly candidateSourceHash: string;
+  readonly passed: boolean;
+  readonly diagnostics: readonly AuthoringDiagnosticV1[];
+  readonly iss: WorkingValidationIssSnapshotV1;
+  readonly results: Readonly<Record<string, WorkingValidationEventResultV1>>;
+}

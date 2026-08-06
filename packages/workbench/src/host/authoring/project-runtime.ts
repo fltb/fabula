@@ -1,12 +1,26 @@
 import { createHash, randomUUID } from 'node:crypto';
-import type { ProjectSourceSnapshotV1 } from '@novalistically/core';
-import { buildSourceSnapshot, computeSourceDocumentHash } from '@novalistically/core/source';
+import type { PluginExtensionSchemaRegistrar, ProjectSourceSnapshotV1 } from '@novalistically/core';
+import {
+  buildSourceSnapshot,
+  computeSourceDocumentHash,
+  extensionDiagnosticsForSnapshot,
+} from '@novalistically/core/source';
+import type {
+  FileProjectStatusReporter,
+  ProjectAuthorityTokenV1,
+  ProjectWriteCoordinator,
+} from '@novalistically/node-host';
 import type { WorkbenchRevisionMirrorConfigurationV2 } from '@novalistically/workbench-protocol';
 import type { SourceRevisionReceipt } from '../../contracts/persistence.js';
+import {
+  createProjectOperationStore,
+  type ProjectOperationStore,
+} from '../../persistence/project-operation-store.js';
 import type { PersistenceWorkerClient } from '../../persistence/worker-client.js';
 import type { AgentCapabilityService } from '../agent/capability-service.js';
 import { createGitRevisionMirror } from '../git/revision-mirror.js';
 import { ControlledGitRunner } from '../git/runner.js';
+import { buildWorkflowStatusForSession } from '../mcp/registry.js';
 import type { ProjectSession } from '../project-session.js';
 import type { YjsWorkingDocumentCore } from '../yjs/gateway.js';
 import { type AuthoringCoordinatorPersistence, createAuthoringCoordinator } from './coordinator.js';
@@ -49,6 +63,33 @@ export interface CreateProjectAuthoringRuntimeOptions {
   readonly revisionMirror?: WorkbenchRevisionMirrorConfigurationV2;
   readonly yjsCore: YjsWorkingDocumentCore;
   readonly events: AuthoringEventPublisher;
+  /**
+   * Project authority lease. When present (production launch), every accepted
+   * source materialization runs under {@link authorityToken}; a lost lease
+   * surfaces as `recovery-required` instead of a tree write. Absent
+   * (standalone/tests) the materializer behaves exactly as before.
+   */
+  readonly coordinator?: ProjectWriteCoordinator;
+  readonly authorityToken?: ProjectAuthorityTokenV1;
+  /**
+   * Best-effort derived status writer for `PROJECT_STATUS.md`. Refreshed after
+   * every accepted submit; a write failure only marks the reporter degraded
+   * and never rolls back the accepted revision. Absent (tests/standalone)
+   * skips the refresh entirely.
+   */
+  readonly statusReporter?: FileProjectStatusReporter;
+  /**
+   * Durable per-project operation queue. Absent (tests/standalone) the
+   * runtime derives one from {@link persistence} so the coordinator's
+   * operation surface is always durable in production.
+   */
+  readonly operationStore?: ProjectOperationStore;
+  /**
+   * Enabled-plugin extension gate (plan 7.5). When present, working-layer
+   * candidate diagnostics include unknown/disabled EventFile `extensions`
+   * namespaces as error-severity source diagnostics; absent → legacy.
+   */
+  readonly extensionRegistrar?: PluginExtensionSchemaRegistrar;
   readonly now?: () => string;
 }
 
@@ -70,6 +111,7 @@ function snapshotFromEntries(input: {
 function diagnosticsFor(
   session: ProjectSession,
   candidate: ProjectSourceSnapshotV1,
+  extensionRegistrar?: PluginExtensionSchemaRegistrar,
 ): readonly {
   readonly code: string;
   readonly severity: 'error' | 'warning' | 'info';
@@ -107,6 +149,11 @@ function diagnosticsFor(
       message: 'The candidate cannot be compiled by the project runtime.',
       logicalPath: null,
     });
+  }
+  // Enabled-plugin extension gate (plan 7.5): unknown/disabled EventFile
+  // `extensions` namespaces are source errors in the working layer too.
+  if (extensionRegistrar !== undefined) {
+    diagnostics.push(...extensionDiagnosticsForSnapshot(candidate, extensionRegistrar));
   }
   return diagnostics;
 }
@@ -431,6 +478,8 @@ export async function createProjectAuthoringRuntime(
   const sourceViewMaterializer = createFileSourceViewMaterializer({
     projectRoot: options.projectRoot,
     now,
+    coordinator: options.coordinator,
+    authorityToken: options.authorityToken,
   });
   const revisionContentStore = createFileRevisionContentStore({
     basePath: options.hostStagingRoot,
@@ -493,11 +542,37 @@ export async function createProjectAuthoringRuntime(
       bundle: { bundleHash: accepted.bundleHash, entries: bundle.entries },
     });
   };
+  /**
+   * Best-effort per-project derived status refresh. Runs after every accepted
+   * submit (submit-receipt) outside the authoring commit lane: the status is
+   * a derived artifact, so a failure only marks the reporter degraded and
+   * never rolls back the accepted revision.
+   */
+  const statusSources: { coordinator: AuthoringCoordinator | null } = {
+    coordinator: null,
+  };
+  const refreshProjectStatusFile = async (): Promise<void> => {
+    const reporter = options.statusReporter;
+    const coordinator = statusSources.coordinator;
+    if (reporter === undefined || coordinator === null) return;
+    const status = await buildWorkflowStatusForSession(options.session, {
+      coordinator,
+      revision,
+      extensionRegistrar: options.extensionRegistrar,
+    });
+    if (status !== null) await reporter.refresh(status);
+  };
+  // Remaining PROJECT_STATUS.md refresh points (render completion, review
+  // decision, publication completion) have no durable hook until plan Steps
+  // 4-6 land their operation/review/publication services; this submit hook is
+  // the only accepted-layer mutation that exists at this step.
   const events: AuthoringEventPublisher = {
     publish(event: AuthoringCoordinatorEvent): void {
       options.events.publish(event);
-      if (event.type === 'submit-receipt')
+      if (event.type === 'submit-receipt') {
         void mirrorAccepted(event.acceptedSourceHash).catch(() => undefined);
+        void refreshProjectStatusFile().catch(() => undefined);
+      }
     },
   };
   const initialAccepted = source;
@@ -523,6 +598,7 @@ export async function createProjectAuthoringRuntime(
         kind: input.kind,
         capabilityId: input.capabilityId,
         scope: input.scopes,
+        ...(input.expectedVersion === undefined ? {} : { expectedVersion: input.expectedVersion }),
         payload: {},
         run: (context) => input.run({ operationId: context.operationId, now }),
       });
@@ -534,12 +610,14 @@ export async function createProjectAuthoringRuntime(
     },
   };
   const staging = createFileCandidateStore(options.hostStagingRoot);
+  const operationStore = options.operationStore ?? createProjectOperationStore(options.persistence);
   const coordinator = await createAuthoringCoordinator({
     projectId: options.projectId,
     materializer: documents,
     documents,
     staging,
     persistence: coordinatorPersistence,
+    operationStore,
     treeLoader,
     sessions: sessionPort,
     revision,
@@ -547,12 +625,14 @@ export async function createProjectAuthoringRuntime(
     revisionContentStore,
     events,
     buildSnapshot: ({ entries }) => snapshotFromEntries({ entries }),
-    validate: (candidate) => diagnosticsFor(options.session, candidate),
+    validate: (candidate) => diagnosticsFor(options.session, candidate, options.extensionRegistrar),
     adopt: async ({ candidate }) => options.session.adoptSourceWithinOperation(candidate),
     initialAccepted,
     initialAcceptedRevisionId: (await revision.loadAccepted(options.projectId))?.revisionId ?? null,
+    extensionRegistrar: options.extensionRegistrar,
     now,
   });
+  statusSources.coordinator = coordinator;
   if (mirror !== null) void mirrorAccepted(initialAccepted.sourceHash).catch(() => undefined);
   const observer = createAuthoringFilesystemObserver({
     projectId: options.projectId,

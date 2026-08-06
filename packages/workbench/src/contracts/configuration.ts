@@ -26,9 +26,14 @@ import { BROWSER_API_BASE_PATH } from './browser-api.js';
 export const PROJECT_ACCESS_ROLES = ['reader', 'author', 'maintainer'] as const;
 export type ProjectAccessRole = (typeof PROJECT_ACCESS_ROLES)[number];
 
-/** Canonical hierarchy and MCP scope grants for every project role. */
+/**
+ * Canonical hierarchy and MCP scope grants for every project role. Single
+ * source of truth for every role→scope derivation (auth rank map, device
+ * pairing, browser principal scopes). `mcp:render` writes the accepted-scene
+ * head, so it is granted only from `author` up — never to `reader`.
+ */
 export const PROJECT_ACCESS_ROLE_GRANTS = {
-  reader: { rank: 1, scopes: ['mcp:read', 'mcp:render'] },
+  reader: { rank: 1, scopes: ['mcp:read'] },
   author: { rank: 2, scopes: ['mcp:read', 'mcp:render', 'mcp:author'] },
   maintainer: {
     rank: 3,
@@ -38,18 +43,26 @@ export const PROJECT_ACCESS_ROLE_GRANTS = {
   Record<ProjectAccessRole, { readonly rank: number; readonly scopes: readonly string[] }>
 >;
 
-/** Canonical Host configuration additions introduced by the V2 source contract. */
+/** Canonical Host configuration additions introduced by the V2/V3 source contracts. */
 export type {
+  WorkbenchAgentConfigurationV3,
   WorkbenchConfigurationInput,
   WorkbenchConfigurationV2,
+  WorkbenchConfigurationV3,
+  WorkbenchOperationLimitsV3,
   WorkbenchProjectConfigurationV2,
+  WorkbenchProjectConfigurationV3,
   WorkbenchReferenceLimitsV2,
   WorkbenchRevisionMirrorConfigurationV2,
+  WorkbenchTrustedPluginConfigurationV3,
 } from '@novalistically/workbench-protocol';
 export {
+  DEFAULT_WORKBENCH_AGENT_CONFIGURATION_V3,
+  DEFAULT_WORKBENCH_OPERATION_LIMITS_V3,
   DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
   normalizeWorkbenchConfiguration,
   WORKBENCH_CONFIGURATION_VERSION_V2,
+  WORKBENCH_CONFIGURATION_VERSION_V3,
 } from '@novalistically/workbench-protocol';
 
 /** Version of the Workbench configuration contract. */
@@ -376,6 +389,7 @@ export type WorkbenchAdminErrorCode =
   | 'CONFIG_INVALID'
   | 'CONFIG_STALE'
   | 'UNKNOWN_FIELD'
+  | 'PLUGIN_NOT_DISCOVERED'
   | 'INTERNAL';
 
 /** All configuration/setup/admin error codes, shared by every adapter. */
@@ -404,6 +418,8 @@ export const BROWSER_ADMIN_INVITES_PATH = `${BROWSER_ADMIN_BASE_PATH}/invites`;
 export const BROWSER_ADMIN_DEVICES_PATH = `${BROWSER_ADMIN_BASE_PATH}/mcp-devices`;
 /** `GET /api/v1/admin/operations` — audit/pending recovery/Git receipts. */
 export const BROWSER_ADMIN_OPERATIONS_PATH = `${BROWSER_ADMIN_BASE_PATH}/operations`;
+/** `GET /api/v1/admin/plugins/discovered/:projectId` — Host-discovered plugin identities (owner-only). */
+export const BROWSER_ADMIN_PLUGINS_DISCOVERED_PATH = `${BROWSER_ADMIN_BASE_PATH}/plugins/discovered`;
 
 // ─── Owner-scoped MCP admin tools ───────────────────────────────────────────
 

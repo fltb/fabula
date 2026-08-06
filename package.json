@@ -15,6 +15,7 @@
     "build:types": "fnm exec --using=26.5.0 -- npm run typecheck:core && npm run typecheck:node-host && npm run typecheck:bench && npm run typecheck:workbench-protocol && npm run typecheck:cli && npm run typecheck:workbench-host && npm run typecheck:workbench-client",
     "build:js": "node packages/core/build.mjs && node packages/node-host/build.mjs && node packages/bench/build.mjs && node packages/workbench-protocol/build.mjs && node packages/cli/build.mjs && npm run -w @novalistically/workbench build",
     "smoke:stage1:live": "node packages/bench/scripts/generate-reference.mjs",
+    "smoke:workbench-agent:live": "fnm exec --using=26.5.0 -- npm run -w @novalistically/workbench smoke:workbench-agent:live",
     "count:drc": "node scripts/drc-fixture-manifest.mjs",
     "test": "fnm exec --using=26.5.0 -- vitest run && npm run test:workbench",
     "test:core": "fnm exec --using=26.5.0 -- vitest run packages/core",
@@ -38,7 +39,7 @@
     "typecheck:e2e": "fnm exec --using=26.5.0 -- npm run -w @novalistically/workbench typecheck:e2e",
     "typecheck:dead-code": "tsc -b packages/core/tsconfig.dead-code.json packages/bench/tsconfig.dead-code.json packages/cli/tsconfig.dead-code.json",
     "bundle-check": "node scripts/bundle-check.mjs",
-    "dead-code:knip": "node scripts/check-public-api.mjs"
+    "check:public-api": "node scripts/check-public-api.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.5",

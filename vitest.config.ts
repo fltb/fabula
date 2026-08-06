@@ -21,4 +21,13 @@ export default defineConfig({
       include: ['packages/*/src/**/*.ts'],
     },
   },
+  // Plugin tests (node-host) load user module files (index.js) from OS temp
+  // directories via dynamic import(). Disable the fs serving allow-list so
+  // vite-node does not reject those files (mirrors the node-host package
+  // vitest.config.ts); the suite is already network-isolated and local.
+  server: {
+    fs: {
+      strict: false,
+    },
+  },
 });

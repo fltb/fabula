@@ -38,3 +38,56 @@ export function writeAuthoringFixture(
   if (options.discourseLedger)
     writeFileSync(join(root, 'definitions', 'discourse-ledger.yaml'), 'version: 1\n', 'utf8');
 }
+
+/** One plugin written under `<root>/plugins/<name>` for catalog/activation tests. */
+export interface TestPluginFixture {
+  readonly name: string;
+  readonly version?: string;
+  readonly priority?: number;
+  /** Plugins this plugin explicitly conflicts with. */
+  readonly conflicts?: readonly string[];
+  /** Capabilities this plugin provides. */
+  readonly provides?: readonly string[];
+  /** Authority dimensions claimed exclusively (`authority.exclusive: true`). */
+  readonly exclusiveAuthority?: readonly string[];
+  /** Extra hook members placed inside `export const hooks = { name, ... }`. */
+  readonly hooksExtra?: string;
+  /** Omit the module file entirely (manifest-only plugin). */
+  readonly module?: false;
+}
+
+export function writePluginFixture(root: string, plugins: readonly TestPluginFixture[]): void {
+  const pluginRoot = join(root, 'plugins');
+  mkdirSync(pluginRoot, { recursive: true });
+  for (const plugin of plugins) {
+    const dir = join(pluginRoot, plugin.name);
+    mkdirSync(dir, { recursive: true });
+    const version = plugin.version ?? '1.0.0';
+    const priority = plugin.priority ?? 10;
+    const provides = plugin.provides ?? [];
+    const conflicts = plugin.conflicts ?? [];
+    const dimensions = plugin.exclusiveAuthority ?? [];
+    writeFileSync(
+      join(dir, 'manifest.yaml'),
+      `name: ${plugin.name}\n` +
+        `version: ${version}\n` +
+        `priority: ${priority}\n` +
+        `provides: [${provides.join(', ')}]\n` +
+        'requires: []\n' +
+        `conflicts: [${conflicts.join(', ')}]\n` +
+        'authority:\n' +
+        `  dimensions: [${dimensions.join(', ')}]\n` +
+        `  exclusive: ${dimensions.length > 0}\n` +
+        'observes:\n' +
+        '  eventTypes: []\n' +
+        '  stateDomains: []\n',
+      'utf8',
+    );
+    if (plugin.module === false) continue;
+    writeFileSync(
+      join(dir, 'index.js'),
+      `export const hooks = {\n  name: '${plugin.name}',\n${plugin.hooksExtra ?? ''}};\n`,
+      'utf8',
+    );
+  }
+}

@@ -14,6 +14,15 @@ export {
 
 /** Public semantic adapters for the Node Host boundary. */
 
+export type {
+  AgentModelEvent,
+  AgentModelMessage,
+  AgentToolSpec,
+  WorkbenchAgentModelOptions,
+  WorkbenchAgentModelPort,
+  WorkbenchAgentModelRunRequest,
+} from './agent/workbench-agent-model.js';
+export { createWorkbenchAgentModelAdapter } from './agent/workbench-agent-model.js';
 export { FileRenderCacheRepository } from './cache/file-render-cache-repository.js';
 export type {
   FileRenderCacheRepositoryOptions,
@@ -23,15 +32,69 @@ export type {
 } from './cache/types.js';
 export { FileExecutionRepository } from './execution/file-execution-repository.js';
 export { withDirectoryLock } from './execution/types.js';
-export type { LoadedNodePlugin } from './plugins/node-plugin-catalog.js';
-export { NodePluginCatalog } from './plugins/node-plugin-catalog.js';
-export type { AiSdkProviderOptions } from './providers/ai-sdk.js';
-export { AiSdkProvider } from './providers/ai-sdk.js';
+export type {
+  FilePublicationWriteInput,
+  FilePublicationWriteResult,
+} from './output/file-publication-writer.js';
+export {
+  assertSafePublicationRelativePath,
+  CANONICAL_PUBLICATION_FILENAME,
+  CANONICAL_PUBLICATION_ID,
+  derivePublicationRelativePath,
+  FilePublicationWriter,
+  hashPublicationMarkdown,
+  normalizePublicationMarkdown,
+  PUBLICATION_OUTPUT_DIRECTORY,
+  PublicationPathError,
+} from './output/file-publication-writer.js';
+export type {
+  ActivateNodePluginsOptions,
+  ActiveNodePluginRecord,
+  BlockedNodePluginRecord,
+  DisabledNodePluginRecord,
+  NodePluginActivationResult,
+} from './plugins/activate.js';
+export {
+  activateNodePlugins,
+  DEFAULT_PLUGIN_HOOK_TIMEOUT_MS,
+  shutdownNodePlugins,
+} from './plugins/activate.js';
+export type {
+  DiscoveredNodePlugin,
+  LoadedNodePlugin,
+  StampedPluginHooks,
+  TrustedNodePluginEntry,
+} from './plugins/node-plugin-catalog.js';
+export {
+  describeTrustedMismatch,
+  discoverNodePlugins,
+  NodePluginCatalog,
+  PLUGIN_IDENTITY_MISMATCH,
+  PluginIdentityMismatchError,
+  pluginHookNames,
+} from './plugins/node-plugin-catalog.js';
+export type {
+  AiSdkClientOptions,
+  AiSdkModelClient,
+  AiSdkProviderOptions,
+} from './providers/ai-sdk.js';
+export { AiSdkProvider, createAiSdkModelClient } from './providers/ai-sdk.js';
+export type { DeterministicMockProviderOptions } from './providers/deterministic-mock.js';
+export {
+  createDeterministicMockProvider,
+  DeterministicMockProvider,
+} from './providers/deterministic-mock.js';
 export type { FileMockPass2Options } from './providers/file-mock-pass2.js';
 export {
   FileMockPass2Provider,
   loadReferenceEntries,
 } from './providers/file-mock-pass2.js';
+export {
+  FileProjectStatusReporter,
+  formatProjectStatus,
+  PROJECT_STATUS_FILENAME,
+  writeFileProjectStatus,
+} from './reports/file-project-status-reporter.js';
 export { writeFileValidationReport } from './reports/file-validation-reporter.js';
 export type { FileCoreRuntimeOptions } from './runtime.js';
 export { createFileCoreRuntimeServices } from './runtime.js';
@@ -91,6 +154,10 @@ export type {
   CoreExecutionRepository,
   OperationRecord,
   PublicationRecord,
+  ReviewEventDraftV1,
+  ReviewEventKindV1,
+  ReviewEventReadResultV1,
+  ReviewEventRecordV1,
   ReviewRecord,
   SceneRevisionRecord,
   StateAppendResult,

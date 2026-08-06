@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { type Dirent, promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -12,9 +13,55 @@ import type {
 } from '@novalistically/core/extensions';
 import * as yaml from 'yaml';
 
+/**
+ * A plugin hook record stamped with the exact identity of the module that
+ * produced it. The stamps ride on the hook object so Core's cache-scoping
+ * (`PluginHooksManager.getPluginIdentities`) sees them: any plugin change
+ * changes the render cache key and validation identity.
+ */
+export interface StampedPluginHooks extends PluginHooks {
+  readonly version: string;
+  readonly manifestHash: string;
+  readonly moduleHash: string;
+}
+
 export interface LoadedNodePlugin {
   readonly manifest: PluginManifest;
-  readonly hooks: PluginHooks | null;
+  /** SHA-256 (hex) of the exact manifest.yaml bytes read from disk. */
+  readonly manifestHash: string;
+  /** SHA-256 (hex) of the exact index.js bytes; null when the plugin has no module. */
+  readonly moduleHash: string | null;
+  readonly hooks: StampedPluginHooks | null;
+}
+
+/**
+ * V3 trusted-plugin allowlist entry (structurally identical to
+ * `WorkbenchTrustedPluginConfigurationV3`). node-host deliberately does not
+ * depend on the workbench-protocol package.
+ */
+export interface TrustedNodePluginEntry {
+  readonly name: string;
+  readonly version: string;
+  readonly moduleHash: string;
+  readonly required: boolean;
+}
+
+/** Error code for trusted-plugin identity verification failures. */
+export const PLUGIN_IDENTITY_MISMATCH = 'PLUGIN_IDENTITY_MISMATCH';
+export type PluginIdentityMismatchCode = typeof PLUGIN_IDENTITY_MISMATCH;
+
+/**
+ * A plugin's discovered identity does not match its trusted allowlist entry.
+ * This is a configuration/security error: never load the plugin.
+ */
+export class PluginIdentityMismatchError extends Error {
+  readonly code: PluginIdentityMismatchCode;
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'PluginIdentityMismatchError';
+    this.code = PLUGIN_IDENTITY_MISMATCH;
+  }
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -50,6 +97,8 @@ const assertSafeDirectory = async (root: string, directory: string): Promise<voi
     throw new Error('Plugin directory resolves outside project root');
   }
 };
+
+const sha256hex = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
 
 const parseManifest = (value: unknown, manifestPath: string): PluginManifest => {
   if (
@@ -90,6 +139,13 @@ const parseManifest = (value: unknown, manifestPath: string): PluginManifest => 
   };
 };
 
+/** Hook function names present on a plugin hook record, sorted for determinism. */
+export function pluginHookNames(hook: PluginHooks): readonly string[] {
+  return (Object.keys(hook) as (keyof PluginHooks)[])
+    .filter((key) => key !== 'name' && typeof hook[key] === 'function')
+    .sort();
+}
+
 const toPromptDecorations = (value: unknown, pluginName: string): readonly PromptDecoration[] => {
   if (!Array.isArray(value)) {
     throw new Error(`Plugin ${pluginName} returned a non-array prompt decoration result`);
@@ -113,7 +169,12 @@ const toPromptDecorations = (value: unknown, pluginName: string): readonly Promp
   return decorations;
 };
 
-const toHooks = (value: unknown, manifest: PluginManifest): PluginHooks | null => {
+const toHooks = (
+  value: unknown,
+  manifest: PluginManifest,
+  manifestHash: string,
+  moduleHash: string,
+): StampedPluginHooks | null => {
   if (!isObject(value) || typeof value.name !== 'string' || value.name !== manifest.name) {
     return null;
   }
@@ -128,6 +189,9 @@ const toHooks = (value: unknown, manifest: PluginManifest): PluginHooks | null =
 
   return {
     name: value.name,
+    version: manifest.version,
+    manifestHash,
+    moduleHash,
     ...(onLoad
       ? {
           onLoad: async (context: PluginContext) => {
@@ -185,12 +249,46 @@ const toHooks = (value: unknown, manifest: PluginManifest): PluginHooks | null =
   };
 };
 
+/**
+ * Reason describing why a discovered plugin does not match its trusted
+ * allowlist entry, or null when every identity field matches exactly.
+ */
+export function describeTrustedMismatch(
+  plugin: LoadedNodePlugin,
+  trusted: TrustedNodePluginEntry,
+): string | null {
+  if (plugin.manifest.name !== trusted.name) {
+    return `manifest name "${plugin.manifest.name}" does not match trusted name "${trusted.name}"`;
+  }
+  if (plugin.manifest.version !== trusted.version) {
+    return `manifest version "${plugin.manifest.version}" does not match trusted version "${trusted.version}"`;
+  }
+  if (plugin.moduleHash !== trusted.moduleHash) {
+    return `module hash "${plugin.moduleHash ?? '(missing module)'}" does not match trusted module hash "${trusted.moduleHash}"`;
+  }
+  return null;
+}
+
 /** Host-owned, containment-checked plugin discovery and module loading. */
 export class NodePluginCatalog {
   readonly #projectRoot: string;
 
   constructor(projectRoot: string) {
     this.#projectRoot = path.resolve(projectRoot);
+  }
+
+  /**
+   * Verify a discovered plugin against a trusted allowlist entry. Throws
+   * {@link PluginIdentityMismatchError} unless name, version and module hash
+   * all match exactly.
+   */
+  verifyTrusted(plugin: LoadedNodePlugin, trusted: TrustedNodePluginEntry): void {
+    const mismatch = describeTrustedMismatch(plugin, trusted);
+    if (mismatch !== null) {
+      throw new PluginIdentityMismatchError(
+        `Trusted plugin verification failed for "${trusted.name}": ${mismatch}`,
+      );
+    }
   }
 
   async load(relativeDirectory = 'plugins'): Promise<readonly LoadedNodePlugin[]> {
@@ -228,10 +326,9 @@ export class NodePluginCatalog {
       if (!manifestStat.isFile() || manifestStat.isSymbolicLink()) {
         throw new Error(`Plugin manifest must be a regular file: ${manifestPath}`);
       }
-      const manifest = parseManifest(
-        yaml.parse(await fs.readFile(manifestPath, 'utf8')),
-        manifestPath,
-      );
+      const manifestBytes = await fs.readFile(manifestPath);
+      const manifestHash = sha256hex(manifestBytes);
+      const manifest = parseManifest(yaml.parse(manifestBytes.toString('utf8')), manifestPath);
 
       const modulePath = path.join(pluginDirectory, 'index.js');
       const moduleStat = await fs.lstat(modulePath).catch((error: unknown) => {
@@ -239,19 +336,53 @@ export class NodePluginCatalog {
         throw error;
       });
       if (moduleStat === null) {
-        plugins.push({ manifest, hooks: null });
+        plugins.push({ manifest, manifestHash, moduleHash: null, hooks: null });
         continue;
       }
       if (!moduleStat.isFile() || moduleStat.isSymbolicLink()) {
         throw new Error(`Plugin module must be a regular file: ${modulePath}`);
       }
+      const moduleBytes = await fs.readFile(modulePath);
+      const moduleHash = sha256hex(moduleBytes);
       const moduleValue: unknown = await import(pathToFileURL(modulePath).href);
       const hooks = toHooks(
         isObject(moduleValue) && 'hooks' in moduleValue ? moduleValue.hooks : undefined,
         manifest,
+        manifestHash,
+        moduleHash,
       );
-      plugins.push({ manifest, hooks });
+      plugins.push({ manifest, manifestHash, moduleHash, hooks });
     }
     return plugins;
   }
+}
+
+/** Identity fields the owner admin needs to build a trusted allowlist. */
+export interface DiscoveredNodePlugin {
+  readonly name: string;
+  readonly version: string;
+  readonly manifestHash: string;
+  readonly moduleHash: string | null;
+  readonly hookNames: readonly string[];
+}
+
+/**
+ * Discover plugins without making any trust decision: sorted by name with
+ * manifest hash, module hash and hook names. Loading modules (to read hook
+ * names) is acceptable because plugins are owner-installed Host code.
+ */
+export async function discoverNodePlugins(
+  projectRoot: string,
+  relativeDirectory = 'plugins',
+): Promise<readonly DiscoveredNodePlugin[]> {
+  const loaded = await new NodePluginCatalog(projectRoot).load(relativeDirectory);
+  return loaded
+    .map((plugin) => ({
+      name: plugin.manifest.name,
+      version: plugin.manifest.version,
+      manifestHash: plugin.manifestHash,
+      moduleHash: plugin.moduleHash,
+      hookNames: plugin.hooks === null ? [] : pluginHookNames(plugin.hooks),
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name));
 }

@@ -9,6 +9,9 @@ import {
   BROWSER_PROJECT_REFERENCES_PATH,
   BROWSER_PROJECT_REFERENCE_RETRY_PATH,
   BROWSER_PROJECT_ROLE_PATH,
+  BROWSER_PROJECT_SCENE_MAP_PATH,
+  BROWSER_PROJECT_SCENE_PATH,
+  BROWSER_PROJECT_SCENE_RENDER_PATH,
   BROWSER_PROJECT_SCENE_ADOPTION_PATH,
   BROWSER_PROJECTS_PATH,
   BROWSER_SESSION_HEADER,
@@ -33,6 +36,9 @@ import type {
   BrowserProjectReferenceRetryResultV1,
   BrowserSessionPrincipalV1,
   SceneAdoptionViewV1,
+  SceneDetailViewV1,
+  SceneMapViewV1,
+  SceneRenderTriggerResultV1,
   SourceStudioStateV1,
   WorkbenchGraphProjectionV1,
 } from '../contracts/index.js';
@@ -94,6 +100,12 @@ export interface BrowserReadClient {
     eventId: string,
     revisionId: string,
   ): Promise<SceneAdoptionViewV1>;
+  /** Chapter-grouped Scene Map projection (plan 9.2.1). */
+  getSceneMap(projectId: string): Promise<SceneMapViewV1>;
+  /** One scene detail for the inline Scene Inspector (plan 9.2.2). */
+  getSceneDetail(projectId: string, eventId: string): Promise<SceneDetailViewV1>;
+  /** Trigger one durable scene render (plan 9.2.3); the Host enforces author+. */
+  triggerSceneRender(projectId: string, eventId: string): Promise<SceneRenderTriggerResultV1>;
   getProjectRole(projectId: string): Promise<BrowserProjectRoleV1>;
   getGraphs(
     projectId: string,
@@ -126,6 +138,11 @@ const BROWSER_ERROR_CODES = new Set<BrowserApiErrorV1['error']['code']>([
   'SCENE_ADOPTION_NOT_FOUND',
   'SCENE_ADOPTION_INVALID',
   'SCENE_ADOPTION_UNAVAILABLE',
+  'SCENE_NOT_FOUND',
+  'SCENE_RENDER_INVALID',
+  'SCENE_RENDER_QUEUE_FULL',
+  'SCENE_RENDER_UNAVAILABLE',
+  'SCENE_MAP_UNAVAILABLE',
 ]);
 
 function browserError(value: unknown): BrowserApiErrorV1 | null {
@@ -290,6 +307,23 @@ export function createBrowserReadClient(options: BrowserReadClientOptions = {}):
       params.set(BROWSER_SCENE_ADOPTION_REVISION_QUERY, revisionId);
       return request(`${path}?${params.toString()}`);
     },
+    getSceneMap: (projectId) =>
+      request(BROWSER_PROJECT_SCENE_MAP_PATH.replace(':projectId', encodeURIComponent(projectId))),
+    getSceneDetail: (projectId, eventId) =>
+      request(
+        BROWSER_PROJECT_SCENE_PATH.replace(':projectId', encodeURIComponent(projectId)).replace(
+          ':eventId',
+          encodeURIComponent(eventId),
+        ),
+      ),
+    triggerSceneRender: (projectId, eventId) =>
+      mutate(
+        BROWSER_PROJECT_SCENE_RENDER_PATH.replace(
+          ':projectId',
+          encodeURIComponent(projectId),
+        ).replace(':eventId', encodeURIComponent(eventId)),
+        'POST',
+      ),
     getProjectRole: (projectId) =>
       request(BROWSER_PROJECT_ROLE_PATH.replace(':projectId', encodeURIComponent(projectId))),
     getGraphs: (projectId, selector) => {

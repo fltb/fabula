@@ -31,6 +31,8 @@ import type {
   BrowserSessionPrincipalV1,
   ProjectAccessRole,
   SceneAdoptionViewV1,
+  SceneDetailViewV1,
+  SceneMapViewV1,
   SourceStudioDocumentDescriptorV1,
 } from '../contracts/index.js';
 import {
@@ -352,6 +354,13 @@ function WorkspaceRoute(props: {
   const [publications, setPublications] = createSignal<BrowserPublicationListV1 | null>(null);
   const [publicationsError, setPublicationsError] = createSignal<string | null>(null);
   const [references, setReferences] = createSignal<BrowserProjectReferenceListV1 | null>(null);
+  const [sceneMap, setSceneMap] = createSignal<SceneMapViewV1 | null>(null);
+  const [sceneMapError, setSceneMapError] = createSignal<string | null>(null);
+  const [sceneDetail, setSceneDetail] = createSignal<SceneDetailViewV1 | null>(null);
+  const [sceneDetailError, setSceneDetailError] = createSignal<string | null>(null);
+  const [sceneRenderBusy, setSceneRenderBusy] = createSignal(false);
+  const [sceneRenderNotice, setSceneRenderNotice] = createSignal<string | null>(null);
+  const [sceneRenderError, setSceneRenderError] = createSignal<string | null>(null);
   const [referencesError, setReferencesError] = createSignal<string | null>(null);
   const [sceneAdoption, setSceneAdoption] = createSignal<SceneAdoptionViewV1 | null>(null);
   const [sessionProjectRole, setSessionProjectRole] = createSignal<ProjectAccessRole | null>(null);
@@ -371,6 +380,13 @@ function WorkspaceRoute(props: {
     setSessionProjectRole(null);
     setSceneAdoption(null);
     setPublicationsError(null);
+    setSceneMap(null);
+    setSceneMapError(null);
+    setSceneDetail(null);
+    setSceneDetailError(null);
+    setSceneRenderNotice(null);
+    setSceneRenderError(null);
+    setSceneRenderBusy(false);
     if (!projectId) {
       setError('No project was selected.');
       setHealth('fatal');
@@ -401,6 +417,9 @@ function WorkspaceRoute(props: {
       );
       await refreshReferences(
         nextWorkspace.capabilities?.features?.includes('references') === true,
+      );
+      await refreshSceneMap(
+        nextWorkspace.capabilities?.features?.includes('scene-map') === true,
       );
       // The adoption preview is keyed by one released scene revision; the
       // workspace projection carries no scene-revision pointer, so the
@@ -590,6 +609,72 @@ function WorkspaceRoute(props: {
       .getReferenceContent(props.projectId, referenceId, query ?? { offset: 0, limit: 1 })
       .catch(() => null);
   /**
+   * Load the chapter-grouped Scene Map (plan 9.2). Absent feature or load
+   * failure keeps the map signal null; a load failure additionally sets
+   * `sceneMapError` so the view renders a distinct retry state. The
+   * workspace load itself never depends on this surface.
+   */
+  const refreshSceneMap = async (enabled: boolean): Promise<void> => {
+    if (!enabled) {
+      setSceneMap(null);
+      setSceneMapError(null);
+      return;
+    }
+    try {
+      setSceneMap(await props.client.read.getSceneMap(props.projectId));
+      setSceneMapError(null);
+    } catch (cause) {
+      setSceneMap(null);
+      setSceneMapError(runtimeErrorMessage(cause));
+    }
+  };
+  /**
+   * Row click: load the selected scene's detail projection for the inline
+   * Scene Inspector, and refresh the adoption preview for the row's released
+   * revision (the detail DTO carries no revision id; the map row does).
+   */
+  const selectScene = async (eventId: string): Promise<void> => {
+    setSceneDetail(null);
+    setSceneDetailError(null);
+    try {
+      setSceneDetail(await props.client.read.getSceneDetail(props.projectId, eventId));
+    } catch (cause) {
+      setSceneDetail(null);
+      setSceneDetailError(runtimeErrorMessage(cause));
+    }
+    const row = sceneMap()
+      ?.chapters.flatMap((chapter) => chapter.scenes)
+      .find((scene) => scene.eventId === eventId);
+    const revisionId = row?.revisionId ?? null;
+    await refreshSceneAdoption(
+      true,
+      revisionId === null ? null : { eventId, revisionId },
+    );
+  };
+  /**
+   * Author+ render trigger (plan 9.2.3). The POST enqueues the durable
+   * operation Host-side; when a released revision exists for the current
+   * source the result also carries the adoption preview the Inspector may
+   * act on. The map and the open detail are refreshed afterwards.
+   */
+  const renderScene = async (eventId: string): Promise<void> => {
+    if (sceneRenderBusy()) return;
+    setSceneRenderBusy(true);
+    setSceneRenderNotice(null);
+    setSceneRenderError(null);
+    try {
+      const result = await props.client.read.triggerSceneRender(props.projectId, eventId);
+      if (result.adoption !== undefined) setSceneAdoption(result.adoption);
+      setSceneRenderNotice(`Render queued as operation ${result.operationId}.`);
+      await refreshSceneMap(true);
+      await selectScene(eventId);
+    } catch (cause) {
+      setSceneRenderError(runtimeErrorMessage(cause));
+    } finally {
+      setSceneRenderBusy(false);
+    }
+  };
+  /**
    * Load the Scene Canvas adoption preview (plan 5.2). The Host preview is
    * keyed by exactly one released scene revision (`eventId` + `revisionId`);
    * without that pair the signal stays null and the view renders an honest
@@ -696,6 +781,18 @@ function WorkspaceRoute(props: {
           onRetryReference={retryReference}
           onDeleteReference={deleteReference}
           onReadReferenceContent={readReferenceContent}
+          sceneMap={sceneMap()}
+          sceneMapError={sceneMapError()}
+          sceneDetail={sceneDetail()}
+          sceneDetailError={sceneDetailError()}
+          sceneRenderBusy={sceneRenderBusy()}
+          sceneRenderNotice={sceneRenderNotice()}
+          sceneRenderError={sceneRenderError()}
+          onRefreshSceneMap={() =>
+            refreshSceneMap(current().capabilities?.features?.includes('scene-map') === true)
+          }
+          onSelectScene={selectScene}
+          onRenderScene={renderScene}
         />
       )}
     </Show>

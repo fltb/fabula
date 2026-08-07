@@ -31,6 +31,8 @@ import type {
   BrowserReviewUpdateRequestV1,
   ProjectAccessRole,
   SceneAdoptionViewV1,
+  SceneDetailViewV1,
+  SceneMapViewV1,
   SourceStudioDocumentDescriptorV1,
   SourceStudioStateV1,
   WorkbenchGraphNodeV1,
@@ -47,6 +49,7 @@ import {
   type WorkbenchPreferencesV1,
 } from './preferences';
 import { GraphRoute, ProjectHome } from './projection-views';
+import { SceneMap } from './SceneMap';
 import { ReviewHub } from './ReviewHub';
 import { SceneCanvas } from './scene-canvas';
 import { SourceStudio, type SourceStudioYjsStatus } from './source-studio';
@@ -63,6 +66,7 @@ const WORKBENCH_VIEW_CATALOG = [
   { id: 'project-home', label: 'Project Home', glyph: '⌂' },
   { id: 'source-studio', label: 'Source Studio', glyph: '≋' },
   { id: 'graph-route', label: 'Graph / Route', glyph: '↗' },
+  { id: 'scene-map', label: 'Scene Map', glyph: '▦' },
   { id: 'review-hub', label: 'Review Hub', glyph: '✓' },
   { id: 'scene-canvas', label: 'Scene Canvas', glyph: '◇' },
   { id: 'publication', label: 'Publication', glyph: '◫' },
@@ -224,6 +228,30 @@ export interface AppProps {
     query?: BrowserProjectReferenceReadQueryV1,
   ) => Promise<BrowserProjectReferenceReadResultV1 | null>;
   /**
+  /**
+   * Scene Map surface (plan 9.2): chapter-grouped map projection plus the
+   * selected scene's detail for the inline Scene Inspector. Supplied only
+   * when the Host feature set includes `scene-map`; absent here the view is
+   * never rendered.
+   */
+  readonly sceneMap?: SceneMapViewV1 | null;
+  /** Map load failure from the Host surface; non-null renders a retry state. */
+  readonly sceneMapError?: string | null;
+  readonly sceneDetail?: SceneDetailViewV1 | null;
+  readonly sceneDetailError?: string | null;
+  /** True while the workspace wiring is running the render trigger. */
+  readonly sceneRenderBusy?: boolean;
+  /** Render queue notice (operation id) after a successful trigger. */
+  readonly sceneRenderNotice?: string | null;
+  /** Render trigger failure message. */
+  readonly sceneRenderError?: string | null;
+  /** Re-requests the Host scene map (after render/adoption mutations). */
+  readonly onRefreshSceneMap?: () => void | Promise<void>;
+  /** Row click handler; the workspace wiring loads the scene detail. */
+  readonly onSelectScene?: (eventId: string) => void | Promise<void>;
+  /** Author+ render trigger for the selected scene. */
+  readonly onRenderScene?: (eventId: string) => void | Promise<void>;
+  /**
    * Agent chat surface (plan 9.5): supplied only when the Host feature set
    * includes `agent-chat`; absent here the view is never rendered.
    */
@@ -339,6 +367,16 @@ interface WorkspaceProps {
     referenceId: string,
     query?: BrowserProjectReferenceReadQueryV1,
   ) => Promise<BrowserProjectReferenceReadResultV1 | null>;
+  readonly sceneMap?: SceneMapViewV1 | null;
+  readonly sceneMapError?: string | null;
+  readonly sceneDetail?: SceneDetailViewV1 | null;
+  readonly sceneDetailError?: string | null;
+  readonly sceneRenderBusy?: boolean;
+  readonly sceneRenderNotice?: string | null;
+  readonly sceneRenderError?: string | null;
+  readonly onRefreshSceneMap?: () => void | Promise<void>;
+  readonly onSelectScene?: (eventId: string) => void | Promise<void>;
+  readonly onRenderScene?: (eventId: string) => void | Promise<void>;
   readonly agentChat?: { readonly projectId: string; readonly client: AgentChatClient } | null;
 }
 
@@ -558,6 +596,24 @@ export function Workspace(props: WorkspaceProps) {
           onRetry={props.onRetryReference}
           onDelete={props.onDeleteReference}
           onReadContent={props.onReadReferenceContent}
+        />
+      </Show>
+      <Show when={props.hostStatus === 'ready' && props.activeView === 'scene-map'}>
+        <SceneMap
+          projectId={props.overview?.projectId ?? null}
+          map={props.sceneMap ?? null}
+          mapError={props.sceneMapError ?? null}
+          detail={props.sceneDetail ?? null}
+          detailError={props.sceneDetailError ?? null}
+          adoption={props.sceneAdoption ?? null}
+          sessionRole={props.sessionProjectRole ?? null}
+          renderBusy={props.sceneRenderBusy ?? false}
+          renderNotice={props.sceneRenderNotice ?? null}
+          renderError={props.sceneRenderError ?? null}
+          onSelectScene={props.onSelectScene}
+          onRenderScene={props.onRenderScene}
+          onRequestAdoption={props.onRequestAdoption}
+          onRefresh={props.onRefreshSceneMap}
         />
       </Show>
       <Show
@@ -1064,6 +1120,16 @@ export function WorkbenchShell(props: AppProps = {}) {
             onDeleteReference={props.onDeleteReference}
             onReadReferenceContent={props.onReadReferenceContent}
             agentChat={props.agentChat}
+            sceneMap={props.sceneMap}
+            sceneMapError={props.sceneMapError}
+            sceneDetail={props.sceneDetail}
+            sceneDetailError={props.sceneDetailError}
+            sceneRenderBusy={props.sceneRenderBusy}
+            sceneRenderNotice={props.sceneRenderNotice}
+            sceneRenderError={props.sceneRenderError}
+            onRefreshSceneMap={props.onRefreshSceneMap}
+            onSelectScene={props.onSelectScene}
+            onRenderScene={props.onRenderScene}
           />
           <OperationCenter
             expanded={operationCenterExpanded()}

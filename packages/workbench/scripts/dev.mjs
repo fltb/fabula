@@ -4,8 +4,8 @@
 // the monorepo-root .env — and keeps fixture/mock/loopback bootstrap
 // defaults whenever the corresponding variable is unset. dotenv never
 // overrides variables already present in the shell, so shell values always
-// win. The Host configuration service decides whether dotenv values only
-// pre-fill initial setup or force an import (WORKBENCH_CONFIG_IMPORT=1).
+// win. Configuration thereafter belongs to the Host configuration service,
+// not to this launcher.
 import { spawn, spawnSync } from 'node:child_process';
 import { cpSync, existsSync, fstatSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';

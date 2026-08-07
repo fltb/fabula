@@ -2,7 +2,8 @@
 
 **源文件：** `packages/cli/src/index.ts`（命令定义）、`packages/cli/src/mcp-server.ts`（8 工具 Host-bound seam，**不是** Workbench 使用的 registry）、`packages/cli/src/workbench-client.ts`（typed via-workbench MCP 客户端）、`packages/cli/src/route.ts`（branch/discourse route 解析）
 **包：** `@novalistically/cli`
-**二进制命令：** `nova`
+**二进制命令：** `fabula`
+CLI 是 headless 自动化工具，产品入口是 Workbench。
 
 ## 安装
 
@@ -11,7 +12,7 @@ git clone <repo>
 cd novalistically
 npm install
 npm run build          # 构建全部工作区（core → node-host → bench → workbench-protocol → cli → workbench）
-npx nova --help        # 或全局链接
+npx fabula --help       # 或全局链接
 ```
 `packages/cli/tests/bundle-boundary.test.ts` 验证：CLI/bench dist 无 dynamic-require wrapper、CLI dist 不内嵌 `@novalistically/core`（保持外部 import）、built CLI 的 `--help` 可启动、MCP bundle 不含 commander/`parseAsync`/`resolveRoute`。
 
@@ -48,7 +49,7 @@ Typed `WorkbenchClient.render()` may include `referenceChunks: readonly { refere
 
 仓库里的 “MCP” 出现在三个互不相同的表面，不要把三者混为一谈：
 
-1. **独立 CLI（standalone）** — `nova` 直接读项目文件、调用 Core/Node Host adapters，不经任何 MCP 传输。
+1. **独立 CLI（standalone）** — `fabula` 直接读项目文件、调用 Core/Node Host adapters，不经任何 MCP 传输。
 2. **typed WorkbenchClient（via-workbench）** — `packages/cli/src/workbench-client.ts` 的 JSON-RPC 2.0 over Streamable HTTP 客户端，把 CLI 命令代理到 Host 的 `/mcp/projects/<id>`；不含文件系统或 Core adapters，每个操作都经 Host 认证。
 3. **真实 Workbench MCP registry** — Host 端 `packages/workbench/src/host/mcp/registry.ts` 的 `createProjectSessionMcpRegistry()`（project family）与 `createAdminMcpRegistry()`（admin family），挂载在 `/mcp/projects/:projectId` 与 `/mcp/admin`。外部 MCP 客户端实际连到的就是这一套工具。
 
@@ -94,7 +95,7 @@ Scope → 项目角色：`mcp:read` / `mcp:render` → reader；`mcp:author` →
 
 ### 已知缺口（2026-08-05 审计确认）
 
-- 协议 catalog（`MCP_TOOL_CATALOG_V1`）仍声明 `nova_graph`、`nova_revise`、`nova_render_tree`（含 input schema），但 **Workbench registry 没有这三个 handler**：via-workbench 模式下 `nova graph`、`revise`、`render-tree` 会收到 `TOOL_NOT_FOUND`。typed `WorkbenchClient.graph() / revise() / renderTree()` 同样没有宿主实现。
+- 协议 catalog（`MCP_TOOL_CATALOG_V1`）仍声明 `nova_graph`、`nova_revise`、`nova_render_tree`（含 input schema），但 **Workbench registry 没有这三个 handler**：via-workbench 模式下 `fabula graph`、`revise`、`render-tree` 会收到 `TOOL_NOT_FOUND`。typed `WorkbenchClient.graph() / revise() / renderTree()` 同样没有宿主实现。
 - via-workbench 的 `source apply` 只经 `nova_authoring_document_edit` 写 **working layer**，不发起 acceptance；typed client 与 CLI 都没有 submit 命令。
 - Workbench registry 的 `nova_validate` 只校验 **accepted source**（无 accepted source 时返回 `NO_ACCEPTED_SOURCE`），ISS 只在 `nova_validate` 返回（`{ passed, iss, results }`）；`nova_status` 只返回 `{ projection, status: getProjectStatus(...) }`，**不含 ISS**，也不含 ReportWriter 的 guidance / nextActions（两者均未暴露）。
 
@@ -104,26 +105,26 @@ Scope → 项目角色：`mcp:read` / `mcp:render` → reader；`mcp:author` →
 
 ```bash
 # 创建新项目（不创建 Git 历史）
-nova project init my-novel
+fabula project init my-novel
 
 # 验证
 cd my-novel
-nova validate
+fabula validate
 
 # 渲染场景
-nova render E1
+fabula render E1
 
 # 渲染整章 / 全部分支所需事件
-nova render --chapter 1
-nova render --all
+fabula render --chapter 1
+fabula render --all
 
 # 检查状态
-nova status
+fabula status
 
 # 查看 DAG
-nova graph --format mermaid
+fabula graph --format mermaid
 
 # 源文档预览与应用（source-hash CAS 写入）
-nova source preview definitions/characters/narrator.yaml draft.yaml
-nova source apply definitions/characters/narrator.yaml draft.yaml
+fabula source preview definitions/characters/narrator.yaml draft.yaml
+fabula source apply definitions/characters/narrator.yaml draft.yaml
 ```

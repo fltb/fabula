@@ -169,7 +169,7 @@ describe('via-workbench CLI command routing', () => {
     });
     expect(result.stdout).toContain('"candidateSourceHash": "candidate-hash"');
     expect(result.stdout).toContain('"layer": "working"');
-    expect(result.stdout).toContain('Next step: run "nova source submit"');
+    expect(result.stdout).toContain('Next step: run "fabula source submit"');
   });
 
   it('keeps source validate without --working on the accepted layer', async () => {
@@ -199,7 +199,7 @@ describe('via-workbench CLI command routing', () => {
       message: 'hello',
     });
     expect(result.stdout).toContain('"status": "queued"');
-    expect(result.stdout).toContain('Next step: run "nova operation wait op-1"');
+    expect(result.stdout).toContain('Next step: run "fabula operation wait op-1"');
   });
 
   it('waits on an operation until a terminal status', async () => {
@@ -275,7 +275,7 @@ describe('via-workbench CLI command routing', () => {
     ]);
     expect(result.requests[0].arguments).toEqual({ version: 2 });
     expect(result.stdout).toContain('"proposedDisjointMerge": true');
-    expect(result.stdout).toContain('nova authoring resolve --choice');
+    expect(result.stdout).toContain('fabula authoring resolve --choice');
   });
 
   it('rejects an invalid resolve choice before any Host call', async () => {
@@ -672,7 +672,7 @@ describe('via-workbench publication command routing', () => {
     expect(result.requests.map((request) => request.name)).toEqual(['nova_publish']);
     expect(result.requests[0].arguments).toEqual({ version: 1 });
     expect(result.stdout).toContain('"status": "queued"');
-    expect(result.stdout).toContain('Next step: run "nova operation wait op-pub-1"');
+    expect(result.stdout).toContain('Next step: run "fabula operation wait op-pub-1"');
   });
 
   it('publishes a custom branch with the structured route identity', async () => {

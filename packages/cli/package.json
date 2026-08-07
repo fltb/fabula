@@ -5,7 +5,7 @@
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
-    "nova": "./dist/index.js"
+    "fabula": "./dist/index.js"
   },
   "scripts": {
     "build": "tsc --emitDeclarationOnly && node build.mjs",

@@ -686,7 +686,7 @@
         }
       },
       "bin": {
-        "nova": "packages/cli/dist/index.js"
+        "fabula": "packages/cli/dist/index.js"
       }
     },
     "@novalistically/workbench": {

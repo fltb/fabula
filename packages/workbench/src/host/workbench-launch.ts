@@ -1773,6 +1773,15 @@ export async function startWorkbench(
               : { routes: [{ path: '/mcp/admin', endpoint: adminEndpoint }] }),
           };
 
+    // Unix-socket binding is a darwin/linux feature: reject it on Windows at
+    // listener construction, covering both the env path (WORKBENCH_UNIX_SOCKET)
+    // and an owner-configured `network.mode: "unix"`.
+    if (
+      process.platform === 'win32' &&
+      (config.unixSocket !== undefined || activeConfiguration?.network.mode === 'unix')
+    ) {
+      throw new Error('network.mode "unix" is not supported on this platform');
+    }
     const hostServer = createHostServer({
       ...config,
       browser,

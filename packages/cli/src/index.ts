@@ -54,7 +54,7 @@ const sourceWriter = new FileProjectSourceWriter({ loader: sourceLoader });
 function ensureProjectDir(): string {
   const projectDir = process.cwd();
   if (!existsSync(path.join(projectDir, 'nova.yaml'))) {
-    throw new Error('Not in a Novalistically project directory (missing nova.yaml).');
+    throw new Error('Not in a Fabula project directory (missing nova.yaml).');
   }
   return projectDir;
 }
@@ -192,7 +192,7 @@ async function runWorkingValidate(json: boolean): Promise<void> {
     throw new WorkbenchClientError({
       status: 400,
       code: 'UNSUPPORTED_MODE',
-      message: 'nova source validate --working requires via-workbench mode.',
+      message: 'fabula source validate --working requires via-workbench mode.',
     });
   }
   const status: unknown = await client.authoringStatus();
@@ -227,15 +227,17 @@ async function runWorkingValidate(json: boolean): Promise<void> {
   if (passed === false) process.exitCode = 1;
   console.log(
     passed === false
-      ? 'Next step: fix the working documents, then run "nova source validate --working" again.'
-      : 'Next step: run "nova source submit" to accept the working layer.',
+      ? 'Next step: fix the working documents, then run "fabula source validate --working" again.'
+      : 'Next step: run "fabula source submit" to accept the working layer.',
   );
 }
 
 const program = new Command();
 program
-  .name('nova')
-  .description('Novalistically Node Host CLI')
+  .name('fabula')
+  .description(
+    'Fabula headless authoring CLI (the product UI is the Workbench; this CLI is for automation and testing)',
+  )
   .version('0.1.0')
   .option('--mode <mode>', 'standalone or via-workbench')
   .option('--project <projectId>', 'Workbench project ID for via-workbench mode')
@@ -362,7 +364,7 @@ source
       throw new WorkbenchClientError({
         status: 400,
         code: 'UNSUPPORTED_MODE',
-        message: 'nova source submit requires via-workbench mode.',
+        message: 'fabula source submit requires via-workbench mode.',
       });
     }
     const status: unknown = await client.authoringStatus();
@@ -402,8 +404,8 @@ source
           : null;
       console.log(
         operationId === null
-          ? 'Next step: run "nova status" to see the accepted layer.'
-          : `Next step: run "nova operation wait ${operationId}" to track the submission.`,
+          ? 'Next step: run "fabula status" to see the accepted layer.'
+          : `Next step: run "fabula operation wait ${operationId}" to track the submission.`,
       );
       return;
     }
@@ -425,8 +427,8 @@ source
     const revisionId = submitRevisionId ?? receiptRevisionId;
     console.log(
       revisionId === null
-        ? 'Next step: run "nova status" to see the accepted layer.'
-        : `Accepted revision ${revisionId}. Next step: run "nova status" to see the accepted layer.`,
+        ? 'Next step: run "fabula status" to see the accepted layer.'
+        : `Accepted revision ${revisionId}. Next step: run "fabula status" to see the accepted layer.`,
     );
   });
 
@@ -513,7 +515,7 @@ source
         }),
         true,
       );
-      console.log('Next step: run "nova source validate --working" to validate the working layer.');
+      console.log('Next step: run "fabula source validate --working" to validate the working layer.');
       return;
     }
     const projectDir = ensureProjectDir();
@@ -649,7 +651,7 @@ program
       throw new WorkbenchClientError({
         status: 400,
         code: 'UNSUPPORTED_MODE',
-        message: 'nova event-diff requires via-workbench mode (Host event state diff).',
+        message: 'fabula event-diff requires via-workbench mode (Host event state diff).',
       });
     }
     printResult(await client.eventStateDiff({ eventId }), options.json ?? false);
@@ -667,7 +669,7 @@ operation
       throw new WorkbenchClientError({
         status: 400,
         code: 'UNSUPPORTED_MODE',
-        message: 'nova operation requires via-workbench mode.',
+        message: 'fabula operation requires via-workbench mode.',
       });
     }
     printResult(
@@ -686,7 +688,7 @@ operation
       throw new WorkbenchClientError({
         status: 400,
         code: 'UNSUPPORTED_MODE',
-        message: 'nova operation requires via-workbench mode.',
+        message: 'fabula operation requires via-workbench mode.',
       });
     }
     const timeoutSeconds = Number(options.timeout);
@@ -741,7 +743,7 @@ operation
       status: 400,
       code: 'UNSUPPORTED_TOOL',
       message:
-        'nova operation cancel is unavailable: the Host MCP catalog exposes no nova_operation_cancel tool.',
+        'fabula operation cancel is unavailable: the Host MCP catalog exposes no nova_operation_cancel tool.',
     });
   });
 
@@ -757,12 +759,12 @@ authoring
       throw new WorkbenchClientError({
         status: 400,
         code: 'UNSUPPORTED_MODE',
-        message: 'nova authoring conflict requires via-workbench mode.',
+        message: 'fabula authoring conflict requires via-workbench mode.',
       });
     }
     printResult(await client.authoringConflictRead(), options.json ?? false);
     console.log(
-      'Resolve with: nova authoring resolve --choice keep-working|accept-external|apply-proposed-disjoint-merge [--candidate-hash <hash>]',
+      'Resolve with: fabula authoring resolve --choice keep-working|accept-external|apply-proposed-disjoint-merge [--candidate-hash <hash>]',
     );
   });
 authoring
@@ -779,7 +781,7 @@ authoring
       throw new WorkbenchClientError({
         status: 400,
         code: 'UNSUPPORTED_MODE',
-        message: 'nova authoring resolve requires via-workbench mode.',
+        message: 'fabula authoring resolve requires via-workbench mode.',
       });
     }
     const choice = options.choice;
@@ -819,7 +821,7 @@ function reviewClient(): WorkbenchClient {
     throw new WorkbenchClientError({
       status: 400,
       code: 'UNSUPPORTED_MODE',
-      message: 'nova review and nova gate require via-workbench mode.',
+      message: 'fabula review and fabula gate require via-workbench mode.',
     });
   }
   return client;
@@ -871,7 +873,7 @@ review
       json?: boolean;
     }) => {
       if (!options.eventId || !options.text) {
-        throw new Error('nova review add requires --event-id and --text.');
+        throw new Error('fabula review add requires --event-id and --text.');
       }
       const client = reviewClient();
       printResult(
@@ -907,7 +909,7 @@ review
       json?: boolean;
     }) => {
       if (!options.commentId || !options.action) {
-        throw new Error('nova review update requires --comment-id and --action.');
+        throw new Error('fabula review update requires --comment-id and --action.');
       }
       if (!REVIEW_ACTIONS.includes(options.action as (typeof REVIEW_ACTIONS)[number])) {
         throw new Error(`--action must be one of: ${REVIEW_ACTIONS.join(', ')}.`);
@@ -1006,7 +1008,7 @@ review
       throw new WorkbenchClientError({
         status: 400,
         code: 'UNSUPPORTED_MODE',
-        message: 'nova review revise requires via-workbench mode.',
+        message: 'fabula review revise requires via-workbench mode.',
       });
     }
     await render(process.cwd(), {
@@ -1055,7 +1057,7 @@ gate
     }) => {
       if (!options.eventId || !options.candidateRevision || !options.reason) {
         throw new Error(
-          'nova gate decide requires --event-id, --candidate-revision, and --reason.',
+          'fabula gate decide requires --event-id, --candidate-revision, and --reason.',
         );
       }
       if (options.decision !== 'accept' && options.decision !== 'reject') {
@@ -1085,7 +1087,7 @@ function publicationClient(): WorkbenchClient {
     throw new WorkbenchClientError({
       status: 400,
       code: 'UNSUPPORTED_MODE',
-      message: 'nova publish and nova publication require via-workbench mode.',
+      message: 'fabula publish and fabula publication require via-workbench mode.',
     });
   }
   return client;
@@ -1149,8 +1151,8 @@ program
             : null;
         console.log(
           operationHandle === null
-            ? 'Next step: run "nova publication status" to see the artifact.'
-            : `Next step: run "nova operation wait ${operationHandle}" to track the publication.`,
+            ? 'Next step: run "fabula publication status" to see the artifact.'
+            : `Next step: run "fabula operation wait ${operationHandle}" to track the publication.`,
         );
       }
     },

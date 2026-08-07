@@ -20,16 +20,17 @@ WORKBENCH_PORT=8790 WORKBENCH_VITE_PORT=5174 \
 
 `WORKBENCH_PROJECT_ROOT` 是兼容旧的单项目启动预填项，不是作者历史或多项目配置来源。未显式指定时，开发脚本会把演示 fixture 复制到临时外部目录；退出时清理该副本。配置验证要求 `nova.yaml.project` 与 configured `projectId` 完全一致。
 
-生产先构建，再运行已打包的 Host：
+生产先构建，再以产品入口 `npm start` 启动（等价于 `npm run -w @novalistically/workbench build:host` + `node packages/workbench/scripts/start.mjs workbench`；打印 URL 并在支持的平台上自动打开浏览器，`WORKBENCH_OPEN_BROWSER=false` 可关闭自动打开）：
 
 ```bash
-fnm exec --using=26.5.0 -- npm run -w @novalistically/workbench build
-WORKBENCH_HOME=/var/lib/fabula/workbench \
-WORKBENCH_ASSETS_ROOT="$PWD/packages/workbench/dist/client" \
-fnm exec --using=26.5.0 -- npm run -w @novalistically/workbench start:workbench
+fnm exec --using=26.5.0 -- npm run build
+export WORKBENCH_HOME=/var/lib/fabula/workbench
+fnm exec --using=26.5.0 -- npm start
 ```
 
-未配置的生产 Host 仍只绑定 loopback，并提供首次设置页面。LAN 必须由所有者显式配置允许的 Host 与 Origin。TLS 在反向代理终止；Workbench 自己不终止 TLS。`start:listener` 只有 `/health` 和 `/status` smoke listener，不提供 Workbench 工作流。
+`npm start` 复用已构建的 `packages/workbench/dist/client` 静态资源（`WORKBENCH_ASSETS_ROOT` 未设置时按打包目录默认解析）。
+
+未配置的生产 Host 仍只绑定 loopback（默认 `127.0.0.1:8787`），并提供首次设置页面。LAN 必须由所有者显式配置允许的 Host 与 Origin。TLS 在反向代理终止；Workbench 自己不终止 TLS。`start:listener` 只有 `/health` 和 `/status` smoke listener，不提供 Workbench 工作流。
 
 ## 配置和凭据
 
@@ -137,6 +138,6 @@ Core 的 `addReviewComment` / `replaceReviewComment` / `updateReviewComment` 已
 - Native revision、restore 与 recovery：`tests/authoring-coordinator-recovery.test.ts`、`tests/host-startup.test.ts`。
 - Optional Git mirror boundary：`tests/git-runner.test.ts`、`tests/git-manifest.test.ts`。
 - Browser 与 MCP/Agent authoring boundary：`tests/browser-agent-api.test.ts`、`tests/mcp-auth-registry.test.ts`。
-- 根 `npm run test:e2e` **当前不可运行**：根 script 转发到 `npm run -w @novalistically/workbench test:e2e`，但 workbench 的 package.json **没有 `test:e2e` script**，也没有 `playwright.config.ts` 与 `tests/e2e/` harness（`tsconfig.e2e.json` include 的 `tests/e2e/**` 与 `playwright.config.ts` 均不存在，`typecheck:e2e` 实际是静默 no-op）；`@playwright/test` 仅是 devDep。
+- 根 `npm run test:e2e` **可运行**：根 script 转发到 `npm run -w @novalistically/workbench test:e2e`（`playwright test`，`playwright.config.ts` 与 `tests/e2e/` harness 齐全），根 `npm test` 已包含 `test:e2e`。执行环境若没有 Playwright 浏览器二进制，先 `npx playwright install chromium`。
 
 这些检查验证 Host 合约；live provider 输出仍需由部署环境的凭据和项目 source 决定。

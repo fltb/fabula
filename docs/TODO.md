@@ -1,5 +1,7 @@
 # TODO.md - 系统的整体计划
 
+现在我们需要开始设计了。目前遇到了问题 1 config 太乱。目前的 API URL 和 key 都是从 dotenv 注入的，但是 dotenv 有两点问题：一个是他本身只是应该负责启动用的环境变量，而 key 这些应该是我们内部设置的，他应该只负责给启动脚本注入。一个是 dotenv 他在我们项目的很多入口根本没有被加载 。 所以说我们需要为 workbench 设计一套 config 系统用来存储 agent 相关的，以及渲染相关的配置，然后把配置统一化，dotenv 只负责到启动脚本。 2 应该设计好内置 agent ，做到能和外部 agent 直接调用 workbench api 一样完整的接管功能。我们目前是认为可以设定 workbench 后端内置一个 pi-agent-core ，然后前端找一些合适的工具去对接和实现它的可视化前端。我们要做到 pi agent core 也是走的 mcp 等价的入口和功能确保接口统一化，这样就避免自己写的 harness 的各种问题，方便端到端测试。3 调研和评估我们是否需要支持 workbench 发现和引入本地的 agent 运行时，比如 codex，我倾向于不要随意拓展这个功能。 4 这个阶段要做好产品化交付的收敛，能直接给最终用户部署，所以需要严格审查缺少的地方最终收口。我目前发现 README 还是不符合产品化逻辑，对我们真正的入口 workbench 不够强调。cli 用的最多的地方就是我们本地 headless 测试，你干脆给他换个名字，不要和我们 workbench cli 混淆。用户最终看到的是前端，他希望直接执行一个 npm run xxx 就行了，然后自己跳到 localhost 网页上，首次打开可能会引导设置。然后进入之后要看到前端，前端我希望 UI 是合理可视化的，能操作，结构不乱，样式正常，看着不像半成品，不要和我们第一次打开发现全是纯文本堆起来，连 UI 控件都没有的样子。然后最好确保我们 agent 的第一位，用户可能看不懂我们的产品没关系，内置的 agent 会帮他干活的，他自己聊天聊着聊着就知道从哪里看到哪里点开怎么看产物了。当然 UX 引导也要合理。
+
 > **当前计划 (2026-08-07)**: Workbench 产品收敛执行计划已批准，见 [`docs/todos/workbench-product-convergence-2026-08-07.md`](./todos/workbench-product-convergence-2026-08-07.md)。本页是阶段 1–3 的历史规划记录，不再作为当前工作指引；当前事实以 [`docs/current-state.md`](./current-state.md) 为准。
 
 > **前身**: `docs/archive/TODO-stage-1-1.5.md` (1420 lines, stage 1 + 1.5 complete)

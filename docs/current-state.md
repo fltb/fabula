@@ -12,9 +12,9 @@
 | Node 24 环境（本会话 v24.1.0） | argon2 相关 workbench 测试（`auth-password` / `auth-service` / `setup-api` / `launch` / `parity`）失败：`crypto.argon2` 是 Node 26 API，本环境不可用（`packages/workbench/src/host/auth/password.ts` 从 `node:crypto` 导入 `argon2`）。**Node 24 下不宣称全绿** |
 | 2026-08-06 基线（收敛前，供参考） | `npm test` 根 3,197 + Host 716 + Client 156、`typecheck:dead-code`、`typecheck:e2e`、`build`、`bundle-check`、`check:public-api`（六包全部登记）、`test:e2e` 23/23、`lint` 0 errors / 0 warnings——均为收敛前记录，收敛后未全量重跑 |
 
-## 2026-08-08 产品收敛记录（Stage 1–7 + 8.3 已交付；8.1/8.2 收口在工作树中未提交）
+## 2026-08-08 产品收敛记录（Stage 1–9 全部交付）
 
-对应 `docs/todos/workbench-product-convergence-2026-08-07.md`：Stage 1–7 与 Stage 8.3（本文档 + AGENTS.md）已交付；Stage 8.1（credential-store 移除 legacy 裸 key）与 8.2（`.env` 清理）正在工作树中执行（`packages/workbench/src/host/providers/credential-store.ts` 已有未提交修改）。Stage 9「前端能力对齐 + 产品化门禁」是独立计划，未在本检查点宣称完成。已核验现状：
+对应 `docs/todos/workbench-product-convergence-2026-08-07.md`：Stage 1–9 已全部交付（9 个 commit：`2ea7463` `999298b` `35932ff` `89a400b` `b8fe2e4` `9849d87` `695e9da` `71f04d3` `fe5c802` `792822d`）。已核验现状：
 
 - **config `version:1` 单一契约 + renderPolicy**：`WorkbenchConfigurationV1`（`@novalistically/workbench-protocol`）是唯一规范配置源形状，owner 直接序列化、无迁移/归一化层；`renderPolicy`（`WorkbenchRenderPolicyV1`：pass1/pass2 温度、maxTokens、pass2 seed）统一应用于 Host 的每次 render。
 - **依赖换核（替换 AI SDK）**：`@earendil-works/pi-ai`（node-host + workbench，`^0.84.1`）与 `@earendil-works/pi-agent-core`（workbench，`^0.84.1`）；生产 provider 为 `PiOpenAICompatibleProvider`（`createPiProviderStack`，`packages/node-host/src/providers/`）；内置 Agent 循环为 pi-agent-core `Agent`（`packages/workbench/src/host/agent/run-service.ts`），模型缝为 `createPiAgentModel`（`agent/pi-agent-model.ts`）。`createWorkbenchAgentModelAdapter` 与 `WorkbenchAgentModel` 已删除。
@@ -24,6 +24,11 @@
 - **内置 agent 换核后 production 默认仍 `agentReady=false`（隐藏）**：capability 门 = V3 `agent.enabled` && `supportsToolCalls`（`workbench-launch.ts` production 从不硬编码 true）；parity matrix（`agent-parity-matrix.test.ts`）与 e2e 是确定性证据；live conformance 是单独运行（`npm run smoke:workbench-agent:live`），不作为 CI 证据。
 - **运行时边界（Stage 7 决策，2026-08-08）**：workbench 是 MCP server——外部 agent（任意 MCP client，包括 codex CLI / Claude Code）连入 `/mcp/projects/:projectId` 即获得与内置 agent 相同的工具面（按角色 scope 过滤）；内置 agent（pi-agent-core）是**唯一**的进程内 agent，不发现、不派生、不托管任何外部本地运行时；未预留未来运行时托管接口，真实需求按新需求单独评审。
 - **FilePublicationWriter 已恢复并在位**：`packages/node-host/src/output/file-publication-writer.ts`（写 `output/novel.md`，`PUBLICATION_OUTPUT_DIRECTORY`）继续从 `@novalistically/node-host` 导出（`index.ts`），`refreshCanonical()` 在 accepted commit / gate 决议 / review-driven revise 后 best-effort 刷新。
+- **References 全管理视图（Stage 9.1）**：`ReferencesView`（导入/删除/重试/搜索/详情/空态），browser 路由复用 `McpReferencePort`（import 三段式、delete、retry、get-by-id、bounded content read）；`referenceLimits.enabled` 门控；6 个路由测试。
+- **Scene Map + Scene Inspector（Stage 9.2，用户核心诉求）**：`/scene-map`（章节分组 + per-scene summary + hash 链 + 跨章条带）、`/scenes/:eventId`（diff + 实体 + graph 边 + 边界 hashes + discourse）、`/scenes/:eventId/render`（复用 `nova_render` registry 路径）；9.2.5 **上下文指纹**——已采纳 scene 的 `scenes/<id>.md` frontmatter `context.sceneHash` 对比 execution sceneHash → `adopted_current`/`adopted_stale`（上下文变化必标 stale、绝不静默覆盖手改散文）；`SceneMap.tsx` + `SceneInspector.tsx`（内联 diff/实体/hash/render 按钮 + Adopt）；8 个路由测试。
+- **错误恢复/空态分离/断连（Stage 9.3）**：review/publication/references/scene-adoption 均区分 error-state（带 Retry）与 empty-state；AgentChat run 失败内联 chip + 重试；Host 事件流断开 → 红点 + 「与 Host 的连接中断，正在重连…」banner；加载期 skeleton。
+- **Onboarding 首访引导（Stage 9.4）**：localStorage 门控 4 步 mini tour（Agent Chat 入口 / Source Studio / Review Hub / Publication）；欢迎卡 icon+描述升级；Agent 未启用 banner（配置提示 + settings 钩子）。
+- **Stage 9 交付门禁（9.6）**：`npm run build` 全绿（core/node-host/bench/workbench-protocol/cli/workbench host+client）；5 包 `tsc -b` 干净；client 168/168、core 2761/2761、protocol 6/6、scene-map 8/8、references 6/6。**Node 24 环境边界**：`npm start` 启动与 argon2 相关测试需 Node 26.5.0（`crypto.argon2` 是 Node 26 API）——Node 24 下启动/部分 host 测试不可用，不宣称全绿。
 
 
 ## 包与依赖边界

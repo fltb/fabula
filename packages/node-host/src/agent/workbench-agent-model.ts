@@ -16,7 +16,10 @@ import {
   jsonSchema,
   type LanguageModel,
   type ModelMessage,
+  type ReasoningUIPart,
+  type TextPart,
   type Tool,
+  type ToolCallPart,
   tool,
 } from 'ai';
 import { type AiSdkClientOptions, createAiSdkModelClient } from '../providers/ai-sdk.js';
@@ -31,7 +34,16 @@ export interface AgentToolSpec {
 /** Turn-level message history fed back between model calls by the run service. */
 export type AgentModelMessage =
   | { readonly role: 'user'; readonly content: string }
-  | { readonly role: 'assistant'; readonly content: string }
+  | {
+      readonly role: 'assistant';
+      readonly content: string;
+      /** Reasoning text from the model step; deepseek/xai thinking mode
+       * requires it to be passed back on subsequent turns. */
+      readonly reasoning?: string;
+      /** Tool calls the assistant made in the same step; required so the
+       * next round's `tool` messages have a preceding `tool_calls` payload. */
+      readonly toolCalls?: readonly { readonly id: string; readonly name: string; readonly input: unknown }[];
+    }
   | {
       readonly role: 'tool';
       readonly toolCallId: string;
@@ -48,6 +60,9 @@ export type AgentModelEvent =
       readonly id: string;
       readonly name: string;
       readonly args: unknown;
+      /** Thinking-mode reasoning from the model step; must be passed back
+       * on subsequent turns for deepseek/xai reasoning providers. */
+      readonly reasoning?: string;
     }
   | { readonly type: 'finish'; readonly finishReason: string };
 
@@ -113,6 +128,7 @@ export function createWorkbenchAgentModelAdapter(
             id: call.toolCallId,
             name: call.toolName,
             args: call.input,
+            reasoning: step.reasoningText,
           };
         }
       }
@@ -125,8 +141,27 @@ function toAiSdkMessage(message: AgentModelMessage): ModelMessage {
   switch (message.role) {
     case 'user':
       return { role: 'user', content: message.content };
-    case 'assistant':
-      return { role: 'assistant', content: message.content };
+    case 'assistant': {
+      // AI SDK v7 drops top-level `toolCalls` when the assistant content is a
+      // plain string (vercel/ai openai-compatible conversion only reads
+      // `tool-call` content PARTS; a tool message without a preceding
+      // `tool_calls` payload is rejected by deepseek/xai-compatible
+      // providers with HTTP 400). Emit the tool calls as content parts so
+      // the wire carries `tool_calls`.
+      const parts: (TextPart | ToolCallPart | ReasoningUIPart)[] = [
+        ...(message.reasoning !== undefined && message.reasoning.length > 0
+          ? [{ type: 'reasoning' as const, text: message.reasoning }]
+          : []),
+        ...(message.content.length > 0 ? [{ type: 'text' as const, text: message.content }] : []),
+        ...(message.toolCalls ?? []).map((call) => ({
+          type: 'tool-call' as const,
+          toolCallId: call.id,
+          toolName: call.name,
+          input: call.input,
+        })),
+      ];
+      return { role: 'assistant', content: parts };
+    }
     case 'tool':
       return {
         role: 'tool',

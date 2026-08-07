@@ -268,6 +268,7 @@ function harness(
     readonly maxToolCalls?: number;
     readonly model?: StubModel;
     readonly executorResults?: Record<string, McpToolResult>;
+    readonly isWorkflowComplete?: () => boolean | Promise<boolean>;
   } = {},
 ): Harness {
   const persistence = createRealPersistence();
@@ -284,6 +285,9 @@ function harness(
     model,
     operations,
     agent: { maxTurns: options.maxTurns ?? 16, maxToolCalls: options.maxToolCalls ?? 64 },
+    ...(options.isWorkflowComplete === undefined
+      ? {}
+      : { isWorkflowComplete: options.isWorkflowComplete }),
     now: () => '2026-08-06T00:00:00.000Z',
   });
   return { store, operations, executorCalls, service, model };
@@ -394,6 +398,36 @@ describe('WorkbenchAgentRunService run loop', () => {
     const calls = await h.store.listToolCalls({ runId: run.runId });
     expect(calls).toHaveLength(1);
     expect(calls[0]?.status).toBe('succeeded');
+  });
+
+  it('force-terminates as succeeded when the workflow completes despite a re-confirming model', async () => {
+    const h = harness({
+      maxTurns: 16,
+      isWorkflowComplete: () => completed,
+    });
+    let completed = false;
+    const conversation = await createConversation(h);
+    // Turn 1: the model executes a tool and finishes (chain reached publish).
+    h.model.script.push(() => [toolEvent('t1', 'nova_authoring_submit', {}), finish()]);
+    // The completion signal flips AFTER turn 1's tool executes; the model
+    // wants another confirmation turn, but the gate stops it.
+    completed = true;
+    h.model.script.push(() => [toolEvent('t2', 'nova_status', {}), finish()]);
+
+    const run = await h.service.sendMessage({
+      conversationId: conversation.conversationId,
+      message: 'publish then confirm',
+      principal: PRINCIPAL,
+    });
+    const outcome = await h.operations.runEnqueued(0);
+    expect(outcome).toMatchObject({ status: 'succeeded' });
+    // The model never got the second turn (no re-confirmation call ran).
+    expect(h.executorCalls).toHaveLength(1);
+    expect(h.executorCalls[0]?.name).toBe('nova_authoring_submit');
+    const persisted = await h.store.getRun(run.runId);
+    expect(persisted?.status).toBe('succeeded');
+    expect(persisted?.turn).toBe(1);
+    expect(persisted?.toolCalls).toBe(1);
   });
 
   it('fails with AGENT_MAX_TURNS_EXCEEDED when the model keeps calling tools', async () => {

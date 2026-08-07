@@ -1333,7 +1333,11 @@ export async function startWorkbench(
             // capability-checked effect) would be DENIED for the built-in
             // caller. Mirrors the parity-matrix harness row exactly.
             await ensureBuiltinAgentGrants(project.projectId);
-            const projectAuthoringRuntime = authoring.get(project.projectId);
+            // The authoring runtime exists as this scope's local before the
+            // session map is populated (authoring.set runs after the agent
+            // branch), so reference the local — authoring.get() here would be
+            // undefined and every authoring tool would fail PROJECT_NOT_READY.
+            const projectAuthoringRuntime = projectAuthoring;
             const reviewService = reviewServices.get(project.projectId);
             const publicationService = publicationServices.get(project.projectId);
             const executor = createProjectToolExecutor(session, {
@@ -1364,6 +1368,16 @@ export async function startWorkbench(
                 maxTurns: activeConfiguration?.agent.maxTurns ?? 16,
                 maxToolCalls: activeConfiguration?.agent.maxToolCalls ?? 64,
               },
+              // Workflow-completion gate (plan 9.4 hardening): once the
+              // canonical publication is current, a tool-executing run is
+              // force-terminated as succeeded instead of letting a
+              // re-confirming agent burn remaining turns.
+              isWorkflowComplete:
+                publicationService === undefined
+                  ? undefined
+                  : async () =>
+                      (await publicationService.workflowPublicationProjection()).status ===
+                      'current',
             });
             await agentService.start();
             agentRunServices.set(project.projectId, agentService);

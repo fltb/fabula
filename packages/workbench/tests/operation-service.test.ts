@@ -198,6 +198,60 @@ function track(fixture: ServiceFixture): ServiceFixture {
 // ─── Queue semantics ─────────────────────────────────────────────────────────
 
 describe('ProjectOperationService queue', () => {
+  it('runs agent-run and render operations on independent lanes (no deadlock)', async () => {
+    const fixture = track(createServiceFixture());
+    const { service } = fixture;
+    await service.start();
+
+    const renderStarted = Promise.withResolvers<void>();
+    const renderRelease = Promise.withResolvers<void>();
+    let renderRan = false;
+    const agentRun = await service.enqueue({
+      kind: 'agent-run',
+      idempotencyKey: 'agent-1',
+      actorId: 'u1',
+      capabilityVersion: 1,
+      sourceHash: null,
+      acceptedRevisionId: null,
+      requestHash: 'a1',
+      runner: async () => {
+        // While the agent-run is mid-flight, a render lands on the other lane
+        // and must complete WITHOUT waiting for the agent-run to finish.
+        const render = await service.enqueue({
+          kind: 'render',
+          idempotencyKey: 'render-1',
+          actorId: 'u1',
+          capabilityVersion: 1,
+          sourceHash: 'hash-a',
+          acceptedRevisionId: null,
+          requestHash: 'r1',
+          runner: async () => {
+            renderStarted.resolve();
+            await renderRelease.promise;
+            renderRan = true;
+            return { status: 'succeeded', result: 'render' };
+          },
+        });
+        expect(render.status).toBe('queued');
+        // Wait until the render lane actually picked it up (would never
+        // happen under the old single-FIFO design while the agent-run holds
+        // the queue).
+        await Promise.race([
+          renderStarted.promise,
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('render never started: single-lane deadlock')), 2000),
+          ),
+        ]);
+        renderRelease.resolve();
+        return { status: 'succeeded', result: 'agent' };
+      },
+    });
+    expect(agentRun.status).toBe('queued');
+    const agentOutcome = await waitForTerminal(service, agentRun.operationHandle);
+    expect(agentOutcome.status).toBe('succeeded');
+    expect(renderRan).toBe(true);
+  });
+
   it('runs queued render operations in FIFO order with per-project concurrency 1', async () => {
     const fixture = track(createServiceFixture());
     const { service } = fixture;

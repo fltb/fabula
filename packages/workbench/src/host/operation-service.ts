@@ -186,12 +186,28 @@ export function createProjectOperationService(
     createRenderConcurrencyLimiter(limits.maxConcurrentRendersPerHost);
   const fireStatusChange = options.onStatusChange ?? ((): void => {});
 
-  /** FIFO of queued operation ids (durable source of truth stays the store). */
-  const queue: string[] = [];
+  /**
+   * Two lanes (plan Step 4): an agent-run occupies its own lane so the tools
+   * it calls (render/revise/publish/…) can run in the OTHER lane — a single
+   * FIFO would deadlock the built-in agent, which waits on those operations
+   * while they wait for it to finish. Render-like kinds keep the host-wide
+   * render concurrency gate; agent runs are strictly serialized per project.
+   */
+  const RENDER_LANE_KINDS = new Set<ProjectOperationKindV1>([
+    'authoring-submit',
+    'render',
+    'revise',
+    'render-tree',
+    'review',
+    'release-gate',
+    'publish',
+  ]);
+  const renderQueue: string[] = [];
+  const agentQueue: string[] = [];
   const runners = new Map<string, ProjectOperationRunner>();
   const controllers = new Map<string, AbortController>();
   const results = new Map<string, unknown>();
-  let draining = false;
+  const draining = { render: false, agent: false };
   let closed = false;
 
   const persist = async (
@@ -213,11 +229,12 @@ export function createProjectOperationService(
     return applied.record;
   };
 
-  const drain = async (): Promise<void> => {
-    if (draining) return;
-    draining = true;
+  const drain = async (lane: 'render' | 'agent'): Promise<void> => {
+    if (draining[lane]) return;
+    draining[lane] = true;
     try {
       while (!closed) {
+        const queue = lane === 'render' ? renderQueue : agentQueue;
         const operationId = queue.shift();
         if (operationId === undefined) break;
         const controller = new AbortController();
@@ -229,8 +246,11 @@ export function createProjectOperationService(
         }
       }
     } finally {
-      draining = false;
+      draining[lane] = false;
     }
+  };
+  const kickDrain = (kind: ProjectOperationKindV1): void => {
+    void drain(RENDER_LANE_KINDS.has(kind) ? 'render' : 'agent');
   };
 
   const runQueued = async (operationId: string, signal: AbortSignal): Promise<void> => {
@@ -335,9 +355,9 @@ export function createProjectOperationService(
         });
         if (!requeued.applied) return { status: 'conflict', record: requeued.record };
         runners.set(existing.operationId, input.runner);
-        queue.push(existing.operationId);
+        (RENDER_LANE_KINDS.has(input.kind) ? renderQueue : agentQueue).push(existing.operationId);
         fireStatusChange(requeued.record);
-        void drain();
+        kickDrain(input.kind);
         return { status: 'queued', operationHandle: existing.operationId, record: requeued.record };
       }
       return { status: 'replayed', record: existing };
@@ -387,9 +407,9 @@ export function createProjectOperationService(
       return { status: 'queue-full', errorCode: 'OPERATION_QUEUE_FULL', active };
     }
     runners.set(operationId, input.runner);
-    queue.push(operationId);
+    (RENDER_LANE_KINDS.has(input.kind) ? renderQueue : agentQueue).push(operationId);
     fireStatusChange(created.record);
-    void drain();
+    kickDrain(input.kind);
     return { status: 'queued', operationHandle: operationId, record: created.record };
   };
 
@@ -462,7 +482,8 @@ export function createProjectOperationService(
       closed = true;
       for (const controller of controllers.values()) controller.abort();
       runners.clear();
-      queue.length = 0;
+      renderQueue.length = 0;
+      agentQueue.length = 0;
       controllers.clear();
       results.clear();
     },

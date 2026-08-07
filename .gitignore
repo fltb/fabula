@@ -28,4 +28,8 @@ omp-session-*.html
 .nova/workbench.sqlite*
 **/.nova/workbench.sqlite*
 .nova/workbench/
+
+# Workbench probe/esbuild scratch artifacts (smoke-agent-live, probe-run, cap bundles)
+packages/workbench/probe-run.mjs
+packages/workbench/*-bundle-*/
 packages/workbench/.nova/

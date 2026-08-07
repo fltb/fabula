@@ -103,6 +103,15 @@ export interface WorkbenchAgentRunServiceOptions {
   readonly operations: ProjectOperationService;
   /** V3 agent bounds: `{ maxTurns, maxToolCalls }` (enabled is the launch gate). */
   readonly agent: { readonly maxTurns: number; readonly maxToolCalls: number };
+  /**
+   * Optional workflow-completion signal (plan 9.4 hardening): when it resolves
+   * true after a tool-executing turn, the run is force-terminated as
+   * `succeeded` WITHOUT calling the model again — agents that keep
+   * re-confirming finished work (deepseek/xai reasoning models are prone to
+   * it) stop burning turns once the workflow goal is actually reached. The
+   * launch wires it to "canonical publication is current".
+   */
+  readonly isWorkflowComplete?: () => boolean | Promise<boolean>;
   readonly now?: () => string;
 }
 
@@ -451,6 +460,25 @@ export function createWorkbenchAgentRunService(
                 resultSummary: summary,
                 at: now(),
               });
+              // Attach the tool call to the assistant message so the next
+              // round's `tool` messages have a preceding `tool_calls` payload
+              // (OpenAI-compatible providers reject tool messages otherwise).
+              const last = messages[messages.length - 1];
+              if (last?.role === 'assistant') {
+                const call = { id: event.id, name: event.name, input: event.args };
+                messages[messages.length - 1] = {
+                  ...last,
+                  reasoning: last.reasoning ?? event.reasoning,
+                  toolCalls: [...(last.toolCalls ?? []), call],
+                };
+              } else {
+                messages.push({
+                  role: 'assistant',
+                  content: '',
+                  reasoning: event.reasoning,
+                  toolCalls: [{ id: event.id, name: event.name, input: event.args }],
+                });
+              }
               messages.push({
                 role: 'tool',
                 toolCallId: event.id,
@@ -486,9 +514,38 @@ export function createWorkbenchAgentRunService(
           completed: Math.min(current.toolCalls, current.maxToolCalls),
           total: current.maxToolCalls,
         });
+        // Workflow-completion gate: the chain actually finished (e.g.
+        // canonical publication is current) even though the model wants to
+        // keep re-confirming — force-terminate as succeeded without burning
+        // another model turn.
+        if (options.isWorkflowComplete !== undefined && (await options.isWorkflowComplete())) {
+          const finished = await store.transitionRun({
+            runId,
+            status: 'succeeded',
+            expectedStatus: 'running',
+            turn,
+            toolCalls: current.toolCalls,
+            at: now(),
+          });
+          publish(runId, { type: 'run-status', run: await runView(finished.record) });
+          return {
+            status: 'succeeded',
+            result: {
+              runId,
+              conversationId: started.record.conversationId,
+              projectId,
+              status: 'succeeded',
+              turn,
+              toolCalls: current.toolCalls,
+            },
+          };
+        }
         continue;
       }
-      // The model finished without tool calls: the run succeeded.
+      // The model finished without tool calls: the run succeeded. (Whether
+      // the user's goal was reached is the caller's concern — the launch
+      // wires the completion gate to stop re-confirming agents once the
+      // workflow IS done, not to penalize early stops.)
       const finished = await store.transitionRun({
         runId,
         status: 'succeeded',

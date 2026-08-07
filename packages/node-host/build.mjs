@@ -19,7 +19,7 @@ const result = await build({
   entryNames: '[name]',
   sourcemap: true,
   metafile: true,
-  external: ['node:*', '@novalistically/core', '@ai-sdk/*', 'ai', 'yaml'],
+  external: ['node:*', '@novalistically/core', '@earendil-works/*', 'yaml'],
   logLevel: 'info',
 });
 

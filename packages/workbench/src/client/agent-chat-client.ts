@@ -8,11 +8,13 @@
 import {
   BROWSER_AGENT_CONVERSATION_HISTORY_PATH,
   BROWSER_AGENT_CONVERSATION_RUNS_PATH,
+  BROWSER_AGENT_CONVERSATIONS_LIST_PATH,
   BROWSER_AGENT_CONVERSATIONS_PATH,
   BROWSER_AGENT_RUN_CANCEL_PATH,
   BROWSER_AGENT_RUN_PROGRESS_PATH,
   BROWSER_AGENT_RUN_RETRY_PATH,
 } from '../contracts/agent-chat.js';
+import type { AgentChatConversationListResultV1 } from '../contracts/agent-chat.js';
 import type { BrowserApiErrorCode, BrowserApiErrorV1 } from '../contracts/browser-api.js';
 import { BROWSER_SESSION_HEADER } from '../contracts/browser-api.js';
 import type {
@@ -77,13 +79,15 @@ export type AgentChatProgressListener = (event: AgentChatProgressEventV1) => voi
 export interface AgentChatClient {
   /** Create one conversation for the caller's project role. */
   createConversation(projectId: string, title?: string): Promise<AgentChatConversationViewV1>;
+  /** List the caller's conversations, newest-updated first (plan 4.4). */
+  listConversations(projectId: string): Promise<readonly AgentChatConversationViewV1[]>;
   /** Send one message and start a run (queued through the operation service). */
   sendMessage(
     projectId: string,
     conversationId: string,
     message: string,
   ): Promise<AgentChatRunViewV1>;
-  /** Durable history of one conversation (runs + tool-call receipts). */
+  /** Durable history of one conversation (runs + tool-call receipts + message projection). */
   history(projectId: string, conversationId: string): Promise<AgentChatHistoryV1>;
   /** Cancel a queued/running run. */
   cancel(projectId: string, runId: string): Promise<AgentChatCancelResultV1>;
@@ -185,6 +189,12 @@ export function createAgentChatClient(options: AgentChatClientOptions = {}): Age
         { version: 1, ...(title === undefined ? {} : { title }) },
       );
       return result.conversation;
+    },
+    async listConversations(projectId) {
+      const result = await get<AgentChatConversationListResultV1>(
+        pathFor(BROWSER_AGENT_CONVERSATIONS_LIST_PATH, projectId),
+      );
+      return result.conversations;
     },
     async sendMessage(projectId, conversationId, message) {
       const result = await post<AgentChatSendMessageResultV1>(

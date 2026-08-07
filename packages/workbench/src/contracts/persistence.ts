@@ -756,6 +756,10 @@ export type AgentRunStatusV1 = (typeof AGENT_RUN_STATUS_VALUES)[number];
 export const AGENT_TOOL_CALL_STATUS_VALUES = ['pending', 'succeeded', 'failed'] as const;
 export type AgentToolCallStatusV1 = (typeof AGENT_TOOL_CALL_STATUS_VALUES)[number];
 
+/** Role of one agent message (`agent_conversation_messages`). */
+export const AGENT_MESSAGE_ROLE_VALUES = ['user', 'assistant', 'tool_result'] as const;
+export type AgentMessageRoleV1 = (typeof AGENT_MESSAGE_ROLE_VALUES)[number];
+
 /**
  * One durable row of an agent conversation (`agent_conversations`), keyed by
  * `conversationId`. The row stores principal identity and the project access
@@ -820,6 +824,25 @@ export interface AppendAgentConversationInput {
   readonly conversationId: string;
   readonly at: string;
   readonly title?: string;
+}
+
+/**
+ * One append-only message of a conversation (`agent_conversation_messages`),
+ * keyed by `messageId`. Messages carry the conversation and the run that
+ * produced them; tool payloads are never stored — `tool_result` messages
+ * reference their call with `toolName`/`callIndex` and hold only the
+ * sanitized result text, so user and assistant messages leave both `null`.
+ */
+export interface AgentConversationMessageRecordV1 {
+  readonly version: 1;
+  readonly messageId: string;
+  readonly conversationId: string;
+  readonly runId: string;
+  readonly role: AgentMessageRoleV1;
+  readonly content: string;
+  readonly toolName: string | null;
+  readonly callIndex: number | null;
+  readonly createdAt: string;
 }
 
 /** Paginated read of conversations, newest-updated first. */
@@ -889,6 +912,13 @@ export interface ListAgentToolCallsInput {
   readonly runId: string;
   /** Keyset: return rows with call_index greater than `after`. */
   readonly after?: number;
+  /** Page size; clamped to 1..100, default 50. */
+  readonly limit?: number;
+}
+
+/** Paginated read of a conversation's messages, oldest first. */
+export interface ListAgentMessagesInput {
+  readonly conversationId: string;
   /** Page size; clamped to 1..100, default 50. */
   readonly limit?: number;
 }
@@ -1009,6 +1039,8 @@ export interface PersistencePayloads {
   appendAgentToolCall: AgentToolCallRecordV1;
   updateAgentToolCallStatus: UpdateAgentToolCallStatusInput;
   listAgentToolCalls: ListAgentToolCallsInput;
+  appendAgentMessage: AgentConversationMessageRecordV1;
+  listAgentMessages: ListAgentMessagesInput;
 }
 
 export interface PersistenceResults {
@@ -1108,6 +1140,8 @@ export interface PersistenceResults {
   appendAgentToolCall: AgentToolCallRecordV1;
   updateAgentToolCallStatus: AgentToolCallRecordV1;
   listAgentToolCalls: AgentToolCallRecordV1[];
+  appendAgentMessage: { appended: true };
+  listAgentMessages: AgentConversationMessageRecordV1[];
 }
 
 export interface PersistenceError {

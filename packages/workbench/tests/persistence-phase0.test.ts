@@ -85,7 +85,7 @@ describe('Phase 0 persistence contracts', () => {
             version: number;
           }[]
         ).map((row) => row.version);
-        expect(versions).toEqual([1, 2, 3, 4, 5, 6, 7]);
+        expect(versions).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
 
         // V1 rows survive every later migration untouched.
         const user = db.prepare('SELECT * FROM users WHERE user_id=?').get('owner-1') as
@@ -178,7 +178,7 @@ describe('Phase 0 persistence contracts', () => {
             version: number;
           }[]
         ).map((row) => row.version);
-        expect(versions).toEqual([1, 2, 3, 4, 5, 6, 7]);
+        expect(versions).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
         const capabilityDdl = db
           .prepare(
             "SELECT sql FROM sqlite_master WHERE type='table' AND name='capability_verifiers'",

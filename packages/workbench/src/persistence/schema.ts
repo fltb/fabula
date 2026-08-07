@@ -646,4 +646,36 @@ export const persistenceSchema: readonly PersistenceMigration[] = [
       },
     ],
   },
+  {
+    version: 8,
+    description: 'Agent conversation messages for transcript history',
+    steps: [
+      {
+        kind: 'create-table',
+        table: {
+          name: 'agent_conversation_messages',
+          columns: [
+            { name: 'message_id', type: 'text', primaryKey: true },
+            { name: 'conversation_id', type: 'text' },
+            { name: 'run_id', type: 'text' },
+            {
+              name: 'role',
+              type: 'text',
+              values: ['user', 'assistant', 'tool_result'],
+            },
+            { name: 'content', type: 'text' },
+            { name: 'tool_name', type: 'text', nullable: true },
+            { name: 'call_index', type: 'integer', nullable: true },
+            { name: 'created_at', type: 'text' },
+          ],
+        },
+      },
+      {
+        kind: 'create-index',
+        name: 'agent_conversation_messages_conversation_created',
+        table: 'agent_conversation_messages',
+        columns: ['conversation_id', 'created_at'],
+      },
+    ],
+  },
 ];

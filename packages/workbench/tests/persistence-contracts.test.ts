@@ -86,8 +86,8 @@ describe('persistence contracts', () => {
     );
     expect(indexSteps.map((step) => step.name)).toEqual(['project_publications_updated']);
   });
-  it('declares the agent migrations as the newest schema with three tables and the required indexes', () => {
-    const latest = persistenceSchema[persistenceSchema.length - 1];
+  it('declares the agent migrations (v7) with three tables and the required indexes', () => {
+    const latest = persistenceSchema.find((migration) => migration.version === 7);
     expect(latest?.version).toBe(7);
     const steps = latest?.steps ?? [];
     const tableNames = steps
@@ -128,5 +128,29 @@ describe('persistence contracts', () => {
     ]);
     expect(indexSteps[0]?.columns).toEqual(['project_id', 'status', 'updated_at']);
     expect(indexSteps[1]?.columns).toEqual(['conversation_id']);
+  });
+  it('declares the agent message transcript migration (v8) with its table and index', () => {
+    const v8 = persistenceSchema.find((migration) => migration.version === 8);
+    expect(v8?.version).toBe(8);
+    const steps = v8?.steps ?? [];
+    const tableStep = steps.find(
+      (step): step is Extract<(typeof steps)[number], { kind: 'create-table' }> =>
+        step.kind === 'create-table',
+    );
+    if (tableStep?.kind !== 'create-table') throw new Error('V8 is missing its create-table step');
+    expect(tableStep.table.name).toBe('agent_conversation_messages');
+    expect(
+      tableStep.table.columns.some(
+        (column) => column.name === 'message_id' && column.primaryKey === true,
+      ),
+    ).toBe(true);
+    const indexSteps = steps.filter(
+      (step): step is Extract<(typeof steps)[number], { kind: 'create-index' }> =>
+        step.kind === 'create-index',
+    );
+    expect(indexSteps.map((step) => step.name)).toEqual([
+      'agent_conversation_messages_conversation_created',
+    ]);
+    expect(indexSteps[0]?.columns).toEqual(['conversation_id', 'created_at']);
   });
 });

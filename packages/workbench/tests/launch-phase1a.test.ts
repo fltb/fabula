@@ -375,7 +375,7 @@ describe('HostProviderFactory credential boundary', () => {
       configuration: { kind: 'ai-sdk', baseUrl: 'https://provider.test/v1', model: 'm-1' },
     });
     const provider = await factory.create();
-    expect(provider.name).toBe('ai-sdk');
+    expect(provider.name).toBe('pi-openai-compatible');
     const readiness = await factory.readiness();
     expect(readiness.configured).toBe(true);
     expect(readiness.endpoint).toBe('https://provider.test');
@@ -397,7 +397,7 @@ describe('HostProviderFactory credential boundary', () => {
       baseUrl: 'https://prod-eu.test/v1',
       model: 'm-prod-eu',
     });
-    expect(provider.name).toBe('ai-sdk');
+    expect(provider.name).toBe('pi-openai-compatible');
     // The default profile has no credential; per-profile construction is isolated.
     const defaultError = await factory.create().catch((e: unknown) => e);
     expect(defaultError).toBeInstanceOf(HostProviderError);

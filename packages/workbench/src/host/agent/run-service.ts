@@ -36,6 +36,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type {
   AgentChatConversationViewV1,
   AgentChatHistoryV1,
+  AgentChatMessageViewV1,
   AgentChatProgressEventV1,
   AgentChatRunHistoryEntryV1,
   AgentChatRunViewV1,
@@ -50,6 +51,7 @@ import {
 import type { ProjectAccessRole } from '../../contracts/configuration.js';
 import { PROJECT_ACCESS_ROLE_GRANTS } from '../../contracts/configuration.js';
 import type {
+  AgentConversationMessageRecordV1,
   AgentConversationRecordV1,
   AgentRunRecordV1,
   AgentToolCallRecordV1,
@@ -145,6 +147,8 @@ export interface WorkbenchAgentRunService {
   /** Restart recovery: every queued/running run of the project becomes `interrupted`. Never auto-replays. */
   start(): Promise<{ readonly updated: number }>;
   createConversation(input: CreateAgentConversationInput): Promise<AgentChatConversationViewV1>;
+  /** The caller's conversations, newest-updated first (plan 4.3). */
+  listConversations(principalUserId: string): Promise<AgentChatConversationViewV1[]>;
   sendMessage(input: SendAgentMessageInput): Promise<AgentChatRunViewV1>;
   getRun(runId: string): Promise<AgentChatRunViewV1 | null>;
   /** Store-first run snapshot (run status + completed tool calls) for SSE replay. */
@@ -226,6 +230,19 @@ function conversationViewOf(record: AgentConversationRecordV1): AgentChatConvers
     title: record.title,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
+  };
+}
+
+function messageViewOf(record: AgentConversationMessageRecordV1): AgentChatMessageViewV1 {
+  return {
+    version: AGENT_CHAT_CONTRACT_VERSION,
+    messageId: record.messageId,
+    runId: record.runId,
+    role: record.role,
+    content: record.content,
+    toolName: record.toolName,
+    callIndex: record.callIndex,
+    createdAt: record.createdAt,
   };
 }
 
@@ -502,6 +519,18 @@ export function createWorkbenchAgentRunService(
             resultRef: summary,
             at: now(),
           });
+          // Plan 4.3: persist the sanitized tool result as a message (the
+          // summary embeds the error code when the call failed).
+          await store.appendMessage({
+            messageId: randomUUID(),
+            conversationId: run.conversationId,
+            runId,
+            role: 'tool_result',
+            content: summary ?? `error:${details.errorCode ?? 'UNKNOWN'}`,
+            toolName: event.toolName,
+            callIndex,
+            createdAt: now(),
+          });
           publish(runId, { type: 'tool-call', runId, call: receiptViewOf(completed) });
           publish(runId, {
             type: 'tool-result',
@@ -517,10 +546,15 @@ export function createWorkbenchAgentRunService(
         case 'turn_end': {
           const text = assistantTextByTurn[turn - 1];
           if (text !== undefined && text.length > 0) {
-            // Stage 4 / plan 4.2 TODO: persist the completed assistant turn
-            // into the conversation message log via store.appendMessage. The
-            // Stage 3 store has no message table, so the turn text stays
-            // in-memory (assistantTextByTurn) until Stage 4 lands.
+            // Plan 4.3: one assistant message per turn (accumulated text, not deltas).
+            await store.appendMessage({
+              messageId: randomUUID(),
+              conversationId: run.conversationId,
+              runId,
+              role: 'assistant',
+              content: text,
+              createdAt: now(),
+            });
           }
           return;
         }
@@ -609,6 +643,11 @@ export function createWorkbenchAgentRunService(
         updatedAt: at,
       });
       return conversationViewOf(record);
+    },
+
+    async listConversations(principalUserId) {
+      const records = await store.listConversations({ projectId, principalUserId });
+      return records.map(conversationViewOf);
     },
 
     async sendMessage(input) {
@@ -705,6 +744,16 @@ export function createWorkbenchAgentRunService(
         createdAt: at,
         updatedAt: at,
       });
+      // Plan 4.3 (store-first): the user message is durable before any run
+      // progress is published.
+      await store.appendMessage({
+        messageId: randomUUID(),
+        conversationId: input.conversationId,
+        runId,
+        role: 'user',
+        content: input.message,
+        createdAt: at,
+      });
       publish(runId, { type: 'run-status', run: runViewOf(record, null) });
       return runViewOf(record, null);
     },
@@ -734,11 +783,13 @@ export function createWorkbenchAgentRunService(
           toolCalls: toolCalls.map(receiptViewOf),
         });
       }
+      const messages = await store.listMessages({ conversationId });
       return {
         version: AGENT_CHAT_CONTRACT_VERSION,
         projectId,
         conversation: conversationViewOf(conversation),
         runs: entries,
+        messages: messages.map(messageViewOf),
       };
     },
 

@@ -35,6 +35,8 @@ export const AGENT_CHAT_RESULT_SUMMARY_MAX_LENGTH = 256;
 
 /** `POST /api/v1/projects/:projectId/agent/conversations` — create a conversation. */
 export const BROWSER_AGENT_CONVERSATIONS_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/agent/conversations`;
+/** `GET /api/v1/projects/:projectId/agent/conversations` — list the caller's conversations. */
+export const BROWSER_AGENT_CONVERSATIONS_LIST_PATH = BROWSER_AGENT_CONVERSATIONS_PATH;
 /** `POST /api/v1/projects/:projectId/agent/conversations/:conversationId/runs` — send message + start run. */
 export const BROWSER_AGENT_CONVERSATION_RUNS_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/agent/conversations/:conversationId/runs`;
 /** `GET /api/v1/projects/:projectId/agent/conversations/:conversationId/history` — durable history. */
@@ -72,6 +74,16 @@ export interface AgentChatCreateConversationRequestV1 {
 export interface AgentChatCreateConversationResultV1 {
   readonly version: AgentChatContractVersion;
   readonly conversation: AgentChatConversationViewV1;
+}
+
+/**
+ * Response to `GET /api/v1/projects/:projectId/agent/conversations`: the
+ * conversation summaries visible to the caller (project-scoped by the route,
+ * principal-filtered by the handler).
+ */
+export interface AgentChatConversationListResultV1 {
+  readonly version: AgentChatContractVersion;
+  readonly conversations: readonly AgentChatConversationViewV1[];
 }
 
 // ─── Run DTOs ────────────────────────────────────────────────────────────────
@@ -132,12 +144,31 @@ export interface AgentChatRunHistoryEntryV1 {
   readonly toolCalls: readonly AgentChatToolCallReceiptV1[];
 }
 
-/** Durable history of one conversation, newest run first. */
+/**
+ * One chat message projected from the durable run records: the user's text,
+ * the assistant's text, or the sanitized result of one tool call. Tool
+ * messages identify their call with `toolName`/`callIndex`; user and
+ * assistant messages leave both `null`. Messages are ordered by `createdAt`
+ * ascending.
+ */
+export interface AgentChatMessageViewV1 {
+  readonly version: AgentChatContractVersion;
+  readonly messageId: string;
+  readonly runId: string;
+  readonly role: 'user' | 'assistant' | 'tool_result';
+  readonly content: string;
+  readonly toolName: string | null;
+  readonly callIndex: number | null;
+  readonly createdAt: string;
+}
+
+/** Durable history of one conversation: runs newest first, messages in creation order. */
 export interface AgentChatHistoryV1 {
   readonly version: AgentChatContractVersion;
   readonly projectId: string;
   readonly conversation: AgentChatConversationViewV1;
   readonly runs: readonly AgentChatRunHistoryEntryV1[];
+  readonly messages: readonly AgentChatMessageViewV1[];
 }
 
 /** Cancel one queued/running run. */

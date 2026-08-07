@@ -1,5 +1,6 @@
 import type {
   AgentConversationRecordV1,
+  AgentConversationMessageRecordV1,
   AgentRunRecordV1,
   AgentToolCallRecordV1,
   AppendAgentConversationInput,
@@ -59,6 +60,22 @@ export interface AgentStore {
   updateToolCallStatus(input: UpdateAgentToolCallStatusInput): Promise<AgentToolCallRecordV1>;
   /** Page a run's tool calls in append order. */
   listToolCalls(input: ListAgentToolCallsInput): Promise<readonly AgentToolCallRecordV1[]>;
+  /** Append one message to a conversation's transcript; duplicate ids fail with `MESSAGE_EXISTS`. */
+  appendMessage(input: {
+    messageId: string;
+    conversationId: string;
+    runId: string;
+    role: 'user' | 'assistant' | 'tool_result';
+    content: string;
+    toolName?: string | null;
+    callIndex?: number | null;
+    createdAt: string;
+  }): Promise<{ appended: true }>;
+  /** Page a conversation's messages oldest-first. */
+  listMessages(input: {
+    conversationId: string;
+    limit?: number;
+  }): Promise<AgentConversationMessageRecordV1[]>;
 }
 
 export function createAgentStore(client: PersistenceWorkerClient): AgentStore {
@@ -80,5 +97,18 @@ export function createAgentStore(client: PersistenceWorkerClient): AgentStore {
     appendToolCall: (record) => client.request('appendAgentToolCall', record),
     updateToolCallStatus: (input) => client.request('updateAgentToolCallStatus', input),
     listToolCalls: (input) => client.request('listAgentToolCalls', input),
+    appendMessage: (input) =>
+      client.request('appendAgentMessage', {
+        version: 1,
+        messageId: input.messageId,
+        conversationId: input.conversationId,
+        runId: input.runId,
+        role: input.role,
+        content: input.content,
+        toolName: input.toolName ?? null,
+        callIndex: input.callIndex ?? null,
+        createdAt: input.createdAt,
+      }),
+    listMessages: (input) => client.request('listAgentMessages', input),
   };
 }

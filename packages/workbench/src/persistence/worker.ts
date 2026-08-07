@@ -5,6 +5,7 @@ import { AUTHORING_PHASE_VALUES } from '../contracts/authoring.js';
 import { PROJECT_ACCESS_ROLES } from '../contracts/configuration.js';
 import type {
   AgentConversationRecordV1,
+  AgentConversationMessageRecordV1,
   AgentRunRecordV1,
   AgentRunStatusV1,
   AgentToolCallRecordV1,
@@ -51,6 +52,7 @@ import type {
   UserRole,
 } from '../contracts/persistence.js';
 import {
+  AGENT_MESSAGE_ROLE_VALUES,
   AGENT_RUN_STATUS_VALUES,
   AGENT_TOOL_CALL_STATUS_VALUES,
   CANONICAL_PUBLICATION_ID,
@@ -1156,7 +1158,8 @@ function agentInputError(
     | 'TOOL_CALL_NOT_FOUND'
     | 'ILLEGAL_RUN_TRANSITION'
     | 'ILLEGAL_TOOL_CALL_TRANSITION'
-    | 'TOOL_CALL_APPEND_VIOLATION',
+    | 'TOOL_CALL_APPEND_VIOLATION'
+    | 'MESSAGE_EXISTS',
   message: string,
 ): never {
   throw { code, message, retryable: false };
@@ -1352,6 +1355,77 @@ function requireAgentToolCallRecord(value: unknown): AgentToolCallRecordV1 {
     resultRef,
     turn,
     status,
+    createdAt,
+  };
+}
+
+function mapAgentMessageRow(row: Record<string, unknown>): AgentConversationMessageRecordV1 {
+  return {
+    version: 1,
+    messageId: text(row.message_id),
+    conversationId: text(row.conversation_id),
+    runId: text(row.run_id),
+    role: text(row.role) as AgentConversationMessageRecordV1['role'],
+    content: text(row.content),
+    toolName: row.tool_name != null ? text(row.tool_name) : null,
+    callIndex: row.call_index != null ? Number(row.call_index) : null,
+    createdAt: text(row.created_at),
+  };
+}
+
+function requireAgentMessageRole(value: unknown): AgentConversationMessageRecordV1['role'] {
+  if (
+    typeof value !== 'string' ||
+    !(AGENT_MESSAGE_ROLE_VALUES as readonly string[]).includes(value)
+  ) {
+    agentInputError('INVALID_INPUT', 'role must be "user", "assistant" or "tool_result".');
+  }
+  return value as AgentConversationMessageRecordV1['role'];
+}
+
+function requireAgentMessageContent(value: unknown): string {
+  if (typeof value !== 'string' || value.length > 100_000) {
+    agentInputError('INVALID_INPUT', 'content must be a string of at most 100000 characters.');
+  }
+  return value;
+}
+
+function requireAgentOptionalCallIndex(value: unknown): number | null {
+  if (value == null) return null;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 1_000_000) {
+    agentInputError(
+      'INVALID_INPUT',
+      'callIndex must be null or an integer between 0 and 1000000.',
+    );
+  }
+  return value;
+}
+
+function requireAgentMessageRecord(value: unknown): AgentConversationMessageRecordV1 {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    agentInputError('INVALID_INPUT', 'agent message record must be an object.');
+  }
+  const record = value as Record<string, unknown>;
+  if (record.version !== 1) {
+    agentInputError('INVALID_INPUT', 'agent message record version must be 1.');
+  }
+  const messageId = requireAgentIdentifier(record.messageId, 'messageId');
+  const conversationId = requireAgentIdentifier(record.conversationId, 'conversationId');
+  const runId = requireAgentIdentifier(record.runId, 'runId');
+  const role = requireAgentMessageRole(record.role);
+  const content = requireAgentMessageContent(record.content);
+  const toolName = requireAgentOptionalString(record.toolName, 'toolName', 512);
+  const callIndex = requireAgentOptionalCallIndex(record.callIndex);
+  const createdAt = requireAgentTimestamp(record.createdAt, 'createdAt');
+  return {
+    version: 1,
+    messageId,
+    conversationId,
+    runId,
+    role,
+    content,
+    toolName,
+    callIndex,
     createdAt,
   };
 }
@@ -1739,6 +1813,18 @@ const KNOWN_PAYLOAD_FIELDS: Record<PersistenceOperation, readonly string[]> = {
   ],
   updateAgentToolCallStatus: ['runId', 'callIndex', 'status', 'resultRef', 'at'],
   listAgentToolCalls: ['runId', 'after', 'limit'],
+  appendAgentMessage: [
+    'version',
+    'messageId',
+    'conversationId',
+    'runId',
+    'role',
+    'content',
+    'toolName',
+    'callIndex',
+    'createdAt',
+  ],
+  listAgentMessages: ['conversationId', 'limit'],
 };
 
 /** Fail closed on payload fields the operation does not declare. */
@@ -3722,6 +3808,49 @@ function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
         args.push(limit);
         const rows = db.prepare(sql).all(...args) as Record<string, unknown>[];
         return rows.map(mapAgentToolCallRow);
+      }
+      case 'appendAgentMessage': {
+        const x = p as PersistencePayloads['appendAgentMessage'];
+        const record = requireAgentMessageRecord(x);
+        const conversation = db
+          .prepare('SELECT conversation_id FROM agent_conversations WHERE conversation_id=?')
+          .get(record.conversationId);
+        if (conversation === undefined) {
+          agentInputError(
+            'CONVERSATION_NOT_FOUND',
+            `Agent conversation ${record.conversationId} not found; cannot append message ${record.messageId}.`,
+          );
+        }
+        const existing = db
+          .prepare('SELECT message_id FROM agent_conversation_messages WHERE message_id=?')
+          .get(record.messageId);
+        if (existing !== undefined) {
+          agentInputError('MESSAGE_EXISTS', `Agent message ${record.messageId} already exists.`);
+        }
+        db.prepare(
+          'INSERT INTO agent_conversation_messages(message_id,conversation_id,run_id,role,content,tool_name,call_index,created_at) VALUES(?,?,?,?,?,?,?,?)',
+        ).run(
+          record.messageId,
+          record.conversationId,
+          record.runId,
+          record.role,
+          record.content,
+          record.toolName,
+          record.callIndex,
+          record.createdAt,
+        );
+        return { appended: true } satisfies PersistenceResults['appendAgentMessage'];
+      }
+      case 'listAgentMessages': {
+        const x = p as PersistencePayloads['listAgentMessages'];
+        const conversationId = requireAgentIdentifier(x.conversationId, 'conversationId');
+        const limit = x.limit != null ? Math.min(Math.max(1, x.limit), 100) : 50;
+        const rows = db
+          .prepare(
+            'SELECT * FROM agent_conversation_messages WHERE conversation_id=? ORDER BY created_at ASC, message_id ASC LIMIT ?',
+          )
+          .all(conversationId, limit) as Record<string, unknown>[];
+        return rows.map(mapAgentMessageRow);
       }
       default: {
         // Unreachable per the typed union, but reachable for malformed wire

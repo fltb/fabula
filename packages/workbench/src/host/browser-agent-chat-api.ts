@@ -17,6 +17,7 @@
 import type { Context, Handler } from 'hono';
 import type {
   AgentChatCancelResultV1,
+  AgentChatConversationListResultV1,
   AgentChatConversationViewV1,
   AgentChatCreateConversationRequestV1,
   AgentChatCreateConversationResultV1,
@@ -31,6 +32,7 @@ import {
   AGENT_CHAT_MESSAGE_MAX_LENGTH,
   BROWSER_AGENT_CONVERSATION_HISTORY_PATH,
   BROWSER_AGENT_CONVERSATION_RUNS_PATH,
+  BROWSER_AGENT_CONVERSATIONS_LIST_PATH,
   BROWSER_AGENT_CONVERSATIONS_PATH,
   BROWSER_AGENT_RUN_CANCEL_PATH,
   BROWSER_AGENT_RUN_PROGRESS_PATH,
@@ -259,6 +261,23 @@ function createConversationHandler(api: BrowserAgentChatApiImpl): Handler<HostLi
   };
 }
 
+function listConversationsHandler(api: BrowserAgentChatApiImpl): Handler<HostListenerEnv> {
+  return async (c) => {
+    const guarded = await api.guarded(c);
+    if (guarded instanceof Response) return guarded;
+    try {
+      const conversations = await guarded.service.listConversations(guarded.principal.userId);
+      const result: AgentChatConversationListResultV1 = {
+        version: AGENT_CHAT_CONTRACT_VERSION,
+        conversations,
+      };
+      return json(result);
+    } catch (error) {
+      return agentChatError(error);
+    }
+  };
+}
+
 function sendMessageHandler(api: BrowserAgentChatApiImpl): Handler<HostListenerEnv> {
   return async (c) => {
     const guarded = await api.guarded(c);
@@ -469,6 +488,7 @@ export function createBrowserAgentChatApi(
         BROWSER_AGENT_CONVERSATIONS_PATH,
         createConversationHandler(api),
       );
+      host.registerReadRoute(BROWSER_AGENT_CONVERSATIONS_LIST_PATH, listConversationsHandler(api));
       host.registerMutationRoute(
         'POST',
         BROWSER_AGENT_CONVERSATION_RUNS_PATH,

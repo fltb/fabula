@@ -48,7 +48,7 @@ describe('real persistence worker initialization', () => {
         const migrations = db
           .prepare('SELECT version FROM schema_migrations ORDER BY version')
           .all() as { version: number }[];
-        expect(migrations.map((m) => m.version)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+        expect(migrations.map((m) => m.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
         const v2Tables = db
           .prepare(
             "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('configuration_operations', 'authoring_state', 'audit_log', 'device_verifiers') ORDER BY name",

@@ -30,6 +30,8 @@ import {
   BROWSER_PROJECT_REFERENCES_PATH,
   BROWSER_PROJECT_ROLE_PATH,
   BROWSER_PROJECT_SCENE_ADOPTION_PATH,
+  BROWSER_PROJECT_SCENE_MAP_PATH,
+  BROWSER_PROJECT_SCENE_PATH,
   BROWSER_PROJECTS_PATH,
   BROWSER_SESSION_HEADER,
   BROWSER_SESSION_PATH,
@@ -51,7 +53,11 @@ import {
 } from '../contracts/browser-api.js';
 import type { WorkbenchGraphProjectionV1 } from '../contracts/graph.js';
 import type { UserState } from '../contracts/persistence.js';
-import type { SceneAdoptionViewV1 } from '../contracts/scene.js';
+import type {
+  SceneAdoptionViewV1,
+  SceneMapViewV1,
+} from '../contracts/scene.js';
+import type { SceneDetailLoadResult } from './scene-map-service.js';
 import {
   BROWSER_PROJECT_SOURCE_PATH,
   type SourceStudioStateV1,
@@ -225,6 +231,19 @@ export interface BrowserSceneAdoptionSource {
   }): Promise<SceneAdoptionPreparation>;
 }
 
+/**
+ * Scene Map surface for one project (plan 9.2). `loadSceneMap` returns null
+ * when the surface cannot be produced for the project (no open session or no
+ * canonical state projection); the route maps that to 503. `loadSceneDetail`
+ * distinguishes an unknown event (404) from an unavailable surface (503).
+ * The port is Host-only: it never receives caller-supplied source, hashes, or
+ * capability tokens.
+ */
+export interface BrowserSceneMapSource {
+  loadSceneMap(projectId: string): Promise<SceneMapViewV1 | null>;
+  loadSceneDetail(projectId: string, eventId: string): Promise<SceneDetailLoadResult>;
+}
+
 /** All injected ports of the browser read surface. */
 export interface BrowserReadApiOptions {
   readonly principal: BrowserPrincipalResolver;
@@ -243,6 +262,12 @@ export interface BrowserReadApiOptions {
   readonly capabilities?: BrowserProjectCapabilitiesSource;
   /** Optional until the Host wires a scene-adoption source for the project. */
   readonly sceneAdoption?: BrowserSceneAdoptionSource;
+  /**
+   * Scene Map surface (plan 9.2): the scene-map and scene-detail GET routes
+   * register only when the port is present, mirroring the optional
+   * scene-adoption and references ports.
+   */
+  readonly sceneMap?: BrowserSceneMapSource;
   /** Optional until the durable reference port is configured for the project. */
   readonly references?: BrowserReferenceLibrarySource;
 }
@@ -297,15 +322,21 @@ const BROWSER_ERROR_STATUS: Readonly<Record<BrowserApiErrorV1['error']['code'], 
   SCENE_ADOPTION_NOT_FOUND: 404,
   SCENE_ADOPTION_INVALID: 400,
   SCENE_ADOPTION_UNAVAILABLE: 503,
+  SCENE_NOT_FOUND: 404,
+  SCENE_RENDER_INVALID: 400,
+  SCENE_RENDER_QUEUE_FULL: 409,
+  SCENE_RENDER_UNAVAILABLE: 503,
+  SCENE_MAP_UNAVAILABLE: 503,
 };
 
-function errorResponse(code: BrowserApiErrorV1['error']['code'], message: string): Response {
+export function errorResponse(code: BrowserApiErrorV1['error']['code'], message: string): Response {
   const body: BrowserApiErrorV1 = { error: { code, message } };
   return new Response(JSON.stringify(body), {
     status: BROWSER_ERROR_STATUS[code],
     headers: { 'content-type': 'application/json; charset=utf-8' },
   });
 }
+
 
 // ─── Strict route selector parsing ───────────────────────────────────────────
 
@@ -958,6 +989,84 @@ function sceneAdoptionHandler(api: BrowserReadApiImpl): Handler<HostListenerEnv>
 }
 
 /**
+ * Shared guard chain for the scene-map and scene-detail routes: identity →
+ * project ACL → catalog listing → scene-map port presence. Returns the
+ * resolved project id on success, or an error Response to short-circuit.
+ */
+async function sceneRouteGuard(
+  api: BrowserReadApiImpl,
+  c: Context<HostListenerEnv>,
+): Promise<Response | { readonly projectId: string }> {
+  const principal = await resolveOrDeny(api, c);
+  if (principal instanceof Response) return principal;
+  const projectId = c.req.param('projectId');
+  if (projectId === undefined || projectId.length === 0) {
+    return errorResponse('PROJECT_NOT_FOUND', "The project is not in this session's catalog.");
+  }
+  if (!(await canAccess(api, principal, projectId))) {
+    return errorResponse('PROJECT_MISMATCH', 'The session is not authorized for this project.');
+  }
+  if (!(await projectIsListed(api, principal, projectId))) {
+    return errorResponse('PROJECT_NOT_FOUND', "The project is not in this session's catalog.");
+  }
+  if (api.options.sceneMap === undefined) {
+    return errorResponse(
+      'SCENE_MAP_UNAVAILABLE',
+      'The Scene Map surface is not enabled for this project.',
+    );
+  }
+  return { projectId };
+}
+
+function sceneMapHandler(api: BrowserReadApiImpl): Handler<HostListenerEnv> {
+  return async (c) => {
+    const guard = await sceneRouteGuard(api, c);
+    if (guard instanceof Response) return guard;
+    try {
+      const view = await api.options.sceneMap!.loadSceneMap(guard.projectId);
+      if (view === null) {
+        return errorResponse(
+          'SCENE_MAP_UNAVAILABLE',
+          'The Scene Map could not be produced for this project.',
+        );
+      }
+      return c.json(view);
+    } catch {
+      return errorResponse(
+        'SCENE_MAP_UNAVAILABLE',
+        'The Scene Map could not be produced for this project.',
+      );
+    }
+  };
+}
+
+function sceneDetailHandler(api: BrowserReadApiImpl): Handler<HostListenerEnv> {
+  return async (c) => {
+    const guard = await sceneRouteGuard(api, c);
+    if (guard instanceof Response) return guard;
+    const eventId = c.req.param('eventId');
+    if (eventId === undefined || eventId.length === 0 || eventId.length > 256) {
+      return errorResponse('SCENE_NOT_FOUND', 'A bounded scene event id is required.');
+    }
+    try {
+      const outcome = await api.options.sceneMap!.loadSceneDetail(guard.projectId, eventId);
+      if (!outcome.ok) {
+        return errorResponse(
+          outcome.code === 'SCENE_NOT_FOUND' ? 'SCENE_NOT_FOUND' : 'SCENE_MAP_UNAVAILABLE',
+          outcome.message,
+        );
+      }
+      return c.json(outcome.view);
+    } catch {
+      return errorResponse(
+        'SCENE_MAP_UNAVAILABLE',
+        'The scene detail could not be produced for this project.',
+      );
+    }
+  };
+}
+
+/**
  * Resolve the caller's ACL role for one project through the shared access
  * port. The Host's implicit owner override is normalized to `maintainer`,
  * matching the Agent chat role resolver.
@@ -1023,6 +1132,12 @@ export function createBrowserReadApi(options: BrowserReadApiOptions): BrowserRea
       ...(options.sceneAdoption === undefined
         ? []
         : [{ path: BROWSER_PROJECT_SCENE_ADOPTION_PATH, handler: sceneAdoptionHandler(api) }]),
+      ...(options.sceneMap === undefined
+        ? []
+        : [
+            { path: BROWSER_PROJECT_SCENE_MAP_PATH, handler: sceneMapHandler(api) },
+            { path: BROWSER_PROJECT_SCENE_PATH, handler: sceneDetailHandler(api) },
+          ]),
       { path: BROWSER_PROJECT_ROLE_PATH, handler: projectRoleHandler(api) },
       ...(options.references === undefined
         ? []

@@ -65,6 +65,7 @@ import type {
   BrowserSessionPrincipalV1,
   WorkbenchProjectFeatureV1,
 } from '../contracts/browser-api.js';
+import type { SceneAdoptionViewV1 } from '../contracts/scene.js';
 import type {
   ConfigChangeRequestV1,
   ConfigOperationReceiptV1,
@@ -92,6 +93,7 @@ import { PersistenceWorkerClient } from '../persistence/worker-client.js';
 import { createAdminApi, type PluginDiscoveryAdminPort } from './admin-api.js';
 import {
   AgentCapabilityService,
+  type AgentCapabilityGrant,
   createAgentDurableAudit,
   createCapabilityPersistence,
   createDurableAuditSink,
@@ -103,6 +105,7 @@ import {
   type WorkbenchAgentRunService,
 } from './agent/run-service.js';
 import { createAuthPersistence, DEFAULT_SESSION_TTL_MS, LocalAuthService } from './auth/index.js';
+import { projectCanonicalGraphRuntime } from './graph-projection.js';
 import { receiptFromRecord } from './authoring/coordinator.js';
 import {
   createBrowserAuthoringMutationPort,
@@ -125,12 +128,13 @@ import {
 import { createBrowserPublicationApi } from './browser-publication-api.js';
 import { createBrowserReferenceApi } from './browser-reference-api.js';
 import { createBrowserPrincipalResolver } from './browser-read-api.js';
+import { createBrowserSceneApi } from './browser-scene-api.js';
 import { createBrowserReviewApi } from './browser-review-api.js';
 import { ConfigurationFileStore } from './configuration-file-store.js';
 import { type ActiveConfiguration, ConfigurationChangeService } from './configuration-service.js';
 import { createProjectCoreRuntime } from './core-runtime.js';
 import { prepareSceneAdoption } from './scene-adoption.js';
-import { projectCanonicalGraphRuntime } from './graph-projection.js';
+import { loadSceneDetail, loadSceneMap } from './scene-map-service.js';
 import {
   createAdminMcpRegistry,
   createDeviceVerifierPersistence,
@@ -1497,12 +1501,13 @@ export async function startWorkbench(
     // tools + browser publication routes (publication, plan Step 6.6).
     // agent-chat is derived only when the full gate passes (canonical
     // agent.enabled + tool-call-ready model + parity flag, plan 9.6); the
-    // browser surface is only constructed when projects are configured, so
-    // the list is never empty here.
     const launchFeatures: readonly WorkbenchProjectFeatureV1[] = [
       'project-home',
       'source-studio',
       'scene-canvas',
+      // Scene Map (plan 9.2): always-on like scene-canvas; the scene-map and
+      // scene-detail read routes plus the scene render trigger mount under it.
+      'scene-map',
       'graph-route',
       'review-hub',
       'publication',
@@ -1643,6 +1648,44 @@ export async function startWorkbench(
                       { execution: session.runtime.services.execution },
                       input,
                     );
+                  },
+                }
+              : undefined,
+            // Scene Map surface (plan 9.2): the scene-map / scene-detail GET
+            // routes mount under the `scene-map` feature (always-on). The
+            // port derives every row from the session's accepted source, the
+            // per-project canonical state projection (diff counts) and the
+            // session's Core execution repository (accepted scene hashes).
+            sceneMap: launchFeatures.includes('scene-map')
+              ? {
+                  loadSceneMap: async (projectId) => {
+                    const session = sessions.get(projectId);
+                    const projection = stateProjections.get(projectId);
+                    if (session === null || projection === undefined) return null;
+                    return loadSceneMap({
+                      projectId,
+                      session,
+                      projection,
+                      execution: session.runtime.services.execution,
+                    });
+                  },
+                  loadSceneDetail: async (projectId, eventId) => {
+                    const session = sessions.get(projectId);
+                    const projection = stateProjections.get(projectId);
+                    if (session === null || projection === undefined) {
+                      return {
+                        ok: false as const,
+                        code: 'SCENE_UNAVAILABLE' as const,
+                        message: 'The project session is not open.',
+                      };
+                    }
+                    return loadSceneDetail({
+                      projectId,
+                      session,
+                      projection,
+                      execution: session.runtime.services.execution,
+                      eventId,
+                    });
                   },
                 }
               : undefined,
@@ -1963,6 +2006,121 @@ export async function startWorkbench(
           },
         },
       }).register(hostServer);
+      // Guarded scene render surface (plan 9.2.3): `POST /scenes/:eventId/render`
+      // enqueues through the SAME `nova_render` tool the MCP endpoint serves —
+      // the same durable operation queue, two-phase lane discipline, and
+      // idempotency semantics. The trigger issues a real `mcp:render` grant
+      // for the already-resolved browser actor; the browser never supplies an
+      // actor, capability, or scope. Registered under the `scene-map` feature.
+      if (launchFeatures.includes('scene-map')) {
+        createBrowserSceneApi({
+          principal,
+          access: projectAccess,
+          authorization,
+          catalog,
+          render: {
+            trigger: async ({ projectId, eventId, userId }) => {
+              const session = sessions.get(projectId);
+              if (session === null) {
+                return {
+                  ok: false as const,
+                  code: 'SCENE_RENDER_UNAVAILABLE' as const,
+                  message: 'The project session is not open.',
+                };
+              }
+              let grant: AgentCapabilityGrant;
+              try {
+                const issued = await capabilities.issue({
+                  userId,
+                  projectId,
+                  scopes: [MCP_RENDER_SCOPE],
+                });
+                grant = issued.grant;
+              } catch {
+                return {
+                  ok: false as const,
+                  code: 'SCENE_RENDER_UNAVAILABLE' as const,
+                  message: 'The render capability could not be issued.',
+                };
+              }
+              const reference = await referencePortFor(projectId);
+              const registry = createProjectSessionMcpRegistry(session, {
+                family: 'project',
+                operations: operationServices.get(projectId),
+                ...(reference === undefined ? {} : { reference }),
+              });
+              const outcome = await registry.run(
+                'nova_render',
+                { sessionId: null, userId: grant.userId, grant },
+                { sceneSelector: { type: 'events', eventIds: [eventId] } },
+              );
+              if (!outcome.ok) {
+                if (outcome.error.code === 'IDEMPOTENCY_CONFLICT') {
+                  return {
+                    ok: false as const,
+                    code: 'SCENE_RENDER_INVALID' as const,
+                    message: outcome.error.message,
+                  };
+                }
+                if (outcome.error.code === 'OPERATION_QUEUE_FULL') {
+                  return {
+                    ok: false as const,
+                    code: 'SCENE_RENDER_QUEUE_FULL' as const,
+                    message: outcome.error.message,
+                  };
+                }
+                return {
+                  ok: false as const,
+                  code: 'SCENE_RENDER_UNAVAILABLE' as const,
+                  message: outcome.error.message,
+                };
+              }
+              const rawHandle =
+                outcome.data !== null &&
+                typeof outcome.data === 'object' &&
+                'operationHandle' in outcome.data
+                  ? outcome.data.operationHandle
+                  : undefined;
+              if (typeof rawHandle !== 'string' || rawHandle.length === 0) {
+                return {
+                  ok: false as const,
+                  code: 'SCENE_RENDER_UNAVAILABLE' as const,
+                  message: 'The render operation returned no operation handle.',
+                };
+              }
+              // Adoption preview: present when the current accepted source
+              // already carries a committed scene (the author may adopt while
+              // the queued render runs); never derived from caller bytes.
+              const record = await session.runtime.services.execution.readAcceptedScene({
+                projectId,
+                eventId,
+              });
+              const source = session.source;
+              const adoption: SceneAdoptionViewV1 | undefined =
+                record !== null &&
+                source !== null &&
+                record.value.sourceHash === source.sourceHash
+                  ? {
+                      version: 1,
+                      eventId,
+                      revisionId: record.value.revisionId,
+                      proseHash: record.value.proseHash,
+                      released: true,
+                      disclosure: 'accepted generated prose will enter the authoring manifest',
+                    }
+                  : undefined;
+              return {
+                ok: true as const,
+                result: {
+                  version: 1,
+                  operationId: rawHandle,
+                  ...(adoption === undefined ? {} : { adoption }),
+                },
+              };
+            },
+          },
+        }).register(hostServer);
+      }
       // Guarded browser reference mutations (plan 9.1): multipart import,
       // one-reference delete, and failed-import retry, all through the same
       // McpReferencePort the MCP tools drive. Registered ONLY while

@@ -55,6 +55,12 @@ const REVIEW_ERROR_CODES: Readonly<Record<BrowserApiErrorCode, true>> = {
   SCENE_ADOPTION_NOT_FOUND: true,
   SCENE_ADOPTION_INVALID: true,
   SCENE_ADOPTION_UNAVAILABLE: true,
+  SCENE_NOT_FOUND: true,
+  SCENE_RENDER_INVALID: true,
+  SCENE_RENDER_QUEUE_FULL: true,
+  SCENE_RENDER_UNAVAILABLE: true,
+  SCENE_MAP_UNAVAILABLE: true,
+
 };
 
 /** Typed non-2xx failure from the guarded Host review surface. */

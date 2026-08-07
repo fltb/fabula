@@ -214,7 +214,7 @@ export type {
   WorkingDocumentState,
   YjsDocumentKey,
 } from './persistence.js';
-export type { SceneAdoptionViewV1 } from './scene.js';
+export type * from './scene.js';
 export type {
   SourceStudioDocumentDescriptorV1,
   SourceStudioStateV1,

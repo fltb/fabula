@@ -96,6 +96,12 @@ const AGENT_CHAT_ERROR_STATUS: Readonly<Record<BrowserApiErrorCode, number>> = {
   SCENE_ADOPTION_NOT_FOUND: 404,
   SCENE_ADOPTION_INVALID: 400,
   SCENE_ADOPTION_UNAVAILABLE: 503,
+  SCENE_NOT_FOUND: 503,
+  SCENE_RENDER_INVALID: 503,
+  SCENE_RENDER_QUEUE_FULL: 503,
+  SCENE_RENDER_UNAVAILABLE: 503,
+  SCENE_MAP_UNAVAILABLE: 503,
+
 };
 
 function errorResponse(code: BrowserApiErrorCode, message: string): Response {

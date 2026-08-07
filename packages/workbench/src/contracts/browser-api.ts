@@ -63,6 +63,12 @@ export const BROWSER_PROJECT_SCENE_ADOPTION_PATH = `${BROWSER_API_BASE_PATH}/pro
 export const BROWSER_SCENE_ADOPTION_EVENT_QUERY = 'eventId';
 /** Query parameter carrying the scene revision id on the scene-adoption endpoint. */
 export const BROWSER_SCENE_ADOPTION_REVISION_QUERY = 'revisionId';
+/** `GET /api/v1/projects/:projectId/scene-map` — chapter-grouped scene map. */
+export const BROWSER_PROJECT_SCENE_MAP_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/scene-map`;
+/** `GET /api/v1/projects/:projectId/scenes/:eventId` — one scene detail. */
+export const BROWSER_PROJECT_SCENE_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/scenes/:eventId`;
+/** `POST /api/v1/projects/:projectId/scenes/:eventId/render` — trigger one scene render. */
+export const BROWSER_PROJECT_SCENE_RENDER_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/scenes/:eventId/render`;
 /** `GET /api/v1/projects/:projectId/role` — the caller's resolved project role. */
 export const BROWSER_PROJECT_ROLE_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/role`;
 
@@ -168,6 +174,7 @@ export type WorkbenchProjectFeatureV1 =
   | 'project-home'
   | 'source-studio'
   | 'scene-canvas'
+  | 'scene-map'
   | 'graph-route'
   | 'review-hub'
   | 'publication'
@@ -328,8 +335,18 @@ export type BrowserApiErrorCode =
   | 'AGENT_CHAT_INVALID'
   /** 409 — the run is already terminal and cannot be cancelled/retried here. */
   | 'AGENT_CHAT_RUN_TERMINAL'
-  /** 409 — the project operation queue is full; retry later. */
+  /** 409 — the agent operation queue is full for this project. */
   | 'AGENT_CHAT_QUEUE_FULL'
+  /** 404 — the requested scene is not in the compiled project. */
+  | 'SCENE_NOT_FOUND'
+  /** 400 — the scene render request is malformed or violates a documented bound. */
+  | 'SCENE_RENDER_INVALID'
+  /** 409 — the scene render queue is full; retry later. */
+  | 'SCENE_RENDER_QUEUE_FULL'
+  /** 503 — the scene render surface cannot be triggered by the host. */
+  | 'SCENE_RENDER_UNAVAILABLE'
+  /** 503 — the scene map / scene detail surface is unavailable. */
+  | 'SCENE_MAP_UNAVAILABLE'
   /** 404 — the requested scene revision does not exist for this project. */
   | 'SCENE_ADOPTION_NOT_FOUND'
   /** 400 — the scene adoption request is malformed or violates a documented bound. */

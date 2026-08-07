@@ -91,6 +91,9 @@ const AGENT_CHAT_ERROR_STATUS: Readonly<Record<BrowserApiErrorCode, number>> = {
   AGENT_CHAT_INVALID: 400,
   AGENT_CHAT_RUN_TERMINAL: 409,
   AGENT_CHAT_QUEUE_FULL: 409,
+  SCENE_ADOPTION_NOT_FOUND: 404,
+  SCENE_ADOPTION_INVALID: 400,
+  SCENE_ADOPTION_UNAVAILABLE: 503,
 };
 
 function errorResponse(code: BrowserApiErrorCode, message: string): Response {

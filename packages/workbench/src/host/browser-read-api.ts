@@ -25,12 +25,17 @@ import {
   BROWSER_PROJECT_GRAPHS_PATH,
   BROWSER_PROJECT_OVERVIEW_PATH,
   BROWSER_PROJECT_REFERENCES_PATH,
+  BROWSER_PROJECT_ROLE_PATH,
+  BROWSER_PROJECT_SCENE_ADOPTION_PATH,
   BROWSER_PROJECTS_PATH,
   BROWSER_SESSION_HEADER,
   BROWSER_SESSION_PATH,
+  BROWSER_SCENE_ADOPTION_EVENT_QUERY,
+  BROWSER_SCENE_ADOPTION_REVISION_QUERY,
   type BrowserApiErrorV1,
   type BrowserGraphRouteSelectorV1,
   type BrowserProjectCapabilitiesV1,
+  type BrowserProjectRoleV1,
   type BrowserProjectListV1,
   type BrowserProjectOverviewV1,
   type BrowserProjectReferenceListQueryV1,
@@ -40,6 +45,7 @@ import {
 } from '../contracts/browser-api.js';
 import type { WorkbenchGraphProjectionV1 } from '../contracts/graph.js';
 import type { UserState } from '../contracts/persistence.js';
+import type { SceneAdoptionViewV1 } from '../contracts/scene.js';
 import {
   BROWSER_PROJECT_SOURCE_PATH,
   type SourceStudioStateV1,
@@ -47,6 +53,8 @@ import {
 import type { LocalAuthService } from './auth/service.js';
 import type { HostListenerEnv } from './listener.js';
 import type { ProjectAccessRequiredRole, ProjectAccessService } from './project-access-service.js';
+import type { ProjectAccessRole } from '../contracts/configuration.js';
+import type { SceneAdoptionFailureCode, SceneAdoptionPreparation } from './scene-adoption.js';
 
 // ─── Injected ports ──────────────────────────────────────────────────────────
 
@@ -184,6 +192,19 @@ export interface BrowserReferenceLibrarySource {
   ): Promise<BrowserProjectReferenceListV1 | null>;
 }
 
+/**
+ * Scene adoption preparation source for one project (plan 5.2). It bridges
+ * the Host-only `prepareSceneAdoption` service; the route projects only
+ * the safe {@link SceneAdoptionViewV1} and maps failures to browser codes.
+ */
+export interface BrowserSceneAdoptionSource {
+  prepare(input: {
+    readonly projectId: string;
+    readonly eventId: string;
+    readonly revisionId: string;
+  }): Promise<SceneAdoptionPreparation>;
+}
+
 /** All injected ports of the browser read surface. */
 export interface BrowserReadApiOptions {
   readonly principal: BrowserPrincipalResolver;
@@ -200,6 +221,8 @@ export interface BrowserReadApiOptions {
    * port is present (mirroring the optional references port).
    */
   readonly capabilities?: BrowserProjectCapabilitiesSource;
+  /** Optional until the Host wires a scene-adoption source for the project. */
+  readonly sceneAdoption?: BrowserSceneAdoptionSource;
   /** Optional until the durable reference port is configured for the project. */
   readonly references?: BrowserReferenceLibrarySource;
 }
@@ -211,8 +234,9 @@ export interface BrowserReadRoute {
 }
 
 /**
- * The mounted browser read surface: the five fixed GET routes plus the
- * optional references and capabilities routes when their ports are present.
+ * The mounted browser read surface: the six fixed GET routes plus the
+ * optional references, capabilities, and scene-adoption routes when their
+ * ports are present.
  */
 export interface BrowserReadApi {
   readonly routes: readonly BrowserReadRoute[];
@@ -248,6 +272,9 @@ const BROWSER_ERROR_STATUS: Readonly<Record<BrowserApiErrorV1['error']['code'], 
   AGENT_CHAT_INVALID: 400,
   AGENT_CHAT_RUN_TERMINAL: 409,
   AGENT_CHAT_QUEUE_FULL: 409,
+  SCENE_ADOPTION_NOT_FOUND: 404,
+  SCENE_ADOPTION_INVALID: 400,
+  SCENE_ADOPTION_UNAVAILABLE: 503,
 };
 
 function errorResponse(code: BrowserApiErrorV1['error']['code'], message: string): Response {
@@ -712,6 +739,148 @@ function referencesHandler(api: BrowserReadApiImpl): Handler<HostListenerEnv> {
   };
 }
 
+// ─── Scene adoption query parsing ────────────────────────────────────────────
+
+type SceneAdoptionQueryParse =
+  | { readonly ok: true; readonly eventId: string; readonly revisionId: string }
+  | { readonly ok: false; readonly message: string };
+
+/** Exactly one non-empty, bounded `eventId` and `revisionId` query value. */
+function parseSceneAdoptionQuery(c: Context<HostListenerEnv>): SceneAdoptionQueryParse {
+  const eventValues = c.req.queries(BROWSER_SCENE_ADOPTION_EVENT_QUERY);
+  const revisionValues = c.req.queries(BROWSER_SCENE_ADOPTION_REVISION_QUERY);
+  if (
+    eventValues === undefined ||
+    eventValues.length !== 1 ||
+    revisionValues === undefined ||
+    revisionValues.length !== 1
+  ) {
+    return {
+      ok: false,
+      message: 'exactly one eventId and one revisionId query parameter is required',
+    };
+  }
+  const eventId = eventValues[0] ?? '';
+  const revisionId = revisionValues[0] ?? '';
+  if (
+    eventId.length === 0 ||
+    eventId.length > 256 ||
+    revisionId.length === 0 ||
+    revisionId.length > 256
+  ) {
+    return {
+      ok: false,
+      message: 'eventId and revisionId must be non-empty strings of at most 256 characters',
+    };
+  }
+  return { ok: true, eventId, revisionId };
+}
+
+/** Map a Host adoption failure to the browser error code for the surface. */
+const SCENE_ADOPTION_ERROR_CODE: Readonly<
+  Record<SceneAdoptionFailureCode, BrowserApiErrorV1['error']['code']>
+> = {
+  REVISION_NOT_FOUND: 'SCENE_ADOPTION_NOT_FOUND',
+  REVISION_MISMATCH: 'SCENE_ADOPTION_NOT_FOUND',
+  REVISION_INVALID: 'SCENE_ADOPTION_UNAVAILABLE',
+  REVISION_UNRELEASED: 'SCENE_ADOPTION_UNAVAILABLE',
+  PROSE_HASH_MISMATCH: 'SCENE_ADOPTION_UNAVAILABLE',
+};
+
+function sceneAdoptionHandler(api: BrowserReadApiImpl): Handler<HostListenerEnv> {
+  return async (c) => {
+    // Strict order: identity, authorization, catalog membership, then the
+    // adoption port — an authorized-but-unlisted project never reaches it.
+    const principal = await resolveOrDeny(api, c);
+    if (principal instanceof Response) return principal;
+    const projectId = c.req.param('projectId');
+    if (projectId === undefined || projectId.length === 0) {
+      return errorResponse('PROJECT_NOT_FOUND', "The project is not in this session's catalog.");
+    }
+    if (!(await canAccess(api, principal, projectId))) {
+      return errorResponse('PROJECT_MISMATCH', 'The session is not authorized for this project.');
+    }
+    if (!(await projectIsListed(api, principal, projectId))) {
+      return errorResponse('PROJECT_NOT_FOUND', "The project is not in this session's catalog.");
+    }
+    if (api.options.sceneAdoption === undefined) {
+      return errorResponse(
+        'SCENE_ADOPTION_UNAVAILABLE',
+        'The scene adoption surface is not enabled for this project.',
+      );
+    }
+    const query = parseSceneAdoptionQuery(c);
+    if (!query.ok) return errorResponse('SCENE_ADOPTION_INVALID', query.message);
+    try {
+      const preparation = await api.options.sceneAdoption.prepare({
+        projectId,
+        eventId: query.eventId,
+        revisionId: query.revisionId,
+      });
+      if (!preparation.ok) {
+        return errorResponse(SCENE_ADOPTION_ERROR_CODE[preparation.code], preparation.message);
+      }
+      // Only the safe view crosses the browser boundary: no claim, no entry
+      // bytes, no authoring-manifest material.
+      const view: SceneAdoptionViewV1 = {
+        version: 1,
+        eventId: preparation.claim.eventId,
+        revisionId: preparation.claim.revisionId,
+        proseHash: preparation.claim.proseHash,
+        released: preparation.claim.released,
+        disclosure: preparation.disclosure,
+      };
+      return c.json(view);
+    } catch {
+      return errorResponse(
+        'SCENE_ADOPTION_UNAVAILABLE',
+        'The scene adoption preview could not be produced by the host.',
+      );
+    }
+  };
+}
+
+/**
+ * Resolve the caller's ACL role for one project through the shared access
+ * port. The Host's implicit owner override is normalized to `maintainer`,
+ * matching the Agent chat role resolver.
+ */
+async function resolveProjectRole(
+  api: BrowserReadApiImpl,
+  principal: BrowserSessionPrincipalV1,
+  projectId: string,
+): Promise<ProjectAccessRole | null> {
+  if (api.options.access === undefined) return null;
+  const result = await api.options.access.authorize({
+    userId: principal.userId,
+    projectId,
+    requiredRole: 'reader',
+  });
+  if (!result.ok) return null;
+  const role = result.grant.role;
+  return role === 'owner' ? 'maintainer' : role;
+}
+
+function projectRoleHandler(api: BrowserReadApiImpl): Handler<HostListenerEnv> {
+  return async (c) => {
+    const principal = await resolveOrDeny(api, c);
+    if (principal instanceof Response) return principal;
+    const projectId = c.req.param('projectId');
+    if (projectId === undefined || projectId.length === 0) {
+      return errorResponse('PROJECT_NOT_FOUND', "The project is not in this session's catalog.");
+    }
+    if (!(await canAccess(api, principal, projectId))) {
+      return errorResponse('PROJECT_MISMATCH', 'The session is not authorized for this project.');
+    }
+    if (!(await projectIsListed(api, principal, projectId))) {
+      return errorResponse('PROJECT_NOT_FOUND', "The project is not in this session's catalog.");
+    }
+    const role = await resolveProjectRole(api, principal, projectId);
+    const body: BrowserProjectRoleV1 = { version: BROWSER_API_VERSION, role };
+    return c.json(body);
+  };
+}
+
 class BrowserReadApiImpl {
   constructor(readonly options: BrowserReadApiOptions) {}
 }
@@ -734,6 +903,10 @@ export function createBrowserReadApi(options: BrowserReadApiOptions): BrowserRea
         : [{ path: BROWSER_PROJECT_CAPABILITIES_PATH, handler: capabilitiesHandler(api) }]),
       { path: BROWSER_PROJECT_GRAPHS_PATH, handler: graphsHandler(api) },
       { path: BROWSER_PROJECT_SOURCE_PATH, handler: sourceStudioHandler(api) },
+      ...(options.sceneAdoption === undefined
+        ? []
+        : [{ path: BROWSER_PROJECT_SCENE_ADOPTION_PATH, handler: sceneAdoptionHandler(api) }]),
+      { path: BROWSER_PROJECT_ROLE_PATH, handler: projectRoleHandler(api) },
       ...(options.references === undefined
         ? []
         : [{ path: BROWSER_PROJECT_REFERENCES_PATH, handler: referencesHandler(api) }]),

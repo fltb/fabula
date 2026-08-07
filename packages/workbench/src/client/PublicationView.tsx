@@ -1,6 +1,7 @@
 import { createSignal, For, Show } from 'solid-js';
 import { PROJECT_ACCESS_ROLE_GRANTS } from '../contracts/configuration.js';
 import type {
+  BrowserGraphRouteSelectorV1,
   BrowserPublicationListV1,
   BrowserPublicationReadQueryV1,
   BrowserPublicationReadResultV1,
@@ -13,8 +14,10 @@ import { BrowserPublicationApiError } from './browser-publication-api.js';
 export interface PublicationViewProps {
   /** Project identity for publish requests; null when no project is open. */
   readonly projectId: string | null;
-  /** Host publication catalog; null = not loaded yet (or the load failed). */
+  /** Host publication catalog; null = not loaded yet. */
   readonly publications?: BrowserPublicationListV1 | null;
+  /** Catalog load failure surfaced by the Host surface; non-null renders a retry state. */
+  readonly publicationsError?: string | null;
   /**
    * Project membership role for the current session. Publishing is a
    * submit-scope operation, so it is offered only when the role's grants
@@ -63,6 +66,27 @@ function downloadFilename(record: BrowserPublicationRecordV1): string {
   const parts = record.relativeOutputPath.split('/');
   const leaf = parts[parts.length - 1];
   return leaf.length > 0 ? leaf : `${record.publicationId}.md`;
+}
+
+/** Client mirror of the Host's assertSafePublicationRelativePath rules. */
+function publicationRelativePathError(relativePath: string): string | null {
+  if (relativePath === '') {
+    return 'publication relative path must not be empty';
+  }
+  if (relativePath.startsWith('/') || /^[A-Za-z]:[\\/]/.test(relativePath)) {
+    return `publication relative path must not be absolute: ${relativePath}`;
+  }
+  const parts = relativePath.split(/[\\/]/);
+  if (parts.some((part) => part === '..' || part === '.')) {
+    return `publication relative path must not traverse: ${relativePath}`;
+  }
+  if (parts.some((part) => part === '')) {
+    return `publication relative path must not contain empty segments: ${relativePath}`;
+  }
+  if (parts[0] !== 'output' || parts.length !== 2) {
+    return `publication relative path must be output/<file>: ${relativePath}`;
+  }
+  return null;
 }
 
 function shortHash(hash: string): string {
@@ -193,7 +217,7 @@ function PublicationCard(props: {
       </Show>
       <Show when={props.onRead !== undefined}>
         <button
-          class="text-button"
+          class="btn"
           type="button"
           disabled={downloading()}
           data-testid={`publication-download-${record().publicationId}`}
@@ -211,65 +235,69 @@ function PublicationCard(props: {
  * branch artifacts with their relative file names, hashes, scene/source
  * identity and stale reasons, plus a publish action and a download action
  * that reads the artifact through the bounded read route (never a Host
- * path). Empty/loading states are honest and no mock data is ever rendered.
+ * path). The publish form is structured (branch name + validated relative
+ * output path, mirroring the Host's path rules) and the wire branchPath is
+ * built exactly as before. Empty, loading, load-error and post-publish
+ * confirmation states are honest and no mock data is ever rendered.
  */
 export function PublicationView(props: PublicationViewProps) {
   const [mutationError, setMutationError] = createSignal<string | null>(null);
   const [publishOpen, setPublishOpen] = createSignal(false);
-  const [branchPath, setBranchPath] = createSignal('');
-  const [discourseBranch, setDiscourseBranch] = createSignal('');
+  const [branchName, setBranchName] = createSignal('');
+  const [relativePath, setRelativePath] = createSignal('output/novel.md');
   const [title, setTitle] = createSignal('');
+  const [publishSuccess, setPublishSuccess] = createSignal(false);
 
   const rank = () => roleRank(props.sessionRole);
   const canPublish = () => roleAllows(rank(), 3) && props.onPublish !== undefined;
 
   const runMutation = async (mutation: () => void | Promise<void>): Promise<void> => {
     setMutationError(null);
+    setPublishSuccess(false);
     try {
       await mutation();
+      setPublishSuccess(true);
       await props.onRefresh?.();
     } catch (error) {
+      setPublishSuccess(false);
       setMutationError(lifecycleErrorMessage(error));
     }
   };
 
+  /**
+   * Submit the publish form. A blank branch name publishes the canonical
+   * novel (no branchPath on the wire, exactly like the previous blank JSON
+   * input); a named branch publishes a custom artifact whose wire branchPath
+   * is the strict route selector `{version:1, branchPath:{decisions:[]}}`
+   * plus the branch's discourse name — byte-identical to what the old JSON
+   * form produced for the same content. The relative output path is
+   * validated client-side with the Host's own rules but is not part of the
+   * wire: custom artifacts are addressed by their derived publication id.
+   */
   const publish = () => {
     const projectId = props.projectId;
     if (projectId === null) return;
-    let parsedBranchPath: unknown;
-    const raw = branchPath().trim();
-    if (raw.length > 0) {
-      try {
-        const value: unknown = JSON.parse(raw);
-        if (
-          typeof value !== 'object' ||
-          value === null ||
-          Array.isArray(value) ||
-          !('decisions' in value) ||
-          !Array.isArray(value.decisions)
-        ) {
-          throw new Error('invalid shape');
-        }
-        parsedBranchPath = { version: 1, branchPath: value };
-      } catch {
-        setMutationError('--branch path must be JSON like {"decisions": []}.');
-        return;
-      }
+    const name = branchName().trim();
+    const pathProblem = publicationRelativePathError(relativePath().trim());
+    if (pathProblem !== null) {
+      setMutationError(pathProblem);
+      return;
     }
+    const customSelector: BrowserGraphRouteSelectorV1 = {
+      version: 1,
+      branchPath: { decisions: [] },
+    };
     const request: BrowserPublishRequestV1 = {
       version: 1,
       projectId,
-      ...(parsedBranchPath === undefined
+      ...(name.length === 0
         ? {}
-        : { branchPath: parsedBranchPath as BrowserPublishRequestV1['branchPath'] }),
-      ...(discourseBranch().trim().length === 0
-        ? {}
-        : { discourseBranch: discourseBranch().trim() }),
+        : { branchPath: customSelector, discourseBranch: name }),
       ...(title().trim().length === 0 ? {} : { title: title().trim() }),
     };
     void runMutation(() => props.onPublish?.(request));
-    setBranchPath('');
-    setDiscourseBranch('');
+    setBranchName('');
+    setRelativePath('output/novel.md');
     setTitle('');
     setPublishOpen(false);
   };
@@ -283,7 +311,7 @@ export function PublicationView(props: PublicationViewProps) {
         </div>
         <Show when={props.onRefresh !== undefined}>
           <button
-            class="text-button"
+            class="btn"
             type="button"
             data-testid="publication-refresh"
             onClick={() => void props.onRefresh?.()}
@@ -302,14 +330,43 @@ export function PublicationView(props: PublicationViewProps) {
           {mutationError()}
         </p>
       </Show>
+      <Show when={publishSuccess()}>
+        <p
+          class="diagnostic diagnostic-success"
+          role="status"
+          data-testid="publication-publish-success"
+        >
+          Publication request accepted — the artifact is queued for assembly.
+        </p>
+      </Show>
 
       <Show
         when={props.publications}
         fallback={
-          <section class="screen-empty" aria-live="polite">
-            <h3>No publication projection</h3>
-            <p>Open an authenticated project in the Host to load its publication records.</p>
-          </section>
+          <Show
+            when={props.publicationsError !== null && props.publicationsError !== undefined}
+            fallback={
+              <section class="screen-empty" aria-live="polite">
+                <h3>No publication projection</h3>
+                <p>Open an authenticated project in the Host to load its publication records.</p>
+              </section>
+            }
+          >
+            <section class="screen-empty" aria-live="polite" data-testid="publication-load-error">
+              <h3>Publication catalog could not be loaded</h3>
+              <p>{props.publicationsError}</p>
+              <Show when={props.onRefresh !== undefined}>
+                <button
+                  class="btn"
+                  type="button"
+                  data-testid="publication-load-retry"
+                  onClick={() => void props.onRefresh?.()}
+                >
+                  Retry
+                </button>
+              </Show>
+            </section>
+          </Show>
         }
       >
         {(catalog) => (
@@ -326,7 +383,7 @@ export function PublicationView(props: PublicationViewProps) {
                   when={publishOpen()}
                   fallback={
                     <button
-                      class="text-button"
+                      class="btn btn-primary"
                       type="button"
                       data-testid="publication-publish-open"
                       onClick={() => setPublishOpen(true)}
@@ -343,18 +400,18 @@ export function PublicationView(props: PublicationViewProps) {
                     }}
                   >
                     <input
-                      aria-label="Branch path JSON"
-                      placeholder='Branch path JSON (e.g. {"decisions": []})'
-                      value={branchPath()}
-                      onInput={(event) => setBranchPath(event.currentTarget.value)}
-                      data-testid="publication-branch-path"
+                      aria-label="Branch name"
+                      placeholder="Branch name (optional)"
+                      value={branchName()}
+                      onInput={(event) => setBranchName(event.currentTarget.value)}
+                      data-testid="publication-branch-name"
                     />
                     <input
-                      aria-label="Discourse branch"
-                      placeholder="Discourse branch (optional)"
-                      value={discourseBranch()}
-                      onInput={(event) => setDiscourseBranch(event.currentTarget.value)}
-                      data-testid="publication-discourse-branch"
+                      aria-label="Relative output path"
+                      placeholder="Relative output path (e.g. output/novel.md)"
+                      value={relativePath()}
+                      onInput={(event) => setRelativePath(event.currentTarget.value)}
+                      data-testid="publication-relative-path"
                     />
                     <input
                       aria-label="Title"
@@ -364,13 +421,13 @@ export function PublicationView(props: PublicationViewProps) {
                       data-testid="publication-title"
                     />
                     <button
-                      class="text-button"
+                      class="btn btn-primary"
                       type="submit"
                       data-testid="publication-publish-save"
                     >
                       Publish
                     </button>
-                    <button class="text-button" type="button" onClick={() => setPublishOpen(false)}>
+                    <button class="btn btn-ghost" type="button" onClick={() => setPublishOpen(false)}>
                       Cancel
                     </button>
                   </form>

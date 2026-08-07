@@ -48,6 +48,9 @@ const PUBLICATION_ERROR_CODES: Readonly<Record<BrowserApiErrorCode, true>> = {
   AGENT_CHAT_INVALID: true,
   AGENT_CHAT_RUN_TERMINAL: true,
   AGENT_CHAT_QUEUE_FULL: true,
+  SCENE_ADOPTION_NOT_FOUND: true,
+  SCENE_ADOPTION_INVALID: true,
+  SCENE_ADOPTION_UNAVAILABLE: true,
 };
 
 /** Typed non-2xx failure from the guarded Host publication surface. */

@@ -118,6 +118,25 @@ describe('Publication projections', () => {
     expect(screen.queryByTestId('publication-download-canonical')).not.toBeInTheDocument();
     expect(screen.queryByText(/demo novel|example publication/i)).not.toBeInTheDocument();
   });
+
+  it('shows a load-error state with a retry action when the catalog fails to load', async () => {
+    const user = userEvent.setup();
+    const onRefresh = vi.fn(async () => undefined);
+    render(() => (
+      <PublicationView
+        projectId="proj-a"
+        publications={null}
+        publicationsError="Host publication catalog request failed with HTTP 503."
+        onRefresh={onRefresh}
+      />
+    ));
+
+    expect(screen.getByTestId('publication-load-error')).toHaveTextContent(
+      'Host publication catalog request failed with HTTP 503.',
+    );
+    await user.click(screen.getByTestId('publication-load-retry'));
+    expect(onRefresh).toHaveBeenCalled();
+  });
 });
 
 describe('Publication mutation affordances', () => {
@@ -154,30 +173,27 @@ describe('Publication mutation affordances', () => {
     ));
 
     await user.click(screen.getByTestId('publication-publish-open'));
-    fireEvent.input(screen.getByTestId('publication-branch-path'), {
-      target: {
-        value: '{"decisions": [{"atEventId": "E1", "choiceId": "c1", "narrativeOrder": 1}]}',
-      },
+    await user.type(screen.getByTestId('publication-branch-name'), 'alternate');
+    fireEvent.input(screen.getByTestId('publication-relative-path'), {
+      target: { value: 'output/alternate.md' },
     });
-    await user.type(screen.getByTestId('publication-discourse-branch'), 'alternate');
     await user.type(screen.getByTestId('publication-title'), 'Alternate Ending');
     await user.click(screen.getByTestId('publication-publish-save'));
 
     expect(onPublish).toHaveBeenCalledWith({
       version: 1,
       projectId: 'proj-a',
-      branchPath: {
-        version: 1,
-        branchPath: {
-          decisions: [{ atEventId: 'E1', choiceId: 'c1', narrativeOrder: 1 }],
-        },
-      },
+      branchPath: { version: 1, branchPath: { decisions: [] } },
       discourseBranch: 'alternate',
       title: 'Alternate Ending',
     });
   });
 
-  it('rejects a malformed branch path JSON before publishing', async () => {
+  it.each([
+    ['../secret.md', 'publication relative path must not traverse: ../secret.md'],
+    ['/etc/passwd', 'publication relative path must not be absolute: /etc/passwd'],
+    ['', 'publication relative path must not be empty'],
+  ])('rejects an unsafe relative output path (%s) before publishing', async (value, expected) => {
     const user = userEvent.setup();
     const onPublish = vi.fn(async () => undefined);
     render(() => (
@@ -190,15 +206,33 @@ describe('Publication mutation affordances', () => {
     ));
 
     await user.click(screen.getByTestId('publication-publish-open'));
-    fireEvent.input(screen.getByTestId('publication-branch-path'), {
-      target: { value: 'not-json' },
+    fireEvent.input(screen.getByTestId('publication-relative-path'), {
+      target: { value },
     });
     await user.click(screen.getByTestId('publication-publish-save'));
 
-    expect(screen.getByTestId('publication-mutation-error')).toHaveTextContent(
-      'branch path must be JSON like',
-    );
+    expect(screen.getByTestId('publication-mutation-error')).toHaveTextContent(expected);
     expect(onPublish).not.toHaveBeenCalled();
+  });
+
+  it('shows a success banner once the publish request is accepted', async () => {
+    const user = userEvent.setup();
+    const onPublish = vi.fn(async () => undefined);
+    render(() => (
+      <PublicationView
+        projectId="proj-a"
+        publications={catalog}
+        sessionRole="maintainer"
+        onPublish={onPublish}
+      />
+    ));
+
+    await user.click(screen.getByTestId('publication-publish-open'));
+    await user.click(screen.getByTestId('publication-publish-save'));
+
+    expect(await screen.findByTestId('publication-publish-success')).toHaveTextContent(
+      'Publication request accepted',
+    );
   });
 
   it('hides the publish action for a reader session even with wired callbacks', () => {

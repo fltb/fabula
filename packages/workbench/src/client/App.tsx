@@ -28,8 +28,8 @@ import type {
   SceneAdoptionViewV1,
   SourceStudioDocumentDescriptorV1,
   SourceStudioStateV1,
+  WorkbenchGraphNodeV1,
   WorkbenchGraphProjectionV1,
-  WorkbenchProjectFeatureV1,
   WorkbenchRouteSelectorV1,
 } from '../contracts/index.js';
 import { AgentChat } from './AgentChat';
@@ -44,6 +44,7 @@ import { GraphRoute, ProjectHome } from './projection-views';
 import { ReviewHub } from './ReviewHub';
 import { SceneCanvas } from './scene-canvas';
 import { SourceStudio, type SourceStudioYjsStatus } from './source-studio';
+import { describeCoordinate, describeOrigin } from './graph-view-model';
 
 /**
  * Full catalog of every Workbench view. The visible list is derived from the
@@ -52,13 +53,13 @@ import { SourceStudio, type SourceStudioYjsStatus } from './source-studio';
  * fallback target.
  */
 const WORKBENCH_VIEW_CATALOG = [
+  { id: 'agent-chat', label: 'Agent Chat', glyph: '✳' },
   { id: 'project-home', label: 'Project Home', glyph: '⌂' },
-  { id: 'scene-canvas', label: 'Scene Canvas', glyph: '◇' },
   { id: 'source-studio', label: 'Source Studio', glyph: '≋' },
   { id: 'graph-route', label: 'Graph / Route', glyph: '↗' },
   { id: 'review-hub', label: 'Review Hub', glyph: '✓' },
+  { id: 'scene-canvas', label: 'Scene Canvas', glyph: '◇' },
   { id: 'publication', label: 'Publication', glyph: '◫' },
-  { id: 'agent-chat', label: 'Agent Chat', glyph: '✳' },
 ] as const;
 
 export type WorkbenchViewId = (typeof WORKBENCH_VIEW_CATALOG)[number]['id'];
@@ -83,10 +84,11 @@ const DEFAULT_VIEWS: ViewDefinition[] = WORKBENCH_VIEW_CATALOG.filter((view) =>
 );
 
 /**
- * Derive the visible view list from Host-supplied feature gates. Features
- * without a view in the catalog (e.g. `agent-chat`) are ignored and catalog
+ * Derive the visible view list from Host-supplied feature gates. Catalog
  * order is preserved, so the navigation order never depends on Host array
- * ordering.
+ * ordering; when the `agent-chat` feature is present it becomes the first
+ * (default) view, and without Host features the always-on `DEFAULT_FEATURES`
+ * views keep the shell honest.
  */
 function viewsFor(
   features: readonly WorkbenchProjectFeatureV1[] | null | undefined,
@@ -104,7 +106,12 @@ export interface AppProps {
   readonly initialNavigatorCollapsed?: boolean;
   readonly initialInspectorPinned?: boolean;
   readonly initialOperationCenterExpanded?: boolean;
-  readonly onViewChange?: (view: WorkbenchViewId) => void;
+  /**
+   * View change notification. The parameter is widened to `string` so the
+   * Agent chat surface (whose artifact chips name views) can forward it
+   * without a cast; the shell validates against the visible catalog.
+   */
+  readonly onViewChange?: (view: string) => void;
   /**
    * Host-derived capability gates for the open project (null = no Host). The
    * visible navigation is derived from these features; a hidden view is never
@@ -170,6 +177,8 @@ export interface AppProps {
   readonly onRefreshReview?: () => void | Promise<void>;
   /** Host publication catalog for the Publication surface. */
   readonly publications?: BrowserPublicationListV1 | null;
+  /** Catalog load failure from the Host surface; non-null renders a retry state. */
+  readonly publicationsError?: string | null;
   /** Publish the canonical novel or a custom branch artifact. */
   readonly onPublish?: (request: BrowserPublishRequestV1) => void | Promise<void>;
   /** Re-requests the Host publication catalog after a publish. */
@@ -199,6 +208,10 @@ export interface NavigatorProps {
 export interface InspectorProps {
   readonly pinned: boolean;
   readonly onPinToggle: () => void;
+  /** Canvas node selected on the Graph / Route surface; null = nothing selected. */
+  readonly selectedNodeId?: string | null;
+  /** Canonical graph projection used to extract the selected node's detail. */
+  readonly graphProjection?: WorkbenchGraphProjectionV1 | null;
 }
 
 export interface OperationCenterProps {
@@ -250,6 +263,10 @@ interface WorkspaceProps {
     request: BrowserAuthoringDocumentDeleteRequestV1,
   ) => void | Promise<void>;
   readonly onGraphRouteChange?: (selector: WorkbenchRouteSelectorV1) => void;
+  /** Surfaces a canvas node selection for the Inspector detail panel. */
+  readonly onNodeSelect?: (nodeId: string) => void;
+  /** View change forwarding for the Agent chat artifact chips (string views). */
+  readonly onViewChange?: (view: string) => void;
   readonly onSourceYjsStatusChange?: (
     descriptor: SourceStudioDocumentDescriptorV1,
     status: SourceStudioYjsStatus,
@@ -265,6 +282,7 @@ interface WorkspaceProps {
   readonly onDecideReviewGate?: (request: BrowserReviewGateDecideRequestV1) => void | Promise<void>;
   readonly onRefreshReview?: () => void | Promise<void>;
   readonly publications?: BrowserPublicationListV1 | null;
+  readonly publicationsError?: string | null;
   readonly onPublish?: (request: BrowserPublishRequestV1) => void | Promise<void>;
   readonly onRefreshPublication?: () => void | Promise<void>;
   readonly onReadPublication?: (
@@ -420,6 +438,7 @@ export function Workspace(props: WorkspaceProps) {
         <GraphRoute
           projection={props.graphProjection ?? null}
           onRouteChange={props.onGraphRouteChange}
+          onNodeSelect={props.onNodeSelect}
         />
       </Show>
       <Show when={props.hostStatus === 'ready' && props.activeView === 'source-studio'}>
@@ -471,6 +490,7 @@ export function Workspace(props: WorkspaceProps) {
         <PublicationView
           projectId={props.overview?.projectId ?? null}
           publications={props.publications ?? null}
+          publicationsError={props.publicationsError ?? null}
           sessionRole={props.sessionProjectRole ?? null}
           onPublish={props.onPublish}
           onRefresh={props.onRefreshPublication}
@@ -483,15 +503,47 @@ export function Workspace(props: WorkspaceProps) {
           props.activeView === 'agent-chat' &&
           props.agentChat !== undefined &&
           props.agentChat !== null
-        }
-      >
-        <AgentChat projectId={props.agentChat!.projectId} client={props.agentChat!.client} />
+        }>
+        <AgentChat
+          projectId={props.agentChat!.projectId}
+          client={props.agentChat!.client}
+          onViewChange={props.onViewChange}
+        />
       </Show>
     </main>
   );
 }
 
+/** Resolve the selected canvas node across both canonical domains by exact id. */
+function selectedGraphNode(
+  projection: WorkbenchGraphProjectionV1 | null | undefined,
+  nodeId: string | null | undefined,
+): { readonly node: WorkbenchGraphNodeV1; readonly domain: 'story' | 'discourse' } | null {
+  if (projection === null || projection === undefined) return null;
+  if (nodeId === null || nodeId === undefined) return null;
+  const story = projection.story.nodes.find((node) => node.id === nodeId);
+  if (story !== undefined) return { node: story, domain: 'story' };
+  const discourse = projection.discourse.nodes.find((node) => node.id === nodeId);
+  return discourse === undefined ? null : { node: discourse, domain: 'discourse' };
+}
+
+/** Canonical node taxonomy: entity (initial), event, or thread (discourse). */
+type InspectorNodeKind = 'entity' | 'event' | 'thread';
+
+function inspectorNodeKind(node: WorkbenchGraphNodeV1): InspectorNodeKind {
+  if (node.origin.type === 'event') return 'event';
+  if (node.origin.type === 'discourse') return 'thread';
+  return 'entity';
+}
+
+const INSPECTOR_KIND_LABEL: Readonly<Record<InspectorNodeKind, string>> = {
+  entity: 'Entity node',
+  event: 'Event node',
+  thread: 'Thread node',
+};
+
 export function Inspector(props: InspectorProps) {
+  const selection = () => selectedGraphNode(props.graphProjection, props.selectedNodeId);
   return (
     <aside
       class={`inspector-region${props.pinned ? ' is-pinned' : ' is-unpinned'}`}
@@ -516,13 +568,84 @@ export function Inspector(props: InspectorProps) {
         </button>
       </div>
 
-      <div class="inspector-empty">
-        <div class="empty-mark" aria-hidden="true">
-          ＋
-        </div>
-        <h3>Nothing selected</h3>
-        <p>Selection details will appear after the Host supplies a canonical projection.</p>
-      </div>
+      <Show
+        when={selection()}
+        fallback={
+          <div class="inspector-empty">
+            <div class="empty-mark" aria-hidden="true">
+              ＋
+            </div>
+            <h3>Nothing selected</h3>
+            <p>Select a node on the Graph / Route canvas to inspect its canonical detail.</p>
+          </div>
+        }
+      >
+        {(current) => {
+          const node = current().node;
+          const origin = node.origin;
+          const kind = inspectorNodeKind(node);
+          return (
+            <div class="inspector-selection" data-testid="inspector-selection">
+              <span class={`badge badge-${kind}`}>{INSPECTOR_KIND_LABEL[kind]}</span>
+              <dl class="inspector-detail">
+                <div>
+                  <dt>Node id</dt>
+                  <dd>
+                    <code>{node.id}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Domain</dt>
+                  <dd>{current().domain}</dd>
+                </div>
+                <div>
+                  <dt>Coordinate</dt>
+                  <dd>{describeCoordinate(node.coordinate)}</dd>
+                </div>
+                <div>
+                  <dt>Branch scope</dt>
+                  <dd>
+                    <code>{node.branchScope}</code>
+                  </dd>
+                </div>
+                {origin.type === 'event' && (
+                  <>
+                    <div>
+                      <dt>Event</dt>
+                      <dd>
+                        <code>{origin.eventId}</code>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Status</dt>
+                      <dd>{origin.source}</dd>
+                    </div>
+                  </>
+                )}
+                {origin.type === 'discourse' && (
+                  <>
+                    <div>
+                      <dt>Thread entry</dt>
+                      <dd>
+                        <code>{origin.entryId}</code>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Scene</dt>
+                      <dd>{origin.sceneId}</dd>
+                    </div>
+                    <div>
+                      <dt>Branch</dt>
+                      <dd>{origin.branch}</dd>
+                    </div>
+                  </>
+                )}
+              </dl>
+              <p class="inspector-note">{describeOrigin(origin)}</p>
+            </div>
+          );
+        }}
+      </Show>
     </aside>
   );
 }
@@ -748,6 +871,7 @@ export function WorkbenchShell(props: AppProps = {}) {
     onCleanup(() => window.removeEventListener('resize', updateLayout));
   });
   const [selectedSourceDocumentId, setSelectedSourceDocumentId] = createSignal<string | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = createSignal<string | null>(null);
 
   const selectSourceDocument = (descriptor: SourceStudioDocumentDescriptorV1): void => {
     setSelectedSourceDocumentId(descriptor.documentId);
@@ -850,6 +974,8 @@ export function WorkbenchShell(props: AppProps = {}) {
             onMoveDocument={props.onMoveDocument}
             onDeleteDocument={props.onDeleteDocument}
             onGraphRouteChange={props.onGraphRouteChange}
+            onNodeSelect={setSelectedNodeId}
+            onViewChange={props.onViewChange}
             selectedSourceDocumentId={selectedSourceDocumentId()}
             onSourceYjsStatusChange={props.onSourceYjsStatusChange}
             sceneAdoption={props.sceneAdoption}
@@ -861,8 +987,8 @@ export function WorkbenchShell(props: AppProps = {}) {
             onAddReviewComment={props.onAddReviewComment}
             onUpdateReviewComment={props.onUpdateReviewComment}
             onDecideReviewGate={props.onDecideReviewGate}
-            onRefreshReview={props.onRefreshReview}
             publications={props.publications}
+            publicationsError={props.publicationsError}
             onPublish={props.onPublish}
             onRefreshPublication={props.onRefreshPublication}
             onReadPublication={props.onReadPublication}
@@ -875,9 +1001,13 @@ export function WorkbenchShell(props: AppProps = {}) {
             onExpandedToggle={toggleOperationCenter}
           />
         </div>
-
         <Show when={layoutMode() === 'desktop'}>
-          <Inspector pinned={inspectorPinned()} onPinToggle={toggleInspector} />
+          <Inspector
+            pinned={inspectorPinned()}
+            onPinToggle={toggleInspector}
+            selectedNodeId={selectedNodeId()}
+            graphProjection={props.graphProjection}
+          />
         </Show>
       </div>
 
@@ -887,7 +1017,12 @@ export function WorkbenchShell(props: AppProps = {}) {
           label="Inspector"
           onClose={() => setInspectorDrawerOpen(false)}
         >
-          <Inspector pinned={inspectorPinned()} onPinToggle={toggleInspector} />
+          <Inspector
+            pinned={inspectorPinned()}
+            onPinToggle={toggleInspector}
+            selectedNodeId={selectedNodeId()}
+            graphProjection={props.graphProjection}
+          />
         </ResponsiveDrawer>
       </Show>
       <Show when={layoutMode() === 'mobile'}>
@@ -909,7 +1044,12 @@ export function WorkbenchShell(props: AppProps = {}) {
           label="Inspector"
           onClose={() => setInspectorDrawerOpen(false)}
         >
-          <Inspector pinned={inspectorPinned()} onPinToggle={toggleInspector} />
+          <Inspector
+            pinned={inspectorPinned()}
+            onPinToggle={toggleInspector}
+            selectedNodeId={selectedNodeId()}
+            graphProjection={props.graphProjection}
+          />
         </ResponsiveDrawer>
       </Show>
     </div>

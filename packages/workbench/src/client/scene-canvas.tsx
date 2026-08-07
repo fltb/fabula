@@ -21,14 +21,19 @@ export function SceneCanvas(props: SceneCanvasProps) {
       <Show
         when={props.adoption}
         fallback={
-          <div class="screen-empty" aria-live="polite">
+          <div class="empty-state" aria-live="polite">
             <h3>No released scene revision</h3>
             <p>Render or revise a scene in the Host before adoption can be considered.</p>
           </div>
         }
       >
         {(candidate) => (
-          <div class="adoption-notice" aria-live="polite">
+          <div class="adoption-notice card" aria-live="polite">
+            <div class="flex flex-wrap items-center gap-[var(--wb-space-2)]">
+              <span class={`badge${candidate().released ? ' badge-entity' : ''}`}>
+                {candidate().released ? 'Released' : 'Not released'}
+              </span>
+            </div>
             <h3>Generated prose is not authoring source yet</h3>
             <p>{candidate().disclosure}.</p>
             <dl>
@@ -50,6 +55,7 @@ export function SceneCanvas(props: SceneCanvasProps) {
               </div>
             </dl>
             <button
+              class="btn btn-primary"
               type="button"
               disabled={!candidate().released || props.onRequestAdoption === undefined}
               onClick={() => props.onRequestAdoption?.(candidate())}

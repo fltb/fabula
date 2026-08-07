@@ -4,10 +4,15 @@ import {
   BROWSER_PROJECT_GRAPHS_PATH,
   BROWSER_PROJECT_OVERVIEW_PATH,
   BROWSER_PROJECT_REFERENCES_PATH,
+  BROWSER_PROJECT_ROLE_PATH,
+  BROWSER_PROJECT_SCENE_ADOPTION_PATH,
   BROWSER_PROJECTS_PATH,
   BROWSER_SESSION_HEADER,
   BROWSER_SESSION_PATH,
+  BROWSER_SCENE_ADOPTION_EVENT_QUERY,
+  BROWSER_SCENE_ADOPTION_REVISION_QUERY,
 } from '../contracts/browser-api.js';
+import type { BrowserProjectRoleV1 } from '../contracts/browser-api.js';
 import type {
   BrowserApiErrorV1,
   BrowserGraphRouteSelectorV1,
@@ -17,6 +22,7 @@ import type {
   BrowserProjectReferenceListQueryV1,
   BrowserProjectReferenceListV1,
   BrowserSessionPrincipalV1,
+  SceneAdoptionViewV1,
   SourceStudioStateV1,
   WorkbenchGraphProjectionV1,
 } from '../contracts/index.js';
@@ -52,6 +58,12 @@ export interface BrowserReadClient {
     projectId: string,
     query?: BrowserProjectReferenceListQueryV1,
   ): Promise<BrowserProjectReferenceListV1>;
+  getSceneAdoption(
+    projectId: string,
+    eventId: string,
+    revisionId: string,
+  ): Promise<SceneAdoptionViewV1>;
+  getProjectRole(projectId: string): Promise<BrowserProjectRoleV1>;
   getGraphs(
     projectId: string,
     selector: BrowserGraphRouteSelectorV1,
@@ -78,6 +90,9 @@ const BROWSER_ERROR_CODES = new Set<BrowserApiErrorV1['error']['code']>([
   'REFERENCE_INVALID',
   'REFERENCE_UNAVAILABLE',
   'REFERENCE_CONFLICT',
+  'SCENE_ADOPTION_NOT_FOUND',
+  'SCENE_ADOPTION_INVALID',
+  'SCENE_ADOPTION_UNAVAILABLE',
 ]);
 
 function browserError(value: unknown): BrowserApiErrorV1 | null {
@@ -157,6 +172,18 @@ export function createBrowserReadClient(options: BrowserReadClientOptions = {}):
       const suffix = params.size === 0 ? '' : `?${params.toString()}`;
       return request(`${path}${suffix}`);
     },
+    getSceneAdoption: (projectId, eventId, revisionId) => {
+      const path = BROWSER_PROJECT_SCENE_ADOPTION_PATH.replace(
+        ':projectId',
+        encodeURIComponent(projectId),
+      );
+      const params = new URLSearchParams();
+      params.set(BROWSER_SCENE_ADOPTION_EVENT_QUERY, eventId);
+      params.set(BROWSER_SCENE_ADOPTION_REVISION_QUERY, revisionId);
+      return request(`${path}?${params.toString()}`);
+    },
+    getProjectRole: (projectId) =>
+      request(BROWSER_PROJECT_ROLE_PATH.replace(':projectId', encodeURIComponent(projectId))),
     getGraphs: (projectId, selector) => {
       const path = BROWSER_PROJECT_GRAPHS_PATH.replace(':projectId', encodeURIComponent(projectId));
       return request(

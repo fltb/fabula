@@ -4,6 +4,7 @@ import type {
   BrowserProjectListV1,
   BrowserProjectOverviewV1,
   BrowserSessionPrincipalV1,
+  ProjectAccessRole,
   SourceStudioStateV1,
   WorkbenchGraphProjectionV1,
 } from '../contracts/index.js';
@@ -96,6 +97,11 @@ export interface RuntimeWorkspace {
   readonly graph: WorkbenchGraphProjectionV1;
   /** Host-derived feature gates; null only if the capabilities read failed. */
   readonly capabilities: BrowserProjectCapabilitiesV1 | null;
+  /**
+   * The caller's resolved project ACL role (owner normalized to `maintainer`
+   * by the Host); null when the role route could not resolve one.
+   */
+  readonly projectRole: ProjectAccessRole | null;
 }
 
 export interface ProjectClient {
@@ -280,13 +286,23 @@ export function createRuntimeClient(
     },
     async loadWorkspace(projectId, selector = { version: 1, branchPath: { decisions: [] } }) {
       try {
-        const [overview, source, graph, capabilities] = await Promise.all([
+        const [overview, source, graph, capabilities, roleResult] = await Promise.all([
           read.getOverview(projectId),
           read.getSourceStudio(projectId),
           read.getGraphs(projectId, selector),
           read.loadCapabilities(projectId).catch(() => null),
+          // The role route never fails the workspace load: an unresolvable
+          // role degrades to null and the mutation gates fall back to the
+          // callback-wiring gate (same pattern as review/publication).
+          read.getProjectRole(projectId).catch(() => null),
         ]);
-        return { overview, source, graph, capabilities };
+        return {
+          overview,
+          source,
+          graph,
+          capabilities,
+          projectRole: roleResult?.role ?? null,
+        };
       } catch (error) {
         if (error instanceof BrowserReadApiError) {
           if (error.status === 401) sessionId = null;

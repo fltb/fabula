@@ -90,6 +90,47 @@ function lifecycleErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'The document mutation was not accepted.';
 }
 
+/**
+ * Hash identity chip: truncated label (first 8 chars) plus a copy button for
+ * the full-length value. The full hash stays reachable (clipboard), never
+ * truncated away.
+ */
+function HashChip(props: { readonly value: string | null; readonly fallback: string }) {
+  const [copied, setCopied] = createSignal(false);
+  const copy = async (): Promise<void> => {
+    if (props.value === null) return;
+    try {
+      await navigator.clipboard.writeText(props.value);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard access can be denied; the visible chip stays readable either way.
+    }
+  };
+  const display = (): string =>
+    props.value === null
+      ? props.fallback
+      : props.value.length > 8
+        ? `${props.value.slice(0, 8)}…`
+        : props.value;
+  return (
+    <span class="hash-chip">
+      <code>{display()}</code>
+      <Show when={props.value !== null}>
+        <button
+          class="hash-chip-copy"
+          type="button"
+          title="Copy full hash"
+          aria-label="Copy full hash"
+          onClick={() => void copy()}
+        >
+          {copied() ? 'Copied' : 'Copy'}
+        </button>
+      </Show>
+    </span>
+  );
+}
+
 function submitBlockLabel(authoring: AuthoringStateV1): string {
   if (authoring.canSubmit) return 'Ready to submit';
   switch (authoring.submitBlockReason) {
@@ -424,7 +465,7 @@ export function SourceStudio(props: SourceStudioProps) {
                 >
                   <div class="workspace-state workspace-state-ready">
                     <p class="region-kicker">Accepted identity</p>
-                    <h3>{authoring().acceptedSourceHash ?? 'No accepted source yet'}</h3>
+                    <HashChip value={authoring().acceptedSourceHash} fallback="No accepted source yet" />
                     <p class="screen-note">
                       Last-valid source hash; this does not change while you type.
                     </p>
@@ -435,7 +476,7 @@ export function SourceStudio(props: SourceStudioProps) {
                     data-phase={authoring().phase}
                   >
                     <p class="region-kicker">Working identity</p>
-                    <h3>{authoring().workspaceDigest ?? 'No working digest'}</h3>
+                    <HashChip value={authoring().workspaceDigest} fallback="No working digest" />
                     <p class="screen-note">
                       {authoring().workingDirty
                         ? 'Local Yjs changes are pending explicit validation and submit.'
@@ -507,6 +548,7 @@ export function SourceStudio(props: SourceStudioProps) {
                   <div class="flex flex-wrap gap-2">
                     <button
                       type="button"
+                      class="btn btn-primary"
                       disabled={mutationBusy() || newPath().trim().length === 0}
                       onClick={() => void runCreate()}
                     >
@@ -514,6 +556,7 @@ export function SourceStudio(props: SourceStudioProps) {
                     </button>
                     <button
                       type="button"
+                      class="btn btn-ghost"
                       disabled={mutationBusy()}
                       onClick={() => {
                         setCreating(false);
@@ -581,6 +624,7 @@ export function SourceStudio(props: SourceStudioProps) {
                           <Show when={props.onConnectYjs !== undefined}>
                             <button
                               type="button"
+                              class="btn"
                               disabled={!descriptor.available}
                               onClick={() => props.onConnectYjs?.(descriptor)}
                             >
@@ -590,6 +634,7 @@ export function SourceStudio(props: SourceStudioProps) {
                           <Show when={props.onSubmit !== undefined}>
                             <button
                               type="button"
+                              class="btn btn-primary"
                               disabled={
                                 !descriptor.available ||
                                 (props.authoring !== undefined &&
@@ -604,6 +649,7 @@ export function SourceStudio(props: SourceStudioProps) {
                           <Show when={props.onMoveDocument !== undefined}>
                             <button
                               type="button"
+                              class="btn"
                               disabled={!descriptor.available || !canMutate()}
                               onClick={() => {
                                 setMovingId(descriptor.documentId);
@@ -630,6 +676,7 @@ export function SourceStudio(props: SourceStudioProps) {
                               <div class="flex flex-wrap gap-2">
                                 <button
                                   type="button"
+                                  class="btn btn-primary"
                                   disabled={mutationBusy() || movePath().trim().length === 0}
                                   onClick={() => void runMove(descriptor.documentId)}
                                 >
@@ -637,6 +684,7 @@ export function SourceStudio(props: SourceStudioProps) {
                                 </button>
                                 <button
                                   type="button"
+                                  class="btn btn-ghost"
                                   disabled={mutationBusy()}
                                   onClick={() => {
                                     setMovingId(null);
@@ -651,6 +699,7 @@ export function SourceStudio(props: SourceStudioProps) {
                           <Show when={props.onDeleteDocument !== undefined}>
                             <button
                               type="button"
+                              class="btn"
                               disabled={!descriptor.available || !canMutate()}
                               onClick={() => {
                                 setConfirmingDeleteId(descriptor.documentId);
@@ -670,6 +719,7 @@ export function SourceStudio(props: SourceStudioProps) {
                               </span>
                               <button
                                 type="button"
+                                class="btn btn-primary"
                                 disabled={mutationBusy()}
                                 onClick={() => void runDelete(descriptor.documentId)}
                               >
@@ -677,6 +727,7 @@ export function SourceStudio(props: SourceStudioProps) {
                               </button>
                               <button
                                 type="button"
+                                class="btn btn-ghost"
                                 disabled={mutationBusy()}
                                 onClick={() => setConfirmingDeleteId(null)}
                               >
@@ -782,6 +833,7 @@ export function SourceStudio(props: SourceStudioProps) {
                         {(choice) => (
                           <button
                             type="button"
+                            class="btn"
                             disabled={!candidate().valid && choice !== 'keep-working'}
                             onClick={() => {
                               const request = reconcileRequest(choice);
@@ -867,7 +919,7 @@ export function SourceStudio(props: SourceStudioProps) {
                   </p>
                 </div>
                 <Show when={props.onListRevisions !== undefined}>
-                  <button type="button" onClick={() => void props.onListRevisions?.()}>
+                  <button type="button" class="btn" onClick={() => void props.onListRevisions?.()}>
                     Refresh revision history
                   </button>
                 </Show>
@@ -898,6 +950,7 @@ export function SourceStudio(props: SourceStudioProps) {
                           <Show when={props.onGetRevision !== undefined}>
                             <button
                               type="button"
+                              class="btn"
                               onClick={() => void props.onGetRevision?.(revision.revisionId)}
                             >
                               View revision
@@ -906,6 +959,7 @@ export function SourceStudio(props: SourceStudioProps) {
                           <Show when={index() > 0 && props.onDiffRevisions !== undefined}>
                             <button
                               type="button"
+                              class="btn"
                               onClick={() =>
                                 void props.onDiffRevisions?.(
                                   props.revisionHistory?.revisions[index() - 1]?.revisionId ?? '',
@@ -919,6 +973,7 @@ export function SourceStudio(props: SourceStudioProps) {
                           <Show when={props.onRestoreRevision !== undefined}>
                             <button
                               type="button"
+                              class="btn btn-primary"
                               disabled={props.authoring?.phase === 'submitting'}
                               onClick={() => {
                                 const request = restoreRequest(revision.revisionId);

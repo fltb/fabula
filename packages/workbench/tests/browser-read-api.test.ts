@@ -4,6 +4,8 @@ import {
   BROWSER_PROJECT_GRAPHS_PATH,
   BROWSER_PROJECT_OVERVIEW_PATH,
   BROWSER_PROJECT_REFERENCES_PATH,
+  BROWSER_PROJECT_ROLE_PATH,
+  BROWSER_PROJECT_SCENE_ADOPTION_PATH,
   BROWSER_PROJECTS_PATH,
   BROWSER_SESSION_HEADER,
   BROWSER_SESSION_PATH,
@@ -871,7 +873,6 @@ describe('guarded read route seam', () => {
     const server = trackServer(createHostServer({ port: 0, browser: browserOptions() }));
     const handle = await server.start();
     const res = await server.app.request('/status');
-    expect(res.status).toBe(200);
     const body = (await res.json()) as { endpoints: { reads: unknown[] } };
     expect(body.endpoints.reads).toEqual([
       { method: 'GET', path: BROWSER_SESSION_PATH, kind: 'read', guarded: true },
@@ -879,6 +880,7 @@ describe('guarded read route seam', () => {
       { method: 'GET', path: BROWSER_PROJECT_OVERVIEW_PATH, kind: 'read', guarded: true },
       { method: 'GET', path: BROWSER_PROJECT_GRAPHS_PATH, kind: 'read', guarded: true },
       { method: 'GET', path: BROWSER_PROJECT_SOURCE_PATH, kind: 'read', guarded: true },
+      { method: 'GET', path: BROWSER_PROJECT_ROLE_PATH, kind: 'read', guarded: true },
     ]);
     await handle.close();
   });

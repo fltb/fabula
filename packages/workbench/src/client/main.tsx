@@ -22,10 +22,10 @@ import type {
   BrowserReviewGateDecideRequestV1,
   BrowserReviewGateListV1,
   BrowserReviewHistoryV1,
-  BrowserReviewListV1,
   BrowserReviewUpdateRequestV1,
   BrowserSessionPrincipalV1,
-  ConfigOperationReceiptV1,
+  ProjectAccessRole,
+  SceneAdoptionViewV1,
   SourceStudioDocumentDescriptorV1,
 } from '../contracts/index.js';
 import {
@@ -345,6 +345,9 @@ function WorkspaceRoute(props: {
   const [reviewGates, setReviewGates] = createSignal<BrowserReviewGateListV1 | null>(null);
   const [reviewHistory, setReviewHistory] = createSignal<BrowserReviewHistoryV1 | null>(null);
   const [publications, setPublications] = createSignal<BrowserPublicationListV1 | null>(null);
+  const [publicationsError, setPublicationsError] = createSignal<string | null>(null);
+  const [sceneAdoption, setSceneAdoption] = createSignal<SceneAdoptionViewV1 | null>(null);
+  const [sessionProjectRole, setSessionProjectRole] = createSignal<ProjectAccessRole | null>(null);
   const [yjsStatus, setYjsStatus] = createSignal<
     Record<string, 'idle' | 'connecting' | 'connected' | 'disconnected' | 'unavailable'>
   >({});
@@ -358,6 +361,9 @@ function WorkspaceRoute(props: {
     eventClient = null;
     setAuthoring(null);
     setYjsStatus({});
+    setSessionProjectRole(null);
+    setSceneAdoption(null);
+    setPublicationsError(null);
     if (!projectId) {
       setError('No project was selected.');
       setHealth('fatal');
@@ -381,11 +387,19 @@ function WorkspaceRoute(props: {
       setRevisionHistory(nextHistory);
       setSelectedRevision(null);
       setRevisionDiff(null);
+      setSessionProjectRole(nextWorkspace.projectRole);
       await refreshReview(nextWorkspace.capabilities?.features?.includes('review-hub') === true);
       await refreshPublication(
         nextWorkspace.capabilities?.features?.includes('publication') === true,
       );
-      if (generation !== loadGeneration) return;
+      // The adoption preview is keyed by one released scene revision; the
+      // workspace projection carries no scene-revision pointer, so the
+      // load-time preview stays null (honest empty state) until a released
+      // revision is named (see adoptScene).
+      await refreshSceneAdoption(
+        nextWorkspace.capabilities?.features?.includes('scene-canvas') === true,
+        null,
+      );
       const nextEvents = createProjectEventClient({
         projectId,
         client: props.client.authoring,
@@ -493,16 +507,25 @@ function WorkspaceRoute(props: {
   };
 
   /**
-   * Load the publication catalog. When the feature is absent (or the read
-   * fails) the signal stays null and the view renders an honest empty state;
-   * the workspace load itself never depends on the publication surface.
+   * Load the publication catalog. Absent feature or load failure keeps the
+   * catalog signal null; a load failure additionally sets `publicationsError`
+   * so the view renders a distinct error state with Retry instead of
+   * conflating failure with an honest empty state. The workspace load itself
+   * never depends on the publication surface.
    */
   const refreshPublication = async (enabled: boolean): Promise<void> => {
     if (!enabled) {
       setPublications(null);
+      setPublicationsError(null);
       return;
     }
-    setPublications(await props.client.publication.list(props.projectId).catch(() => null));
+    try {
+      setPublications(await props.client.publication.list(props.projectId));
+      setPublicationsError(null);
+    } catch (cause) {
+      setPublications(null);
+      setPublicationsError(runtimeErrorMessage(cause));
+    }
   };
   const publish = async (request: BrowserPublishRequestV1): Promise<void> => {
     await props.client.publication.publish(request);
@@ -513,6 +536,39 @@ function WorkspaceRoute(props: {
     query?: BrowserPublicationReadQueryV1,
   ): Promise<BrowserPublicationReadResultV1> =>
     props.client.publication.read(projectId, publicationId, query);
+  /**
+   * Load the Scene Canvas adoption preview (plan 5.2). The Host preview is
+   * keyed by exactly one released scene revision (`eventId` + `revisionId`);
+   * without that pair the signal stays null and the view renders an honest
+   * empty state. The workspace load itself never depends on this surface.
+   */
+  const refreshSceneAdoption = async (
+    enabled: boolean,
+    scene: { readonly eventId: string; readonly revisionId: string } | null,
+  ): Promise<void> => {
+    if (!enabled || scene === null) {
+      setSceneAdoption(null);
+      return;
+    }
+    setSceneAdoption(
+      await props.client.read
+        .getSceneAdoption(props.projectId, scene.eventId, scene.revisionId)
+        .catch(() => null),
+    );
+  };
+  /**
+   * Explicit adoption request. The Host derives the authoring-manifest claim
+   * from the persisted released revision (never from browser-supplied
+   * hashes); this handler re-requests the Host-authoritative preview for the
+   * named revision so the surface always reflects the server's claim
+   * derivation. The durable adoption mutation route is a later stage.
+   */
+  const adoptScene = async (candidate: SceneAdoptionViewV1): Promise<void> => {
+    await refreshSceneAdoption(true, {
+      eventId: candidate.eventId,
+      revisionId: candidate.revisionId,
+    });
+  };
 
   return (
     <Show
@@ -558,10 +614,12 @@ function WorkspaceRoute(props: {
           onDeleteDocument={deleteDocument}
           onGraphRouteChange={(selector) => void load(selector)}
           onSourceYjsStatusChange={updateYjsStatus}
+          sceneAdoption={sceneAdoption()}
+          onRequestAdoption={adoptScene}
           reviewState={reviewState()}
           reviewGates={reviewGates()}
           reviewHistory={reviewHistory()}
-          sessionProjectRole={null}
+          sessionProjectRole={sessionProjectRole()}
           onAddReviewComment={addReviewComment}
           onUpdateReviewComment={updateReviewComment}
           onDecideReviewGate={decideReviewGate}
@@ -569,6 +627,7 @@ function WorkspaceRoute(props: {
             refreshReview(current().capabilities?.features?.includes('review-hub') === true)
           }
           publications={publications()}
+          publicationsError={publicationsError()}
           onPublish={publish}
           onRefreshPublication={() =>
             refreshPublication(current().capabilities?.features?.includes('publication') === true)

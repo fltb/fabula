@@ -14,8 +14,9 @@ import type {
   ReferenceItemV1,
 } from '@novalistically/workbench-protocol';
 import type { UserRole } from './persistence.js';
+import type { ProjectAccessRole } from './configuration.js';
 
-export type { ProjectAccessRole } from './configuration.js';
+export type { ProjectAccessRole };
 
 /** Version of the browser read API contract carried by every response DTO. */
 export const BROWSER_API_VERSION = 1 as const;
@@ -46,6 +47,14 @@ export const BROWSER_PROJECT_GRAPHS_PATH = `${BROWSER_API_BASE_PATH}/projects/:p
 export const BROWSER_PROJECT_REFERENCES_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/references`;
 /** `GET /api/v1/projects/:projectId/capabilities` — Host-derived feature gates. */
 export const BROWSER_PROJECT_CAPABILITIES_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/capabilities`;
+/** `GET /api/v1/projects/:projectId/scene-adoption` — adoption preview for one scene revision. */
+export const BROWSER_PROJECT_SCENE_ADOPTION_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/scene-adoption`;
+/** Query parameter carrying the scene event id on the scene-adoption endpoint. */
+export const BROWSER_SCENE_ADOPTION_EVENT_QUERY = 'eventId';
+/** Query parameter carrying the scene revision id on the scene-adoption endpoint. */
+export const BROWSER_SCENE_ADOPTION_REVISION_QUERY = 'revisionId';
+/** `GET /api/v1/projects/:projectId/role` — the caller's resolved project role. */
+export const BROWSER_PROJECT_ROLE_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/role`;
 
 /** Query parameter carrying the strict route selector on the graphs endpoint. */
 export const BROWSER_GRAPH_ROUTE_QUERY = 'route';
@@ -162,6 +171,16 @@ export interface BrowserProjectCapabilitiesV1 {
 }
 
 /**
+ * The caller's resolved project role for one project. `role` is null only
+ * when no ACL role could be resolved; the Host's implicit owner override is
+ * normalized to `maintainer`, matching the Agent chat role resolver.
+ */
+export interface BrowserProjectRoleV1 {
+  readonly version: 1;
+  readonly role: ProjectAccessRole | null;
+}
+
+/**
  * Strict documented route selector for `GET /api/v1/projects/:projectId/graphs`.
  * Single source of truth: the graph contract's {@link WorkbenchRouteSelectorV1},
  * aliased here as the browser API's wire selector.
@@ -245,7 +264,13 @@ export type BrowserApiErrorCode =
   /** 409 — the run is already terminal and cannot be cancelled/retried here. */
   | 'AGENT_CHAT_RUN_TERMINAL'
   /** 409 — the project operation queue is full; retry later. */
-  | 'AGENT_CHAT_QUEUE_FULL';
+  | 'AGENT_CHAT_QUEUE_FULL'
+  /** 404 — the requested scene revision does not exist for this project. */
+  | 'SCENE_ADOPTION_NOT_FOUND'
+  /** 400 — the scene adoption request is malformed or violates a documented bound. */
+  | 'SCENE_ADOPTION_INVALID'
+  /** 503 — the scene adoption preview cannot be produced by the host. */
+  | 'SCENE_ADOPTION_UNAVAILABLE';
 /** Secret-free error envelope for every non-2xx browser read response. */
 export interface BrowserApiErrorV1 {
   readonly error: {

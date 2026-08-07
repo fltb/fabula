@@ -8,6 +8,7 @@ import type {
   BrowserReviewGateListV1,
   BrowserReviewListV1,
 } from '../../src/contracts/browser-api';
+import type { AgentChatClient } from '../../src/client/agent-chat-client.js';
 
 const navigationLabels = [
   'Project Home',
@@ -15,6 +16,53 @@ const navigationLabels = [
   'Source Studio',
   'Graph / Route',
 ] as const;
+
+function stubAgentChatClient(): AgentChatClient {
+  const conversation = {
+    version: 1 as const,
+    conversationId: 'conv-1',
+    projectId: 'project-a',
+    title: null,
+    createdAt: '2026-08-06T00:00:00.000Z',
+    updatedAt: '2026-08-06T00:00:00.000Z',
+  };
+  return {
+    createConversation: async (projectId: string) => ({ ...conversation, projectId }),
+    listConversations: async () => [conversation],
+    sendMessage: async () => ({
+      version: 1 as const,
+      runId: 'run-1',
+      conversationId: 'conv-1',
+      operationId: 'op-1',
+      status: 'queued' as const,
+      turn: 0,
+      maxTurns: 16,
+      toolCalls: 0,
+      maxToolCalls: 64,
+      errorCode: null,
+      createdAt: '2026-08-06T00:00:00.000Z',
+      updatedAt: '2026-08-06T00:00:00.000Z',
+    }),
+    history: async () => ({
+      version: 1 as const,
+      projectId: 'project-a',
+      conversation,
+      runs: [],
+      messages: [],
+    }),
+    cancel: async (_projectId: string, runId: string) => ({
+      version: 1 as const,
+      runId,
+      status: 'cancelled' as const,
+    }),
+    retry: async (_projectId: string, runId: string) => ({
+      version: 1 as const,
+      runId,
+      status: 'queued' as const,
+    }),
+    openProgress: () => () => {},
+  };
+}
 
 afterEach(() => {
   cleanup();
@@ -176,46 +224,7 @@ describe('Workbench feature-gated views', () => {
   });
 
   it('renders the Agent Chat surface only when the feature and surface are both present', async () => {
-    const client = {
-      createConversation: async () => ({
-        version: 1 as const,
-        conversationId: 'conv-1',
-        projectId: 'project-a',
-        title: null,
-        createdAt: 'now',
-        updatedAt: 'now',
-      }),
-      sendMessage: async () => ({
-        version: 1 as const,
-        runId: 'run-1',
-        conversationId: 'conv-1',
-        operationId: 'op-1',
-        status: 'queued' as const,
-        turn: 0,
-        maxTurns: 16,
-        toolCalls: 0,
-        maxToolCalls: 64,
-        errorCode: null,
-        createdAt: 'now',
-        updatedAt: 'now',
-      }),
-      history: async () => ({
-        version: 1 as const,
-        projectId: 'project-a',
-        conversation: {
-          version: 1 as const,
-          conversationId: 'conv-1',
-          projectId: 'project-a',
-          title: null,
-          createdAt: 'now',
-          updatedAt: 'now',
-        },
-        runs: [],
-      }),
-      cancel: async () => ({ version: 1 as const, runId: 'run-1', status: 'cancelled' as const }),
-      retry: async () => ({ version: 1 as const, runId: 'run-1', status: 'queued' as const }),
-      openProgress: () => () => {},
-    };
+    const client = stubAgentChatClient();
 
     const user = userEvent.setup();
     render(() => (
@@ -223,7 +232,7 @@ describe('Workbench feature-gated views', () => {
         hostStatus="ready"
         initialView="agent-chat"
         features={['project-home', 'agent-chat']}
-        agentChat={{ projectId: 'project-a', client: client as never }}
+        agentChat={{ projectId: 'project-a', client }}
       />
     ));
     expect(screen.getByRole('heading', { level: 1, name: 'Agent Chat' })).toBeInTheDocument();
@@ -235,7 +244,7 @@ describe('Workbench feature-gated views', () => {
         hostStatus="ready"
         initialView="agent-chat"
         features={['project-home']}
-        agentChat={{ projectId: 'project-a', client: client as never }}
+        agentChat={{ projectId: 'project-a', client }}
       />
     ));
     expect(screen.getByRole('heading', { level: 1, name: 'Project Home' })).toBeInTheDocument();

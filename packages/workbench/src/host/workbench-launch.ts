@@ -127,6 +127,7 @@ import { createBrowserReviewApi } from './browser-review-api.js';
 import { ConfigurationFileStore } from './configuration-file-store.js';
 import { type ActiveConfiguration, ConfigurationChangeService } from './configuration-service.js';
 import { createProjectCoreRuntime } from './core-runtime.js';
+import { prepareSceneAdoption } from './scene-adoption.js';
 import { projectCanonicalGraphRuntime } from './graph-projection.js';
 import {
   createAdminMcpRegistry,
@@ -1585,6 +1586,29 @@ export async function startWorkbench(
                 };
               },
             },
+            // Scene Canvas adoption preview (plan 5.2): the route mounts only
+            // under the `scene-canvas` feature (always-on today). The port
+            // bridges the Host-only `prepareSceneAdoption` service, so the
+            // preview is always derived from the persisted released revision
+            // by the project session's Core execution repository.
+            sceneAdoption: launchFeatures.includes('scene-canvas')
+              ? {
+                  prepare: async (input) => {
+                    const session = sessions.get(input.projectId);
+                    if (session === null) {
+                      return {
+                        ok: false as const,
+                        code: 'REVISION_NOT_FOUND' as const,
+                        message: 'The project session is not open.',
+                      };
+                    }
+                    return prepareSceneAdoption(
+                      { execution: session.runtime.services.execution },
+                      input,
+                    );
+                  },
+                }
+              : undefined,
           };
     const yjs =
       configuredProjects.length === 0

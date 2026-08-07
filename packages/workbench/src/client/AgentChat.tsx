@@ -1,17 +1,23 @@
 /**
- * Agent Chat view (plan 9.5): a conversation + tool-call review surface.
+ * Agent Chat view (plan 5.1): a conversation list + message surface.
  *
  * Rendered only when the Host-derived features include `agent-chat`. The view
- * owns ONE conversation per mount: a message list fed by the live SSE progress
- * stream, per-run tool-call receipts from the durable history, a cancel button
- * while a run is queued/running, and an explicit retry for interrupted runs.
- * It is deliberately not a single-document span-diff drawer.
+ * owns the conversation list (newest-updated first) and one active
+ * conversation whose messages are loaded from the durable history and streamed
+ * live over SSE: assistant text accumulates into ONE message per run (not one
+ * per delta), tool-call receipts fold into that run's `<details>`, cancel /
+ * retry controls cover queued/running/interrupted/failed runs, artifact chips
+ * link succeeded nova_publish / nova_render calls to the publication and
+ * review surfaces, and an empty-conversation welcome card set fills the
+ * composer with agent-first example prompts.
  */
 
 import type { JSX } from 'solid-js';
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
+import { SolidMarkdown } from 'solid-markdown';
 import type {
   AgentChatConversationViewV1,
+  AgentChatMessageViewV1,
   AgentChatProgressEventV1,
   AgentChatRunHistoryEntryV1,
   AgentChatRunViewV1,
@@ -21,14 +27,42 @@ import type { AgentChatClient } from './agent-chat-client.js';
 
 interface ChatMessage {
   readonly id: string;
-  readonly role: 'user' | 'assistant';
+  readonly runId: string;
+  readonly role: 'user' | 'assistant' | 'tool_result';
   readonly content: string;
+  readonly toolName: string | null;
+  readonly callIndex: number | null;
   readonly at: string;
 }
+
+interface ArtifactChip {
+  readonly key: string;
+  readonly label: string;
+  readonly view: string;
+  readonly hint: string;
+}
+
+/** Agent-first onboarding prompts; clicking one fills the composer. */
+const WELCOME_PROMPTS: readonly { readonly prompt: string; readonly hint: string }[] = [
+  {
+    prompt: '查看项目当前状态并告诉我下一步',
+    hint: '了解项目进展，由 Agent 规划下一步动作',
+  },
+  {
+    prompt: '渲染第 1 章并发布',
+    hint: '渲染首章内容并发布为可查看的产物',
+  },
+  {
+    prompt: '检查有哪些待处理的评审或门禁',
+    hint: '扫描待处理的评审意见与发布门禁',
+  },
+];
 
 export interface AgentChatProps {
   readonly projectId: string;
   readonly client: AgentChatClient;
+  /** Switch the workspace to another view (artifact chips → publication / review-hub). */
+  readonly onViewChange?: (view: string) => void;
 }
 
 function runLabel(run: AgentChatRunViewV1): string {
@@ -45,7 +79,43 @@ function receiptLabel(call: AgentChatToolCallReceiptV1): string {
   return `${call.toolName} #${call.callIndex} — ${result}`;
 }
 
+function messageViewOf(message: AgentChatMessageViewV1): ChatMessage {
+  return {
+    id: message.messageId,
+    runId: message.runId,
+    role: message.role,
+    content: message.content,
+    toolName: message.toolName,
+    callIndex: message.callIndex,
+    at: message.createdAt,
+  };
+}
+
+function artifactChipsOf(entry: AgentChatRunHistoryEntryV1): readonly ArtifactChip[] {
+  const chips: ArtifactChip[] = [];
+  for (const call of entry.toolCalls) {
+    if (call.status !== 'succeeded') continue;
+    if (call.toolName === 'nova_publish') {
+      chips.push({
+        key: `publish-${call.callIndex}`,
+        label: '查看发布产物',
+        view: 'publication',
+        hint: '在 Publication 视图查看已发布产物',
+      });
+    } else if (call.toolName === 'nova_render') {
+      chips.push({
+        key: `render-${call.callIndex}`,
+        label: '查看渲染产物',
+        view: 'review-hub',
+        hint: '渲染产物可在 Publication / Review Hub 查看',
+      });
+    }
+  }
+  return chips;
+}
+
 export function AgentChat(props: AgentChatProps): JSX.Element {
+  const [conversations, setConversations] = createSignal<readonly AgentChatConversationViewV1[]>([]);
   const [conversation, setConversation] = createSignal<AgentChatConversationViewV1 | null>(null);
   const [messages, setMessages] = createSignal<readonly ChatMessage[]>([]);
   const [runs, setRuns] = createSignal<readonly AgentChatRunHistoryEntryV1[]>([]);
@@ -55,25 +125,51 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
   const [streamingRun, setStreamingRun] = createSignal<string | null>(null);
   let activeRunId: string | null = null;
   let stopProgress: (() => void) | null = null;
+  let loadToken = 0;
 
   const refreshHistory = async (): Promise<void> => {
     const current = conversation();
     if (current === null) return;
     const history = await props.client.history(props.projectId, current.conversationId);
     setRuns(history.runs);
+    setMessages(history.messages.map(messageViewOf));
   };
 
-  const ensureConversation = async (): Promise<void> => {
-    if (conversation() !== null) return;
-    const created = await props.client.createConversation(props.projectId);
-    setConversation(created);
-    await refreshHistory();
+  const openConversation = async (target: AgentChatConversationViewV1): Promise<void> => {
+    stopProgress?.();
+    stopProgress = null;
+    activeRunId = null;
+    setStreamingRun(null);
+    setConversation(target);
+    const token = ++loadToken;
+    const history = await props.client.history(props.projectId, target.conversationId);
+    if (token !== loadToken) return; // a newer selection superseded this one
+    setRuns(history.runs);
+    setMessages(history.messages.map(messageViewOf));
+    setError(null);
+  };
+
+  const createConversation = async (): Promise<void> => {
+    try {
+      const created = await props.client.createConversation(props.projectId);
+      setConversations((all) => [created, ...all]);
+      await openConversation(created);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
   };
 
   onMount(() => {
-    void ensureConversation().catch((cause: unknown) => {
-      setError(errorMessage(cause));
-    });
+    void props.client
+      .listConversations(props.projectId)
+      .then(async (list) => {
+        const sorted = [...list].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+        setConversations(sorted);
+        if (sorted[0] !== undefined) await openConversation(sorted[0]);
+      })
+      .catch((cause: unknown) => {
+        setError(errorMessage(cause));
+      });
     onCleanup(() => {
       stopProgress?.();
       stopProgress = null;
@@ -82,20 +178,43 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
 
   const handleProgressEvent = (event: AgentChatProgressEventV1): void => {
     if (event.type === 'assistant-text') {
-      setMessages((current) => [
-        ...current,
-        {
-          id: `${event.runId}-${event.at}-${current.length}`,
-          role: 'assistant',
-          content: event.text,
-          at: event.at,
-        },
-      ]);
+      // Accumulate deltas into the CURRENT assistant message of this run:
+      // one message per run, not one per delta.
+      const runId = event.runId;
+      setMessages((current) => {
+        let index = -1;
+        for (let i = current.length - 1; i >= 0; i -= 1) {
+          const message = current[i];
+          if (message !== undefined && message.role === 'assistant' && message.runId === runId) {
+            index = i;
+            break;
+          }
+        }
+        if (index >= 0) {
+          const existing = current[index];
+          if (existing === undefined) return current;
+          const merged = [...current];
+          merged[index] = { ...existing, content: existing.content + event.text, at: event.at };
+          return merged;
+        }
+        return [
+          ...current,
+          {
+            id: `run-${runId}`,
+            runId,
+            role: 'assistant',
+            content: event.text,
+            toolName: null,
+            callIndex: null,
+            at: event.at,
+          },
+        ];
+      });
       return;
     }
     if (event.type === 'tool-call') {
-      // Live receipt: merge into the run entry (or show as a standalone run
-      // fragment while the durable history refreshes).
+      // Live receipt: merge into the run entry (the run-status replay of the
+      // progress stream guarantees the entry exists before any tool-call event).
       const runId = event.runId;
       setRuns((current) => {
         const existing = current.find((entry) => entry.run.runId === runId);
@@ -136,21 +255,45 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
   const send = async (): Promise<void> => {
     const message = draft().trim();
     if (message.length === 0 || sending()) return;
-    const current = conversation();
+    let current = conversation();
     if (current === null) {
-      setError('The conversation is not ready yet.');
-      return;
+      // Welcome-card start: create the conversation on first send.
+      try {
+        const created = await props.client.createConversation(props.projectId);
+        setConversations((all) => [created, ...all]);
+        setConversation(created);
+        current = created;
+      } catch (cause) {
+        setError(errorMessage(cause));
+        return;
+      }
     }
     setError(null);
     setSending(true);
+    const optimisticId = `user-${Date.now()}`;
     setMessages((all) => [
       ...all,
-      { id: `user-${Date.now()}`, role: 'user', content: message, at: new Date().toISOString() },
+      {
+        id: optimisticId,
+        runId: '',
+        role: 'user',
+        content: message,
+        toolName: null,
+        callIndex: null,
+        at: new Date().toISOString(),
+      },
     ]);
     setDraft('');
     try {
       const run = await props.client.sendMessage(props.projectId, current.conversationId, message);
-      setRuns((all) => [...all, { run, toolCalls: [] }]);
+      setMessages((all) =>
+        all.map((entry) => (entry.id === optimisticId ? { ...entry, runId: run.runId } : entry)),
+      );
+      setRuns((all) =>
+        all.some((entry) => entry.run.runId === run.runId)
+          ? all.map((entry) => (entry.run.runId === run.runId ? { run, toolCalls: entry.toolCalls } : entry))
+          : [...all, { run, toolCalls: [] }],
+      );
       activeRunId = run.runId;
       setStreamingRun(run.runId);
       stopProgress = props.client.openProgress(
@@ -159,7 +302,6 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
         run.runId,
         handleProgressEvent,
       );
-      void refreshHistory().catch(() => undefined);
     } catch (cause) {
       setError(errorMessage(cause));
     } finally {
@@ -177,11 +319,23 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
     }
   };
 
+  const cancelCurrent = async (): Promise<void> => {
+    const runId = activeRunId ?? streamingRun();
+    if (runId === null) return;
+    await cancelRun(runId);
+  };
+
   const retryRun = async (runId: string): Promise<void> => {
     setError(null);
     try {
       await props.client.retry(props.projectId, runId);
       await refreshHistory();
+      // The retried attempt re-streams under the same run id: drop the
+      // previous attempt's assistant/tool messages but keep its user message
+      // so deltas start a fresh assistant message.
+      setMessages((all) =>
+        all.filter((message) => message.runId !== runId || message.role === 'user'),
+      );
       activeRunId = runId;
       setStreamingRun(runId);
       const current = conversation();
@@ -221,123 +375,256 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
         </p>
       </Show>
 
-      <div class="agent-chat-messages" data-testid="agent-chat-messages">
-        <Show
-          when={messages().length > 0}
-          fallback={
-            <p class="agent-chat-empty">
-              Send a message to start an Agent run. The Agent can only use the tools your project
-              role grants.
-            </p>
-          }
-        >
-          <For each={messages()}>
-            {(message) => (
-              <article class={`agent-message agent-message-${message.role}`}>
-                <span class="agent-message-role">{message.role}</span>
-                <p>{message.content}</p>
-              </article>
-            )}
-          </For>
-        </Show>
-      </div>
+      <div class="agent-chat-layout flex items-start gap-[var(--wb-space-3)]">
+        <aside class="agent-conversation-list w-64 shrink-0" aria-label="Conversations">
+          <div class="flex flex-wrap items-center justify-between gap-[var(--wb-space-2)]">
+            <h3>Conversations</h3>
+            <button
+              class="text-button"
+              type="button"
+              data-testid="agent-chat-new-conversation"
+              onClick={() => void createConversation()}
+            >
+              + 新会话
+            </button>
+          </div>
+          <Show
+            when={conversations().length > 0}
+            fallback={<p class="text-xs text-[var(--wb-text-muted)]">暂无会话</p>}
+          >
+            <ul class="agent-conversation-items max-h-[60vh] overflow-y-auto">
+              <For each={conversations()}>
+                {(entry) => (
+                  <li>
+                    <button
+                      class="agent-conversation-item"
+                      classList={{
+                        'is-active': conversation()?.conversationId === entry.conversationId,
+                      }}
+                      type="button"
+                      data-testid={`agent-conversation-${entry.conversationId}`}
+                      onClick={() => void openConversation(entry)}
+                    >
+                      <span class="agent-conversation-title">
+                        {entry.title ?? entry.conversationId}
+                      </span>
+                      <span class="text-xs text-[var(--wb-text-muted)]">
+                        {new Date(entry.updatedAt).toLocaleString()}
+                      </span>
+                    </button>
+                  </li>
+                )}
+              </For>
+            </ul>
+          </Show>
+        </aside>
 
-      <Show when={runs().length > 0}>
-        <div class="agent-runs" data-testid="agent-chat-runs">
-          <h3>Tool-call receipts</h3>
-          <ul class="grid gap-[var(--wb-space-2)]">
-            <For each={runs()}>
-              {(entry) => (
-                <li class="agent-run" data-testid={`agent-run-${entry.run.runId}`}>
-                  <div class="flex flex-wrap items-center justify-between gap-[var(--wb-space-2)]">
-                    <span class="agent-run-label" data-testid="agent-run-status">
-                      {runLabel(entry.run)}
-                    </span>
-                    <span class="flex gap-[var(--wb-space-2)]">
-                      <Show when={entry.run.status === 'queued' || entry.run.status === 'running'}>
+        <div class="agent-chat-main min-w-0 flex-1">
+          <div class="agent-chat-messages" data-testid="agent-chat-messages">
+            <Show
+              when={messages().length > 0}
+              fallback={
+                <div class="agent-chat-welcome" data-testid="agent-chat-welcome">
+                  <p class="agent-chat-welcome-title">不知道从哪开始？试试这些</p>
+                  <div class="grid gap-[var(--wb-space-2)]">
+                    <For each={WELCOME_PROMPTS}>
+                      {(example, index) => (
                         <button
-                          class="text-button"
+                          class="agent-chat-welcome-card"
                           type="button"
-                          data-testid={`agent-cancel-${entry.run.runId}`}
-                          onClick={() => void cancelRun(entry.run.runId)}
+                          data-testid={`agent-chat-welcome-card-${index()}`}
+                          onClick={() => setDraft(example.prompt)}
                         >
-                          Cancel
+                          <span class="agent-chat-welcome-prompt">{example.prompt}</span>
+                          <span class="text-xs text-[var(--wb-text-muted)]">{example.hint}</span>
                         </button>
-                      </Show>
-                      <Show when={entry.run.status === 'interrupted'}>
-                        <button
-                          class="text-button"
-                          type="button"
-                          data-testid={`agent-retry-${entry.run.runId}`}
-                          onClick={() => void retryRun(entry.run.runId)}
-                        >
-                          Retry
-                        </button>
-                      </Show>
-                      <Show when={streamingRun() === entry.run.runId}>
-                        <span class="agent-streaming" data-testid="agent-streaming">
-                          streaming…
-                        </span>
-                      </Show>
-                    </span>
+                      )}
+                    </For>
                   </div>
-                  <Show when={entry.run.errorCode !== null}>
-                    <p class="text-xs text-[var(--wb-text-muted)]" data-testid="agent-run-error">
-                      {entry.run.errorCode}
-                    </p>
+                </div>
+              }
+            >
+              <For each={messages()}>
+                {(message) => (
+                  <Show when={message.role !== 'tool_result'}>
+                    <article class={`agent-message agent-message-${message.role}`}>
+                      <span class="agent-message-role">{message.role}</span>
+                      {message.role === 'assistant' ? (
+                        <div class="agent-message-markdown">
+                          <SolidMarkdown children={message.content} />
+                        </div>
+                      ) : (
+                        <p>{message.content}</p>
+                      )}
+                    </article>
                   </Show>
-                  <Show when={entry.toolCalls.length > 0}>
-                    <ul class="agent-tool-calls">
-                      <For each={entry.toolCalls}>
-                        {(call) => (
-                          <li data-testid={`agent-tool-call-${entry.run.runId}-${call.callIndex}`}>
-                            <span class="agent-tool-call-name">{call.toolName}</span>
-                            <span class="agent-tool-call-status" data-status={call.status}>
-                              {receiptLabel(call)}
-                            </span>
-                            <code class="agent-tool-call-hash">
-                              {call.sanitizedArgsHash.slice(0, 12)}
-                            </code>
-                          </li>
-                        )}
-                      </For>
-                    </ul>
-                  </Show>
-                </li>
-              )}
-            </For>
-          </ul>
-        </div>
-      </Show>
+                )}
+              </For>
+            </Show>
+          </div>
 
-      <form
-        class="agent-chat-composer"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void send();
-        }}
-      >
-        <label class="sr-only" for="agent-chat-input">
-          Message the Agent
-        </label>
-        <input
-          id="agent-chat-input"
-          type="text"
-          value={draft()}
-          onInput={(event) => setDraft(event.currentTarget.value)}
-          placeholder="Describe the authoring work to run…"
-          disabled={sending() || conversation() === null}
-          data-testid="agent-chat-input"
-        />
-        <button
-          class="text-button"
-          type="submit"
-          disabled={sending() || draft().trim().length === 0 || conversation() === null}
-          data-testid="agent-chat-send"
-        >
-          {sending() ? 'Sending…' : 'Send'}
-        </button>
-      </form>
+          <Show when={runs().length > 0}>
+            <div class="agent-runs" data-testid="agent-chat-runs">
+              <h3>Tool-call receipts</h3>
+              <ul class="grid gap-[var(--wb-space-2)]">
+                <For each={runs()}>
+                  {(entry) => {
+                    const chips = artifactChipsOf(entry);
+                    return (
+                      <li>
+                        <details
+                          class="agent-run"
+                          data-testid={`agent-run-${entry.run.runId}`}
+                          open={
+                            entry.run.status === 'queued' ||
+                            entry.run.status === 'running' ||
+                            streamingRun() === entry.run.runId
+                          }
+                        >
+                          <summary class="flex flex-wrap items-center justify-between gap-[var(--wb-space-2)]">
+                            <span class="agent-run-label" data-testid="agent-run-status">
+                              {runLabel(entry.run)}
+                            </span>
+                            <span class="flex gap-[var(--wb-space-2)]">
+                              <Show
+                                when={
+                                  entry.run.status === 'queued' || entry.run.status === 'running'
+                                }
+                              >
+                                <button
+                                  class="text-button"
+                                  type="button"
+                                  data-testid={`agent-cancel-${entry.run.runId}`}
+                                  onClick={() => void cancelRun(entry.run.runId)}
+                                >
+                                  Cancel
+                                </button>
+                              </Show>
+                              <Show
+                                when={
+                                  entry.run.status === 'interrupted' || entry.run.status === 'failed'
+                                }
+                              >
+                                <button
+                                  class="text-button"
+                                  type="button"
+                                  data-testid={`agent-retry-${entry.run.runId}`}
+                                  onClick={() => void retryRun(entry.run.runId)}
+                                >
+                                  Retry
+                                </button>
+                              </Show>
+                              <Show when={streamingRun() === entry.run.runId}>
+                                <span class="agent-streaming" data-testid="agent-streaming">
+                                  streaming…
+                                </span>
+                              </Show>
+                            </span>
+                          </summary>
+                          <Show when={entry.run.errorCode !== null}>
+                            <p
+                              class="text-xs text-[var(--wb-text-muted)]"
+                              data-testid="agent-run-error"
+                            >
+                              {entry.run.errorCode}
+                            </p>
+                          </Show>
+                          <Show when={entry.toolCalls.length > 0}>
+                            <ul class="agent-tool-calls">
+                              <For each={entry.toolCalls}>
+                                {(call) => (
+                                  <li
+                                    data-testid={`agent-tool-call-${entry.run.runId}-${call.callIndex}`}
+                                  >
+                                    <span class="agent-tool-call-name">{call.toolName}</span>
+                                    <span class="agent-tool-call-status" data-status={call.status}>
+                                      {receiptLabel(call)}
+                                    </span>
+                                    <span class="text-xs text-[var(--wb-text-muted)]">
+                                      {new Date(call.createdAt).toLocaleTimeString()}
+                                    </span>
+                                    <code class="agent-tool-call-hash">
+                                      {call.sanitizedArgsHash.slice(0, 12)}
+                                    </code>
+                                  </li>
+                                )}
+                              </For>
+                            </ul>
+                          </Show>
+                          <Show when={chips.length > 0}>
+                            <div class="agent-artifact-chips">
+                              <For each={chips}>
+                                {(chip) => (
+                                  <button
+                                    class="agent-artifact-chip"
+                                    type="button"
+                                    title={chip.hint}
+                                    data-testid={`agent-artifact-${chip.key}-${entry.run.runId}`}
+                                    onClick={() => props.onViewChange?.(chip.view)}
+                                  >
+                                    {chip.label}
+                                  </button>
+                                )}
+                              </For>
+                            </div>
+                          </Show>
+                        </details>
+                      </li>
+                    );
+                  }}
+                </For>
+              </ul>
+            </div>
+          </Show>
+
+          <form
+            class="agent-chat-composer"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void send();
+            }}
+          >
+            <label class="sr-only" for="agent-chat-input">
+              Message the Agent
+            </label>
+            <textarea
+              id="agent-chat-input"
+              rows={3}
+              value={draft()}
+              onInput={(event) => setDraft(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                  event.preventDefault();
+                  void send();
+                }
+              }}
+              placeholder="描述要运行的写作任务…（Enter 发送，Shift+Enter 换行）"
+              disabled={sending()}
+              data-testid="agent-chat-input"
+            />
+            <div class="flex gap-[var(--wb-space-2)]">
+              <Show when={streamingRun() !== null}>
+                <button
+                  class="text-button"
+                  type="button"
+                  data-testid="agent-chat-cancel"
+                  onClick={() => void cancelCurrent()}
+                >
+                  Cancel
+                </button>
+              </Show>
+              <button
+                class="text-button"
+                type="submit"
+                disabled={sending() || draft().trim().length === 0}
+                data-testid="agent-chat-send"
+              >
+                {sending() ? 'Sending…' : 'Send'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
     </section>
   );
 }

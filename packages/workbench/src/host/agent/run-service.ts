@@ -1,9 +1,10 @@
+import { createHash, randomUUID } from 'node:crypto';
 /**
  * WorkbenchAgentRunService (plan 9.4): the built-in Agent's run loop.
  *
  * One service per project. It owns the durable agent conversation/run/tool-call
  * records (via {@link AgentStore}) and drives turns over the SAME shared
- * {@link ProjectToolExecutor} + {@link WorkbenchAgentModelPort} the external
+ * {@link ProjectToolExecutor} + pi-ai {@link Model} the external
  * MCP transport uses — it never re-implements handler, CAS, or scope logic.
  *
  * Invariants this service enforces:
@@ -32,12 +33,6 @@
  * provider keys, raw arguments, or raw tool results.
  */
 
-import { createHash, randomUUID } from 'node:crypto';
-import type {
-  AgentModelMessage,
-  AgentToolSpec,
-  WorkbenchAgentModelPort,
-} from '@novalistically/node-host';
 import type {
   AgentChatConversationViewV1,
   AgentChatHistoryV1,
@@ -59,6 +54,9 @@ import type {
   AgentRunRecordV1,
   AgentToolCallRecordV1,
 } from '../../contracts/persistence.js';
+import { Agent, type AgentEvent, type AgentMessage, type AgentTool, type StreamFn } from '@earendil-works/pi-agent-core';
+import { Type, type TSchema } from '@earendil-works/pi-ai';
+import type { Api, Model } from '@earendil-works/pi-ai';
 import type { AgentStore } from '../../persistence/agent-store.js';
 import type {
   ProjectOperationRunnerResult,
@@ -97,8 +95,8 @@ export interface WorkbenchAgentRunServiceOptions {
   readonly store: AgentStore;
   /** The shared executor over this project's session (plan 9.1). */
   readonly executor: ProjectToolExecutor;
-  /** The tool-calling model port for this project's provider profile. */
-  readonly model: WorkbenchAgentModelPort;
+  /** pi-ai model + streamFn for this project's provider profile. */
+  readonly agentModel: { readonly model: Model<Api>; readonly streamFn: StreamFn };
   /** The durable operation queue every run is enqueued through. */
   readonly operations: ProjectOperationService;
   /** V3 agent bounds: `{ maxTurns, maxToolCalls }` (enabled is the launch gate). */
@@ -171,7 +169,7 @@ const RUN_RECORD_WAIT_INTERVAL_MS = 20;
 export function buildAgentSystemPrompt(
   projectId: string,
   role: ProjectAccessRole,
-  tools: readonly AgentToolSpec[],
+  tools: readonly AgentTool[],
 ): string {
   const lines = tools.map((tool) => `- ${tool.name}: ${tool.description}`);
   return [
@@ -254,13 +252,13 @@ function receiptViewOf(record: AgentToolCallRecordV1): AgentChatToolCallReceiptV
 export function createWorkbenchAgentRunService(
   options: WorkbenchAgentRunServiceOptions,
 ): WorkbenchAgentRunService {
-  const { projectId, store, executor, model, operations } = options;
+  const { projectId, store, executor, agentModel, operations } = options;
   const now = options.now ?? (() => new Date().toISOString());
   const maxTurns = Math.max(1, Math.floor(options.agent.maxTurns));
   const maxToolCalls = Math.max(1, Math.floor(options.agent.maxToolCalls));
 
   /** runId → initial transcript (user message) kept for explicit retry. */
-  const transcripts = new Map<string, readonly AgentModelMessage[]>();
+  const transcripts = new Map<string, readonly AgentMessage[]>();
   /** runId → subscribers; publish() fires them only after store writes. */
   const subscribers = new Map<string, Set<(event: AgentChatProgressEventV1) => void>>();
   let closed = false;
@@ -327,7 +325,7 @@ export function createWorkbenchAgentRunService(
   const runLoop = async (
     runId: string,
     input: SendAgentMessageInput,
-    initialMessages: readonly AgentModelMessage[],
+    initialMessages: readonly AgentMessage[],
     ctx: {
       readonly signal: AbortSignal;
       readonly reportProgress: (progress: {
@@ -356,217 +354,233 @@ export function createWorkbenchAgentRunService(
     const principal = input.principal;
     const scopes = PROJECT_ACCESS_ROLE_GRANTS[principal.role].scopes;
     const caller = executor.callerForRole(principal);
-    const tools: readonly AgentToolSpec[] = executor.listTools(scopes).map((definition) => ({
+    const tools: AgentTool[] = executor.listTools(scopes).map((definition) => ({
       name: definition.name,
       description: definition.description,
-      // The registry schema is a concrete JSON Schema object; the model port
-      // accepts a plain Record shape. The cast is lossless (same fields).
-      inputSchema: definition.inputSchema as unknown as Readonly<Record<string, unknown>>,
+      // Registry schemas are concrete JSON Schema objects, not TypeBox kinds.
+      // Type.Unsafe wraps them for pi-ai; validateToolArguments falls back to
+      // JSON-schema validation + coercion for non-TypeBox schemas.
+      parameters: Type.Unsafe(definition.inputSchema as unknown as TSchema),
+      label: definition.name,
+      // The bounded summary is computed here; details carry {ok, errorCode,
+      // summary} so subscribers persist the sanitized record.
+      execute: async (toolCallId: string, params: unknown) => {
+        const result = await executor.callTool(definition.name, caller, params);
+        const summary = resultSummaryOf(result);
+        return {
+          content: [{ type: 'text', text: summary }],
+          // McpToolResult is a discriminated union; narrow before touching error.
+          details: { ok: result.ok, errorCode: result.ok ? null : result.error.code, summary },
+        };
+      },
     }));
-    const toolNames = new Set(tools.map((tool) => tool.name));
+    const toolNames = new Set(tools.map((t) => t.name));
     const system = buildAgentSystemPrompt(projectId, principal.role, tools);
 
-    const messages: AgentModelMessage[] = [...initialMessages];
+    let failure: { code: AgentRunFailureCode; message: string } | null = null;
+    let toolCallsUsed = 0;
+    let turn = 0;
     let current = started.record;
-    let turn = current.turn;
+    const assistantTextByTurn: string[] = []; // per-turn accumulation (index = turn - 1)
+    const callIndexByCallId = new Map<string, number>(); // toolCallId → callIndex
 
-    while (true) {
-      if (ctx.signal.aborted) {
-        const cancelled = await store.transitionRun({
-          runId,
-          status: 'cancelled',
-          expectedStatus: 'running',
-          at: now(),
-        });
-        publish(runId, { type: 'run-status', run: await runView(cancelled.record) });
-        return { status: 'cancelled' };
-      }
-      if (turn >= current.maxTurns) {
-        return failRun(runId, 'AGENT_MAX_TURNS_EXCEEDED', 'The run exceeded its turn budget.');
-      }
-      turn += 1;
-      await store.checkpointRun({ runId, turn, at: now() });
-      let sawToolCall = false;
-      let modelError: unknown = null;
-      try {
-        for await (const event of model.run({
-          system,
-          messages,
-          tools,
-          maxTurns: 1,
-          signal: ctx.signal,
-        })) {
-          if (ctx.signal.aborted) break;
-          switch (event.type) {
-            case 'assistant-text': {
-              messages.push({ role: 'assistant', content: event.text });
-              publish(runId, {
-                type: 'assistant-text',
-                runId,
-                text: event.text,
-                at: now(),
-              });
-              break;
-            }
-            case 'tool-call': {
-              sawToolCall = true;
-              const nextToolCalls = current.toolCalls + 1;
-              if (nextToolCalls > current.maxToolCalls) {
-                return failRun(
-                  runId,
-                  'AGENT_MAX_TOOL_CALLS_EXCEEDED',
-                  'The run exceeded its tool-call budget.',
-                );
-              }
-              // Catalog-only enforcement: only the exact tools handed to the
-              // model (the executor's scope-filtered registry listing) may be
-              // executed; a hallucinated name never reaches the executor.
-              if (!toolNames.has(event.name)) {
-                return failRun(
-                  runId,
-                  'AGENT_TOOL_NOT_IN_CATALOG',
-                  `The model requested a tool outside the registry: ${event.name}`,
-                );
-              }
-              const callIndex = current.toolCalls; // next sequential ordinal
-              const pending = await store.appendToolCall({
-                version: 1,
-                runId,
-                callIndex,
-                toolName: event.name,
-                sanitizedArgsHash: digestOf(event.args),
-                resultRef: null,
-                turn,
-                status: 'pending',
-                createdAt: now(),
-              });
-              publish(runId, { type: 'tool-call', runId, call: receiptViewOf(pending) });
-              if (ctx.signal.aborted) break;
-              const result = await executor.callTool(event.name, caller, event.args);
-              const summary = resultSummaryOf(result);
-              const completed = await store.updateToolCallStatus({
-                runId,
-                callIndex,
-                status: result.ok ? 'succeeded' : 'failed',
-                resultRef: summary,
-                at: now(),
-              });
-              publish(runId, { type: 'tool-call', runId, call: receiptViewOf(completed) });
-              publish(runId, {
-                type: 'tool-result',
-                runId,
-                callIndex,
-                status: result.ok ? 'succeeded' : 'failed',
-                resultSummary: summary,
-                at: now(),
-              });
-              // Attach the tool call to the assistant message so the next
-              // round's `tool` messages have a preceding `tool_calls` payload
-              // (OpenAI-compatible providers reject tool messages otherwise).
-              const last = messages[messages.length - 1];
-              if (last?.role === 'assistant') {
-                const call = { id: event.id, name: event.name, input: event.args };
-                messages[messages.length - 1] = {
-                  ...last,
-                  reasoning: last.reasoning ?? event.reasoning,
-                  toolCalls: [...(last.toolCalls ?? []), call],
-                };
-              } else {
-                messages.push({
-                  role: 'assistant',
-                  content: '',
-                  reasoning: event.reasoning,
-                  toolCalls: [{ id: event.id, name: event.name, input: event.args }],
-                });
-              }
-              messages.push({
-                role: 'tool',
-                toolCallId: event.id,
-                toolName: event.name,
-                result: result.ok ? result.data : { error: result.error },
-                isError: !result.ok,
-              });
-              current = { ...current, toolCalls: nextToolCalls };
-              break;
-            }
-            case 'finish':
-              break;
-          }
-        }
-      } catch (error) {
-        modelError = error;
-      }
-      if (ctx.signal.aborted) {
-        const cancelled = await store.transitionRun({
-          runId,
-          status: 'cancelled',
-          expectedStatus: 'running',
-          at: now(),
-        });
-        publish(runId, { type: 'run-status', run: await runView(cancelled.record) });
-        return { status: 'cancelled' };
-      }
-      if (modelError !== null) {
-        return failRun(runId, 'AGENT_MODEL_ERROR', errorMessageOf(modelError));
-      }
-      if (sawToolCall) {
-        await ctx.reportProgress({
-          completed: Math.min(current.toolCalls, current.maxToolCalls),
-          total: current.maxToolCalls,
-        });
-        // Workflow-completion gate: the chain actually finished (e.g.
-        // canonical publication is current) even though the model wants to
-        // keep re-confirming — force-terminate as succeeded without burning
-        // another model turn.
+    const agent = new Agent({
+      streamFn: options.agentModel.streamFn,
+      initialState: {
+        systemPrompt: system,
+        model: options.agentModel.model,
+        thinkingLevel: 'off',
+        tools,
+        messages: [],
+      },
+      // Decision: sequential execution (one-at-a-time, same as the old
+      // hand-written loop). MCP tools carry authoring side effects, so
+      // parallel execution would make store-first ordering and callIndex
+      // assignment nondeterministic.
+      toolExecution: 'sequential',
+      beforeToolCall: async () => {
+        // Abort gate: blocks the call when the run was cancelled (a late
+        // cancellation races between tool_execution_start and here); the
+        // agent's own signal check in pi-agent-core covers agent.abort().
+        if (ctx.signal.aborted) return { block: true, reason: 'ABORTED', terminate: true };
+        // A failure marker (catalog/budget/maxTurns) already aborted the
+        // agent; keep any later call in the batch from executing and hint
+        // termination so the run settles promptly.
+        if (failure !== null) return { block: true, reason: failure.code, terminate: true };
+        return undefined;
+      },
+      afterToolCall: async () => {
         if (options.isWorkflowComplete !== undefined && (await options.isWorkflowComplete())) {
-          const finished = await store.transitionRun({
+          return { terminate: true };
+        }
+        return undefined;
+      },
+    });
+    const onAbort = () => agent.abort();
+    ctx.signal.addEventListener('abort', onAbort, { once: true });
+    const unsubscribe = agent.subscribe(async (event: AgentEvent) => {
+      switch (event.type) {
+        case 'turn_start':
+          turn += 1;
+          if (turn > maxTurns) {
+            failure = {
+              code: 'AGENT_MAX_TURNS_EXCEEDED',
+              message: 'The run exceeded its turn budget.',
+            };
+            agent.abort();
+            return;
+          }
+          void store.checkpointRun({ runId, turn, at: now() }).catch(() => undefined);
+          return;
+        case 'message_update': {
+          const e = event.assistantMessageEvent;
+          if (e.type === 'text_delta') {
+            assistantTextByTurn[turn - 1] = (assistantTextByTurn[turn - 1] ?? '') + e.delta;
+            publish(runId, { type: 'assistant-text', runId, text: e.delta, at: now() });
+          }
+          return;
+        }
+        case 'tool_execution_start': {
+          // pi-agent-core short-circuits unknown tools BEFORE beforeToolCall
+          // (prepareToolCall → immediate 'Tool X not found' error), so the
+          // catalog gate must live here — this event fires unconditionally
+          // per model-emitted call. Gated calls get NO tool-call record, the
+          // run is aborted, and the failure marker fails it afterwards (old
+          // loop failed the run before persisting anything for such calls).
+          if (ctx.signal.aborted) return;
+          if (!toolNames.has(event.toolName)) {
+            failure = {
+              code: 'AGENT_TOOL_NOT_IN_CATALOG',
+              message: `The model requested a tool outside the registry: ${event.toolName}`,
+            };
+            agent.abort();
+            return;
+          }
+          if (toolCallsUsed >= maxToolCalls) {
+            failure = {
+              code: 'AGENT_MAX_TOOL_CALLS_EXCEEDED',
+              message: 'The run exceeded its tool-call budget.',
+            };
+            agent.abort();
+            return;
+          }
+          toolCallsUsed += 1;
+          const callIndex = current.toolCalls;
+          callIndexByCallId.set(event.toolCallId, callIndex);
+          const pending = await store.appendToolCall({
+            version: 1,
             runId,
-            status: 'succeeded',
-            expectedStatus: 'running',
+            callIndex,
+            toolName: event.toolName,
+            sanitizedArgsHash: digestOf(event.args),
+            resultRef: null,
             turn,
-            toolCalls: current.toolCalls,
+            status: 'pending',
+            createdAt: now(),
+          });
+          publish(runId, { type: 'tool-call', runId, call: receiptViewOf(pending) });
+          return;
+        }
+        case 'tool_execution_end': {
+          const callIndex = callIndexByCallId.get(event.toolCallId);
+          if (callIndex === undefined) return; // defensive: end without a seen start is not persisted
+          const details = (event.result?.details ?? {}) as {
+            ok?: boolean;
+            errorCode?: string | null;
+            summary?: string | null;
+          };
+          const summary = details.summary ?? null;
+          // pi-agent-core marks isError only when execute() THROWS; a failed
+          // executor result returns normally with details.ok === false. The
+          // durable status must reflect the real executor outcome (old-loop
+          // semantics: status = result.ok ? succeeded : failed).
+          const failed = event.isError || details.ok === false;
+          const completed = await store.updateToolCallStatus({
+            runId,
+            callIndex,
+            status: failed ? 'failed' : 'succeeded',
+            resultRef: summary,
             at: now(),
           });
-          publish(runId, { type: 'run-status', run: await runView(finished.record) });
-          return {
-            status: 'succeeded',
-            result: {
-              runId,
-              conversationId: started.record.conversationId,
-              projectId,
-              status: 'succeeded',
-              turn,
-              toolCalls: current.toolCalls,
-            },
-          };
+          publish(runId, { type: 'tool-call', runId, call: receiptViewOf(completed) });
+          publish(runId, {
+            type: 'tool-result',
+            runId,
+            callIndex,
+            status: failed ? 'failed' : 'succeeded',
+            resultSummary: summary,
+            at: now(),
+          });
+          current = { ...current, toolCalls: Math.max(current.toolCalls, callIndex + 1) };
+          return;
         }
-        continue;
+        case 'turn_end': {
+          const text = assistantTextByTurn[turn - 1];
+          if (text !== undefined && text.length > 0) {
+            // Stage 4 / plan 4.2 TODO: persist the completed assistant turn
+            // into the conversation message log via store.appendMessage. The
+            // Stage 3 store has no message table, so the turn text stays
+            // in-memory (assistantTextByTurn) until Stage 4 lands.
+          }
+          return;
+        }
       }
-      // The model finished without tool calls: the run succeeded. (Whether
-      // the user's goal was reached is the caller's concern — the launch
-      // wires the completion gate to stop re-confirming agents once the
-      // workflow IS done, not to penalize early stops.)
-      const finished = await store.transitionRun({
+    });
+    let loopError: unknown = null;
+    try {
+      await agent.prompt([...initialMessages]);
+      await agent.waitForIdle();
+    } catch (error) {
+      loopError = error;
+    } finally {
+      ctx.signal.removeEventListener('abort', onAbort);
+      unsubscribe();
+    }
+
+    if (ctx.signal.aborted) {
+      const cancelled = await store.transitionRun({
         runId,
-        status: 'succeeded',
+        status: 'cancelled',
         expectedStatus: 'running',
-        turn,
-        toolCalls: current.toolCalls,
         at: now(),
       });
-      publish(runId, { type: 'run-status', run: await runView(finished.record) });
-      return {
-        status: 'succeeded',
-        result: {
-          runId,
-          conversationId: started.record.conversationId,
-          projectId,
-          status: 'succeeded',
-          turn,
-          toolCalls: current.toolCalls,
-        },
-      };
+      publish(runId, { type: 'run-status', run: await runView(cancelled.record) });
+      return { status: 'cancelled' };
     }
+    if (loopError !== null) {
+      return failRun(runId, 'AGENT_MODEL_ERROR', errorMessageOf(loopError));
+    }
+    if (
+      failure === null &&
+      agent.state.errorMessage !== undefined &&
+      agent.state.errorMessage.length > 0
+    ) {
+      failure = { code: 'AGENT_MODEL_ERROR', message: errorMessageOf(agent.state.errorMessage) };
+    }
+    if (failure !== null) {
+      return failRun(runId, failure.code, failure.message);
+    }
+    const finalTurn = Math.max(1, turn);
+    const finished = await store.transitionRun({
+      runId,
+      status: 'succeeded',
+      expectedStatus: 'running',
+      turn: finalTurn,
+      toolCalls: current.toolCalls,
+      at: now(),
+    });
+    publish(runId, { type: 'run-status', run: await runView(finished.record) });
+    return {
+      status: 'succeeded',
+      result: {
+        runId,
+        conversationId: started.record.conversationId,
+        projectId,
+        status: 'succeeded',
+        turn: finalTurn,
+        toolCalls: current.toolCalls,
+      },
+    };
   };
 
   return {
@@ -632,8 +646,8 @@ export function createWorkbenchAgentRunService(
         });
       }
       const runId = randomUUID();
-      const initialMessages: readonly AgentModelMessage[] = [
-        { role: 'user', content: input.message },
+      const initialMessages: AgentMessage[] = [
+        { role: 'user', content: input.message, timestamp: Date.now() },
       ];
       transcripts.set(runId, initialMessages);
       const requestHash = digestOf({
@@ -769,7 +783,11 @@ export function createWorkbenchAgentRunService(
         };
       }
       const firstUser = initialMessages.find((message) => message.role === 'user');
-      if (firstUser === undefined || firstUser.role !== 'user') {
+      if (
+        firstUser === undefined ||
+        firstUser.role !== 'user' ||
+        typeof firstUser.content !== 'string'
+      ) {
         return {
           status: 'unavailable',
           errorCode: 'AGENT_CHAT_INVALID',

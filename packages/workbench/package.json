@@ -35,6 +35,8 @@
     "build": "npm run build:host && npm run build:client"
   },
   "dependencies": {
+    "@earendil-works/pi-ai": "^0.84.1",
+    "@earendil-works/pi-agent-core": "^0.84.1",
     "@novalistically/core": "^0.1.0",
     "@novalistically/node-host": "^0.1.0",
     "@novalistically/workbench-protocol": "^0.1.0",

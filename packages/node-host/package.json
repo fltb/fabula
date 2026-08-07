@@ -19,9 +19,8 @@
     "test": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
-    "@ai-sdk/openai-compatible": "^3.0.12",
+    "@earendil-works/pi-ai": "^0.84.1",
     "@novalistically/core": "*",
-    "ai": "^7.0.31",
     "yaml": "^2.7.0"
   },
   "devDependencies": {

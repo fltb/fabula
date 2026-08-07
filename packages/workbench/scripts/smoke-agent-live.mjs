@@ -8,7 +8,7 @@
 //   - the session/render provider is a DETERMINISTIC mock (fixed Pass 1 prose
 //     + canned Pass 2 analysis with the protocol echo), so renders are
 //     offline-deterministic;
-//   - the AGENT MODEL is the REAL AiSdkProvider tool-calling adapter built
+//   - the AGENT MODEL is the REAL pi-ai model (createPiAgentModel) built
 //     from NOVALISTICALLY_AI_API_KEY (env key only; the credential store is
 //     not touched).
 // One conversation is driven through the shared executor + model adapter with
@@ -57,8 +57,7 @@ if (!apiKey || apiKey.trim() === '') {
   );
   process.exit(2);
 }
-// The agent model adapter reads the key from this env var directly.
-if (!process.env.NOVALISTICALLY_AI_API_KEY) process.env.NOVALISTICALLY_AI_API_KEY = apiKey;
+// createPiAgentModel resolves the key through the provider stack's apiKey.
 
 for (const dist of [
   'core/dist/index.js',
@@ -106,7 +105,19 @@ await build({
 });
 
 const { startWorkbench } = await import(`${bundleDir}/workbench-launch.js`);
-const { createWorkbenchAgentModelAdapter } = await import('@novalistically/node-host');
+// createPiAgentModel is not part of the workbench package exports, so bundle
+// it from source (same pattern as serializeConfigurationYaml below).
+await build({
+  entryPoints: [resolve(packageRoot, 'src/host/agent/pi-agent-model.ts')],
+  bundle: true,
+  packages: 'external',
+  platform: 'node',
+  target: 'node26',
+  format: 'esm',
+  outfile: join(bundleDir, 'pi-agent-model.js'),
+  logLevel: 'silent',
+});
+const { createPiAgentModel } = await import(`${bundleDir}/pi-agent-model.js`);
 // serializeConfigurationYaml is bundled with the composed host (no standalone
 // dist file exists), so import it from the smoke's own esbuild bundle.
 await build({
@@ -194,9 +205,9 @@ const handle = await startWorkbench({
   // Deterministic renders for Pass1/Pass2; the REAL model runs the agent.
   providerOverride: provider,
   agentReady: true,
-  agentModel: createWorkbenchAgentModelAdapter({
+  agentModel: createPiAgentModel({
     baseURL: process.env.NOVALISTICALLY_AI_BASE_URL,
-    model: process.env.NOVALISTICALLY_AI_MODEL,
+    modelId: process.env.NOVALISTICALLY_AI_MODEL,
     apiKey,
   }),
 });

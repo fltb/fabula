@@ -38,7 +38,6 @@ import {
   activateNodePlugins,
   createDeterministicMockProvider,
   createFileCoreRuntimeServices,
-  createWorkbenchAgentModelAdapter,
   FileProjectSourceLoader,
   FileProjectStatusReporter,
   type NodePluginActivationResult,
@@ -46,7 +45,6 @@ import {
   type ProjectAuthorityTokenV1,
   ProjectWriteCoordinator,
   shutdownNodePlugins,
-  type WorkbenchAgentModelPort,
 } from '@novalistically/node-host';
 import {
   DEFAULT_WORKBENCH_AGENT_CONFIGURATION,
@@ -55,6 +53,8 @@ import {
   DEFAULT_WORKBENCH_REFERENCE_LIMITS,
   DEFAULT_WORKBENCH_RENDER_POLICY,
 } from '@novalistically/workbench-protocol';
+import type { Api, Model } from '@earendil-works/pi-ai';
+import type { StreamFn } from '@earendil-works/pi-agent-core';
 import {
   AUTHORING_CONTRACT_VERSION,
   type AuthoringActivityEventV1,
@@ -95,6 +95,7 @@ import {
   createCapabilityPersistence,
   createDurableAuditSink,
 } from './agent/index.js';
+import { createPiAgentModel } from './agent/pi-agent-model.js';
 import { createProjectToolExecutor } from './agent/project-tool-executor.js';
 import {
   createWorkbenchAgentRunService,
@@ -161,8 +162,6 @@ import {
 } from './project-membership-service.js';
 import { createProjectSession, createProjectSessionRegistry } from './project-session.js';
 import {
-  DEFAULT_AI_SDK_BASE_URL,
-  DEFAULT_AI_SDK_MODEL,
   HostProviderError,
   HostProviderFactory,
 } from './provider-factory.js';
@@ -211,11 +210,13 @@ export interface WorkbenchLaunchConfig extends HostServerOptions {
   /** Test/dev-only provider override injected past the credential store (e.g. `MockProvider`). */
   readonly providerOverride?: LLMProvider;
   /**
-   * Test/dev-only built-in Agent model port injection (e.g. a deterministic
-   * tool-calling port for the parity fixture). Absent = production
+   * Test/dev-only built-in Agent model injection (e.g. a deterministic
+   * tool-calling model for the parity fixture). Absent = production
    * construction from the project profile configuration + credential.
    */
-  readonly agentModel?: WorkbenchAgentModelPort;
+  readonly agentModel?:
+    | { readonly model: Model<Api>; readonly streamFn: StreamFn }
+    | undefined;
   /**
   /** Test-only provider factory injection. Production composes the
    * credential-backed {@link HostProviderFactory}; a double injected here
@@ -227,10 +228,8 @@ export interface WorkbenchLaunchConfig extends HostServerOptions {
    * Built-in Agent parity gate (plan 9.6). The deterministic parity matrix
    * test toggles this; it is NEVER hardcoded true in production. The
    * `agent-chat` capability is exposed only when the canonical
-   * `agent.enabled` is true
-   * AND the project provider's model adapter reports tool-call support AND
-   * this flag is true. Defaults to false, so the Agent surface stays fully
-   * hidden until the parity matrix passes.
+   * `agent.enabled` is true AND this flag is true. Defaults to false, so
+   * the Agent surface stays fully hidden until the parity matrix passes.
    */
   readonly agentReady?: boolean | (() => boolean | Promise<boolean>);
   /** Absolute path to the built persistence worker entry; defaults to the bundled `dist/host/persistence/worker.js`. */
@@ -857,8 +856,7 @@ export async function startWorkbench(
     // Built-in Agent parity gate (plan 9.6): the deterministic parity matrix
     // test toggles `agentReady`; production never hardcodes it true. The
     // `agent-chat` capability is derived only when the canonical
-    // agent.enabled is true AND the tool-calling model port reports support
-    // AND the parity flag.
+    // agent.enabled is true AND the parity flag.
     const agentReadyValue = await resolveAgentReady(config.agentReady);
     const agentChatEnabled =
       activeConfiguration?.agent.enabled === true && agentReadyValue === true;
@@ -1313,31 +1311,33 @@ export async function startWorkbench(
           }),
         );
         // Built-in Agent run service (plan 9.4): constructed only when the
-        // `agent-chat` gate passes. The model port is built per project from
+        // `agent-chat` gate passes. The model is built per project from
         // the same profile configuration + credential the provider uses (the
         // credential stays inside the Host; only secret-free options cross).
         if (agentChatEnabled) {
           const profileConfig = activeConfiguration?.providers[profileId];
           // Production construction is credential-backed and may fail when no
-          // key is stored yet (or the AI SDK client rejects empty options):
-          // the project must still open — the Agent surface simply stays
-          // absent for it (fail closed, feature derived from registered
-          // services only). Tests/parity inject a deterministic port.
-          let agentModel: WorkbenchAgentModelPort | null = config.agentModel ?? null;
+          // key is stored yet: the project must still open — the Agent
+          // surface simply stays absent for it (fail closed, feature derived
+          // from registered services only). Tests/parity inject a
+          // deterministic model; the pi defaults fill a missing baseUrl/model.
+          let agentModel:
+            | { readonly model: Model<Api>; readonly streamFn: StreamFn }
+            | null = config.agentModel ?? null;
           if (agentModel === null) {
             try {
-              agentModel = createWorkbenchAgentModelAdapter({
-                baseURL: profileConfig?.baseUrl ?? DEFAULT_AI_SDK_BASE_URL,
-                model: profileConfig?.model ?? DEFAULT_AI_SDK_MODEL,
+              agentModel = createPiAgentModel({
+                baseURL: profileConfig?.baseUrl,
                 apiKey:
                   (await credentialStore.get(providerCredentialKey(profileId)).catch(() => null)) ??
                   undefined,
+                modelId: profileConfig?.model,
               });
             } catch {
               agentModel = null;
             }
           }
-          if (agentModel !== null && agentModel.supportsToolCalls) {
+          if (agentModel !== null) {
             // Persist the built-in Agent principal's capability grant for
             // this project's owner/maintainer users (plan 9.6): the session
             // gate re-loads the row by capabilityId before every phase, and
@@ -1369,12 +1369,18 @@ export async function startWorkbench(
                     }),
               ...(reviewService === undefined ? {} : { review: reviewService }),
               ...(publicationService === undefined ? {} : { publication: publicationService }),
+              // Reference library tools (plan 3.8): threaded only while
+              // referenceLimits.enabled — referencePortFor returns undefined
+              // otherwise, preserving the registry's fail-closed filter.
+              ...(await referencePortFor(project.projectId) === undefined
+                ? {}
+                : { reference: await referencePortFor(project.projectId) }),
             });
             const agentService = createWorkbenchAgentRunService({
               projectId: project.projectId,
               store: createAgentStore(persistence.client),
               executor,
-              model: agentModel,
+              agentModel,
               operations: operationService,
               agent: {
                 maxTurns: activeConfiguration?.agent.maxTurns ?? 16,
@@ -1693,6 +1699,9 @@ export async function startWorkbench(
                 // Plugin activation health (plan 7.3): a live accessor so
                 // `nova_status` reports the current activation snapshot at
                 // call time; null when plugins were never activated.
+                ...(await referencePortFor(projectId) === undefined
+                  ? {}
+                  : { reference: await referencePortFor(projectId) }),
                 plugins: () => pluginActivations.get(projectId) ?? null,
                 // Enabled-plugin extension gate (plan 7.5) for the accepted-
                 // source validation paths.

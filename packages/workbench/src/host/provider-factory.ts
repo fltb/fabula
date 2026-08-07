@@ -23,7 +23,11 @@
  */
 
 import type { LLMProvider } from '@novalistically/core';
-import { AiSdkProvider } from '@novalistically/node-host';
+import {
+  PI_DEFAULT_BASE_URL,
+  PI_DEFAULT_MODEL,
+  PiOpenAICompatibleProvider,
+} from '@novalistically/node-host';
 import type {
   ConfigOperationDiagnosticV1,
   WorkbenchProjectValidationV1,
@@ -42,14 +46,13 @@ import {
  * credential store falls back to this bare key for the default profile.
  */
 export const HOST_AI_SDK_PROVIDER_ID = 'ai-sdk';
-
-/**
- * Explicit defaults mirroring `AiSdkProvider`'s own fallbacks. The factory
- * passes them explicitly whenever the configuration omits a value so that
- * construction never performs a process-environment read.
- */
-export const DEFAULT_AI_SDK_BASE_URL = 'https://opencode.ai/zen/v1';
-export const DEFAULT_AI_SDK_MODEL = 'deepseek-v4-flash-free';
+/** One-time migration notice: legacy provider kind `ai-sdk` is read as `pi`. */
+let warnedLegacyAiSdkKind = false;
+function warnLegacyAiSdkKindOnce(): void {
+  if (warnedLegacyAiSdkKind) return;
+  warnedLegacyAiSdkKind = true;
+  console.warn('legacy kind ai-sdk treated as pi');
+}
 
 export type HostProviderErrorCode =
   | 'PROVIDER_NOT_CONFIGURED'
@@ -212,8 +215,9 @@ export class HostProviderFactory {
   /**
    * Construct the runtime provider for the default profile (`default`). The
    * credential is read from the store and passed as `apiKey`; endpoint/model
-   * default in-module when the configuration omits them, so `AiSdkProvider`
-   * cannot fall back to process environment values.
+   * default in-module when the configuration omits them, so
+   * `PiOpenAICompatibleProvider` cannot fall back to process environment
+   * values.
    */
   async create(): Promise<LLMProvider> {
     return this.createForProfile(DEFAULT_PROVIDER_PROFILE, this.#configuration ?? undefined);
@@ -256,10 +260,13 @@ export class HostProviderFactory {
         `No stored AI provider credential for profile "${profileId}"; save one through Workbench setup or the owner dashboard`,
       );
     }
-    return new AiSdkProvider({
-      baseURL: configuration.baseUrl ?? DEFAULT_AI_SDK_BASE_URL,
+    if (configuration.kind !== 'pi') {
+      warnLegacyAiSdkKindOnce();
+    }
+    return new PiOpenAICompatibleProvider({
+      baseURL: configuration.baseUrl ?? PI_DEFAULT_BASE_URL,
       apiKey,
-      model: configuration.model ?? DEFAULT_AI_SDK_MODEL,
+      model: configuration.model ?? PI_DEFAULT_MODEL,
     });
   }
 

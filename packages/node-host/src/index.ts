@@ -14,15 +14,6 @@ export {
 
 /** Public semantic adapters for the Node Host boundary. */
 
-export type {
-  AgentModelEvent,
-  AgentModelMessage,
-  AgentToolSpec,
-  WorkbenchAgentModelOptions,
-  WorkbenchAgentModelPort,
-  WorkbenchAgentModelRunRequest,
-} from './agent/workbench-agent-model.js';
-export { createWorkbenchAgentModelAdapter } from './agent/workbench-agent-model.js';
 export { FileRenderCacheRepository } from './cache/file-render-cache-repository.js';
 export type {
   FileRenderCacheRepositoryOptions,
@@ -73,12 +64,16 @@ export {
   PluginIdentityMismatchError,
   pluginHookNames,
 } from './plugins/node-plugin-catalog.js';
-export type {
-  AiSdkClientOptions,
-  AiSdkModelClient,
-  AiSdkProviderOptions,
-} from './providers/ai-sdk.js';
-export { AiSdkProvider, createAiSdkModelClient } from './providers/ai-sdk.js';
+export {
+  PiOpenAICompatibleProvider,
+  type PiOpenAICompatibleProviderOptions,
+} from './providers/pi-openai-compatible.js';
+export {
+  createPiProviderStack,
+  PI_DEFAULT_BASE_URL,
+  PI_DEFAULT_MODEL,
+  type PiProviderStack,
+} from './providers/pi-provider.js';
 export type { DeterministicMockProviderOptions } from './providers/deterministic-mock.js';
 export {
   createDeterministicMockProvider,

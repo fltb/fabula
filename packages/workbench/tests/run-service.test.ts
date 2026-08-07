@@ -1,7 +1,7 @@
 // ============================================================================
 // WorkbenchAgentRunService tests (plan 9.4)
 // ============================================================================
-// Verifies the built-in Agent run loop over the shared executor + model port:
+// Verifies the built-in Agent run loop over the shared executor + pi-ai model:
 // turn/tool-call accounting against V3 bounds, catalog-only tool enforcement,
 // store-first progress publication, cancellation mid-run, the restart sweep
 // with explicit (never automatic) retry, and backpressure on a full queue.
@@ -9,11 +9,15 @@
 // executor, model and operation queue are deterministic stubs.
 // ============================================================================
 
-import type {
-  AgentModelEvent,
-  AgentToolSpec,
-  WorkbenchAgentModelPort,
-} from '@novalistically/node-host';
+import { AssistantMessageEventStream, type Api, type Model } from '@earendil-works/pi-ai';
+import type { StreamFn } from '@earendil-works/pi-agent-core';
+import {
+  assistantPartial,
+  doneEvent,
+  scriptedStream,
+  textDelta,
+  toolCallEnd,
+} from './helpers/scripted-stream.js';
 import { afterAll, describe, expect, it } from 'vitest';
 import type { ProjectAccessRole } from '../src/contracts/configuration.js';
 import { PROJECT_ACCESS_ROLE_GRANTS } from '../src/contracts/configuration.js';
@@ -113,48 +117,82 @@ function stubExecutor(
   };
 }
 
-/** Scripted model: one call per turn; each script entry yields that turn's events. */
-class StubModel implements WorkbenchAgentModelPort {
-  readonly supportsToolCalls = true;
+/** Minimal pi-ai model identity; the scripted streamFn never streams it. */
+const fakeModel: Model<Api> = {
+  id: 'test-model',
+  name: 'test-model',
+  api: 'openai-completions',
+  provider: 'pi-provider',
+  baseUrl: 'http://localhost:1',
+  reasoning: false,
+  input: ['text'],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: 128_000,
+  maxTokens: 32_000,
+};
+
+/** One scripted streamFn call = one assistant turn. */
+function toolTurn(
+  id: string,
+  name: string,
+  args: Record<string, unknown>,
+  text = '',
+): AssistantMessageEventStream {
+  const final = assistantPartial([
+    ...(text.length > 0 ? [{ type: 'text' as const, text }] : []),
+    { type: 'toolCall', id, name, arguments: args },
+  ]);
+  return scriptedStream(
+    [
+      { type: 'start', partial: final },
+      ...(text.length > 0 ? [textDelta(text, final)] : []),
+      toolCallEnd({ type: 'toolCall', id, name, arguments: args }, final),
+      doneEvent('toolUse', final),
+    ],
+    final,
+  );
+}
+
+function textTurn(text: string): AssistantMessageEventStream {
+  const final = assistantPartial([{ type: 'text', text }]);
+  return scriptedStream(
+    [
+      { type: 'start', partial: final },
+      textDelta(text, final),
+      doneEvent('stop', final),
+    ],
+    final,
+  );
+}
+
+function finishTurn(): AssistantMessageEventStream {
+  const final = assistantPartial([]);
+  return scriptedStream([doneEvent('stop', final)], final);
+}
+
+export interface ScriptedAgentModel {
+  readonly model: Model<Api>;
+  readonly streamFn: StreamFn;
+  readonly script: Array<() => AssistantMessageEventStream>;
   readonly calls: Array<{
-    readonly tools: readonly AgentToolSpec[];
-    readonly messages: unknown[];
-  }> = [];
-  readonly script: Array<() => AgentModelEvent[] | AsyncGenerator<AgentModelEvent>>;
-  onRequest?: (request: { readonly signal?: AbortSignal; readonly maxTurns: number }) => void;
-
-  constructor(script: Array<() => AgentModelEvent[] | AsyncGenerator<AgentModelEvent>> = []) {
-    this.script = script;
-  }
-
-  async *run(request: {
-    readonly tools: readonly AgentToolSpec[];
+    readonly tools: readonly { name: string }[];
     readonly messages: readonly unknown[];
-    readonly maxTurns: number;
-    readonly signal?: AbortSignal;
-  }): AsyncIterable<AgentModelEvent> {
-    // Snapshot: the service mutates the same array across turns.
-    this.calls.push({ tools: request.tools, messages: [...request.messages] });
-    this.onRequest?.(request);
-    const produce =
-      this.script.shift() ?? (() => [{ type: 'finish' as const, finishReason: 'stop' }]);
-    const events = produce();
-    if (Symbol.asyncIterator in Object(events)) {
-      yield* events as AsyncGenerator<AgentModelEvent>;
-    } else {
-      yield* events as AgentModelEvent[];
-    }
-  }
+  }>;
 }
 
-function textEvent(text: string): AgentModelEvent {
-  return { type: 'assistant-text', text };
-}
-function toolEvent(id: string, name: string, args: unknown): AgentModelEvent {
-  return { type: 'tool-call', id, name, args };
-}
-function finish(): AgentModelEvent {
-  return { type: 'finish', finishReason: 'stop' };
+/** Scripted model: one streamFn call per turn; each script entry yields that turn's stream. */
+function scriptedModel(script: Array<() => AssistantMessageEventStream> = []): ScriptedAgentModel {
+  const calls: Array<{
+    readonly tools: readonly { name: string }[];
+    readonly messages: readonly unknown[];
+  }> = [];
+  const streamFn: StreamFn = (_model, context) => {
+    // Snapshot: the service mutates the same messages array across turns.
+    calls.push({ tools: context.tools ?? [], messages: [...context.messages] });
+    const produce = script.shift() ?? finishTurn;
+    return produce();
+  };
+  return { model: fakeModel, streamFn, script, calls };
 }
 
 /** Deterministic operation queue double: captures runners; cancel aborts the signal. */
@@ -259,14 +297,14 @@ interface Harness {
   operations: StubOperations;
   executorCalls: ToolCallRecord[];
   service: WorkbenchAgentRunService;
-  model: StubModel;
+  model: ScriptedAgentModel;
 }
 
 function harness(
   options: {
     readonly maxTurns?: number;
     readonly maxToolCalls?: number;
-    readonly model?: StubModel;
+    readonly model?: ScriptedAgentModel;
     readonly executorResults?: Record<string, McpToolResult>;
     readonly isWorkflowComplete?: () => boolean | Promise<boolean>;
   } = {},
@@ -277,12 +315,12 @@ function harness(
   const operations = new StubOperations();
   const executorCalls: ToolCallRecord[] = [];
   const executor = stubExecutor(options.executorResults ?? {}, executorCalls);
-  const model = options.model ?? new StubModel();
+  const model = options.model ?? scriptedModel();
   const service = createWorkbenchAgentRunService({
     projectId: 'p1',
     store,
     executor,
-    model,
+    agentModel: { model: model.model, streamFn: model.streamFn },
     operations,
     agent: { maxTurns: options.maxTurns ?? 16, maxToolCalls: options.maxToolCalls ?? 64 },
     ...(options.isWorkflowComplete === undefined
@@ -313,12 +351,8 @@ describe('WorkbenchAgentRunService run loop', () => {
     const h = harness();
     const conversation = await createConversation(h);
     const model = h.model;
-    model.script.push(() => [
-      textEvent('inspecting'),
-      toolEvent('t1', 'nova_status', {}),
-      finish(),
-    ]);
-    model.script.push(() => [textEvent('all good'), finish()]);
+    model.script.push(() => toolTurn('t1', 'nova_status', {}, 'inspecting'));
+    model.script.push(() => textTurn('all good'));
 
     const run = await h.service.sendMessage({
       conversationId: conversation.conversationId,
@@ -351,19 +385,16 @@ describe('WorkbenchAgentRunService run loop', () => {
     const toolNames = model.calls[0]?.tools.map((tool) => tool.name);
     expect(toolNames).toEqual(expect.arrayContaining(['nova_status', 'nova_authoring_submit']));
     expect(h.executorCalls).toHaveLength(1);
-    expect(h.executorCalls[0]?.caller.grant.scopes).toEqual([
-      'mcp:read',
-      'mcp:render',
-      'mcp:author',
-      'mcp:submit',
-    ]);
+    expect(h.executorCalls[0]?.caller.grant.scopes).toEqual(
+      PROJECT_ACCESS_ROLE_GRANTS.maintainer.scopes,
+    );
   });
 
   it('publishes progress only after records persist (store-first ordering)', async () => {
     const h = harness();
     const conversation = await createConversation(h);
-    h.model.script.push(() => [toolEvent('t1', 'nova_status', {}), finish()]);
-    h.model.script.push(() => [textEvent('done'), finish()]);
+    h.model.script.push(() => toolTurn('t1', 'nova_status', {}));
+    h.model.script.push(() => textTurn('done'));
 
     const run = await h.service.sendMessage({
       conversationId: conversation.conversationId,
@@ -408,11 +439,11 @@ describe('WorkbenchAgentRunService run loop', () => {
     let completed = false;
     const conversation = await createConversation(h);
     // Turn 1: the model executes a tool and finishes (chain reached publish).
-    h.model.script.push(() => [toolEvent('t1', 'nova_authoring_submit', {}), finish()]);
+    h.model.script.push(() => toolTurn('t1', 'nova_authoring_submit', {}));
     // The completion signal flips AFTER turn 1's tool executes; the model
     // wants another confirmation turn, but the gate stops it.
     completed = true;
-    h.model.script.push(() => [toolEvent('t2', 'nova_status', {}), finish()]);
+    h.model.script.push(() => toolTurn('t2', 'nova_status', {}));
 
     const run = await h.service.sendMessage({
       conversationId: conversation.conversationId,
@@ -433,8 +464,8 @@ describe('WorkbenchAgentRunService run loop', () => {
   it('fails with AGENT_MAX_TURNS_EXCEEDED when the model keeps calling tools', async () => {
     const h = harness({ maxTurns: 2, maxToolCalls: 8 });
     const conversation = await createConversation(h);
-    h.model.script.push(() => [toolEvent('t1', 'nova_status', {}), finish()]);
-    h.model.script.push(() => [toolEvent('t2', 'nova_status', {}), finish()]);
+    h.model.script.push(() => toolTurn('t1', 'nova_status', {}));
+    h.model.script.push(() => toolTurn('t2', 'nova_status', {}));
 
     const run = await h.service.sendMessage({
       conversationId: conversation.conversationId,
@@ -454,11 +485,24 @@ describe('WorkbenchAgentRunService run loop', () => {
   it('fails with AGENT_MAX_TOOL_CALLS_EXCEEDED when a turn exceeds the tool budget', async () => {
     const h = harness({ maxTurns: 4, maxToolCalls: 1 });
     const conversation = await createConversation(h);
-    h.model.script.push(() => [
-      toolEvent('t1', 'nova_status', {}),
-      toolEvent('t2', 'nova_authoring_submit', {}),
-      finish(),
-    ]);
+    h.model.script.push(() => {
+      const final = assistantPartial([
+        { type: 'toolCall', id: 't1', name: 'nova_status', arguments: {} },
+        { type: 'toolCall', id: 't2', name: 'nova_authoring_submit', arguments: {} },
+      ]);
+      return scriptedStream(
+        [
+          { type: 'start', partial: final },
+          toolCallEnd({ type: 'toolCall', id: 't1', name: 'nova_status', arguments: {} }, final),
+          toolCallEnd(
+            { type: 'toolCall', id: 't2', name: 'nova_authoring_submit', arguments: {} },
+            final,
+          ),
+          doneEvent('toolUse', final),
+        ],
+        final,
+      );
+    });
 
     const run = await h.service.sendMessage({
       conversationId: conversation.conversationId,
@@ -478,7 +522,7 @@ describe('WorkbenchAgentRunService run loop', () => {
   it('rejects tools outside the registry catalog before touching the executor', async () => {
     const h = harness();
     const conversation = await createConversation(h);
-    h.model.script.push(() => [toolEvent('t1', 'nova_hallucinated_tool', {}), finish()]);
+    h.model.script.push(() => toolTurn('t1', 'nova_hallucinated_tool', {}));
 
     const run = await h.service.sendMessage({
       conversationId: conversation.conversationId,
@@ -503,8 +547,8 @@ describe('WorkbenchAgentRunService run loop', () => {
       },
     });
     const conversation = await createConversation(h);
-    h.model.script.push(() => [toolEvent('t1', 'nova_status', {}), finish()]);
-    h.model.script.push(() => [textEvent('recovering'), finish()]);
+    h.model.script.push(() => toolTurn('t1', 'nova_status', {}));
+    h.model.script.push(() => textTurn('recovering'));
 
     const run = await h.service.sendMessage({
       conversationId: conversation.conversationId,
@@ -516,9 +560,13 @@ describe('WorkbenchAgentRunService run loop', () => {
 
     const calls = await h.store.listToolCalls({ runId: run.runId });
     expect(calls[0]).toMatchObject({ status: 'failed', resultRef: 'error:SOURCE_UNAVAILABLE' });
-    // The model's second call saw the tool error as a tool message.
+    // The model's second call saw the tool error as a toolResult message.
     const secondTurnMessages = h.model.calls[1]?.messages;
-    expect(secondTurnMessages?.some((m) => (m as { role: string }).role === 'tool')).toBe(true);
+    expect(
+      secondTurnMessages?.some(
+        (m) => typeof m === 'object' && m !== null && 'role' in m && m.role === 'toolResult',
+      ),
+    ).toBe(true);
   });
 });
 
@@ -547,11 +595,21 @@ describe('WorkbenchAgentRunService cancel and restart semantics', () => {
       release = resolve;
     });
     h.model.script.push(() => {
-      return (async function* blocked(): AsyncGenerator<AgentModelEvent> {
-        yield toolEvent('t1', 'nova_status', {});
-        await gate;
-        yield finish();
-      })();
+      const final = assistantPartial([
+        { type: 'toolCall', id: 't1', name: 'nova_status', arguments: {} },
+      ]);
+      const stream = new AssistantMessageEventStream();
+      stream.push({ type: 'start', partial: final });
+      stream.push(
+        toolCallEnd({ type: 'toolCall', id: 't1', name: 'nova_status', arguments: {} }, final),
+      );
+      // The tool executes only after `done`; hold the gate so the run is
+      // mid-stream when cancel fires, then release on the way out.
+      void gate.then(() => {
+        stream.push(doneEvent('toolUse', final));
+        stream.end(final);
+      });
+      return stream;
     });
 
     const run = await h.service.sendMessage({
@@ -590,8 +648,8 @@ describe('WorkbenchAgentRunService cancel and restart semantics', () => {
   it('explicit retry re-enqueues an interrupted run with the same message', async () => {
     const h = harness();
     const conversation = await createConversation(h);
-    h.model.script.push(() => [toolEvent('t1', 'nova_status', {}), finish()]);
-    h.model.script.push(() => [textEvent('done'), finish()]);
+    h.model.script.push(() => toolTurn('t1', 'nova_status', {}));
+    h.model.script.push(() => textTurn('done'));
     const run = await h.service.sendMessage({
       conversationId: conversation.conversationId,
       message: 'retry me',
@@ -608,7 +666,7 @@ describe('WorkbenchAgentRunService cancel and restart semantics', () => {
     expect(outcome.status).toBe('succeeded');
     expect((await h.store.getRun(run.runId))?.status).toBe('succeeded');
     // The retried run re-executed from the stored user message.
-    expect(h.model.calls[0]?.messages).toEqual([{ role: 'user', content: 'retry me' }]);
+    expect(h.model.calls[0]?.messages).toMatchObject([{ role: 'user', content: 'retry me' }]);
   });
 
   it('returns queue-full as a typed failure when the queue rejects the run', async () => {

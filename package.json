@@ -51,8 +51,5 @@
     "typescript": "^5.9.0",
     "vitest": "^3.2.4"
   },
-  "dependencies": {
-    "@ai-sdk/openai-compatible": "^3.0.12",
-    "ai": "^7.0.31"
-  }
+  "dependencies": {}
 }

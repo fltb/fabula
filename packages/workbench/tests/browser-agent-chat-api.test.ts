@@ -8,7 +8,15 @@
 // deterministic executor/model/operation doubles.
 // ============================================================================
 
-import type { AgentModelEvent, WorkbenchAgentModelPort } from '@novalistically/node-host';
+import type { Api, AssistantMessage, AssistantMessageEvent, Model } from '@earendil-works/pi-ai';
+import type { StreamFn } from '@earendil-works/pi-agent-core';
+import {
+  assistantPartial,
+  doneEvent,
+  scriptedStream,
+  textDelta,
+  toolCallEnd,
+} from './helpers/scripted-stream.js';
 import { Hono } from 'hono';
 import { afterAll, describe, expect, it } from 'vitest';
 import type {
@@ -148,17 +156,72 @@ function stubExecutor(calls: string[]): ProjectToolExecutor {
   };
 }
 
-/** Scripted one-turn model: tools then stop. */
-function scriptedModel(turns: Array<Array<AgentModelEvent>>): WorkbenchAgentModelPort {
-  let index = 0;
+/** A scripted turn: the events one streamFn call yields plus its final message. */
+interface ScriptedTurn {
+  readonly events: readonly AssistantMessageEvent[];
+  readonly final: AssistantMessage;
+}
+
+/** Minimal pi-ai model identity; the scripted streamFn never streams it. */
+const fakeModel: Model<Api> = {
+  id: 'test-model',
+  name: 'test-model',
+  api: 'openai-completions',
+  provider: 'pi-provider',
+  baseUrl: 'http://localhost:1',
+  reasoning: false,
+  input: ['text'],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: 128_000,
+  maxTokens: 32_000,
+};
+
+function finishTurn(): ScriptedTurn {
+  const final = assistantPartial([]);
+  return { events: [doneEvent('stop', final)], final };
+}
+
+function toolTurn(
+  id: string,
+  name: string,
+  args: Record<string, unknown>,
+  text = '',
+): ScriptedTurn {
+  const final = assistantPartial([
+    ...(text.length > 0 ? [{ type: 'text' as const, text }] : []),
+    { type: 'toolCall', id, name, arguments: args },
+  ]);
   return {
-    supportsToolCalls: true,
-    async *run() {
-      const events = turns[index] ?? [];
-      index += 1;
-      for (const event of events) yield event;
-    },
+    events: [
+      { type: 'start', partial: final },
+      ...(text.length > 0 ? [textDelta(text, final)] : []),
+      toolCallEnd({ type: 'toolCall', id, name, arguments: args }, final),
+      doneEvent('toolUse', final),
+    ],
+    final,
   };
+}
+
+function textTurn(text: string): ScriptedTurn {
+  const final = assistantPartial([{ type: 'text', text }]);
+  return {
+    events: [
+      { type: 'start', partial: final },
+      textDelta(text, final),
+      doneEvent('stop', final),
+    ],
+    final,
+  };
+}
+
+/** Scripted pi-ai agentModel: one streamFn call per turn, in script order. */
+function scriptedModel(turns: ScriptedTurn[] = []) {
+  const script = [...turns];
+  const streamFn: StreamFn = () => {
+    const turn = script.shift() ?? finishTurn();
+    return scriptedStream([...turn.events], turn.final);
+  };
+  return { model: fakeModel, streamFn };
 }
 
 interface OpEntry {
@@ -242,7 +305,7 @@ interface Harness {
   service: WorkbenchAgentRunService;
 }
 
-function harness(modelTurns: Array<Array<AgentModelEvent>> = []): Harness {
+function harness(turns: ScriptedTurn[] = []): Harness {
   const persistence = createRealPersistence();
   harnesses.push(persistence);
   const store = createAgentStore(persistence.client);
@@ -253,7 +316,7 @@ function harness(modelTurns: Array<Array<AgentModelEvent>> = []): Harness {
     projectId: 'proj-a',
     store,
     executor: stubExecutor(executorCalls),
-    model: scriptedModel(modelTurns),
+    agentModel: scriptedModel(turns),
     operations: operations as never,
     agent: { maxTurns: 16, maxToolCalls: 64 },
     now: () => '2026-08-06T00:00:00.000Z',
@@ -350,7 +413,7 @@ describe('Browser Agent Chat API conversation/run surface', () => {
   });
 
   it('sends a message and starts a queued run with an operation handle', async () => {
-    const h = harness([[{ type: 'finish', finishReason: 'stop' }]]);
+    const h = harness([finishTurn()]);
     const conversationId = await createConversation(h.app);
     const res = await h.app.request(
       BROWSER_AGENT_CONVERSATION_RUNS_PATH.replace(':projectId', 'proj-a').replace(
@@ -395,14 +458,8 @@ describe('Browser Agent Chat API conversation/run surface', () => {
 
   it('serves durable history with tool-call receipts after a completed run', async () => {
     const h = harness([
-      [
-        { type: 'tool-call', id: 't1', name: 'nova_status', args: {} },
-        { type: 'finish', finishReason: 'stop' },
-      ],
-      [
-        { type: 'assistant-text', text: 'done' },
-        { type: 'finish', finishReason: 'stop' },
-      ],
+      toolTurn('t1', 'nova_status', {}),
+      textTurn('done'),
     ]);
     const conversationId = await createConversation(h.app);
     const sent = await h.app.request(
@@ -446,14 +503,8 @@ describe('Browser Agent Chat API conversation/run surface', () => {
 describe('Browser Agent Chat API progress and cancel', () => {
   it('replays the durable store before streaming and closes for terminal runs', async () => {
     const h = harness([
-      [
-        { type: 'tool-call', id: 't1', name: 'nova_status', args: {} },
-        { type: 'finish', finishReason: 'stop' },
-      ],
-      [
-        { type: 'assistant-text', text: 'ok' },
-        { type: 'finish', finishReason: 'stop' },
-      ],
+      toolTurn('t1', 'nova_status', {}),
+      textTurn('ok'),
     ]);
     const conversationId = await createConversation(h.app);
     const sent = await h.app.request(
@@ -528,7 +579,7 @@ describe('Browser Agent Chat API progress and cancel', () => {
   });
 
   it('retries an interrupted run through the route and re-queues it', async () => {
-    const h = harness([[{ type: 'finish', finishReason: 'stop' }]]);
+    const h = harness([finishTurn()]);
     const conversationId = await createConversation(h.app);
     const sent = await h.app.request(
       BROWSER_AGENT_CONVERSATION_RUNS_PATH.replace(':projectId', 'proj-a').replace(

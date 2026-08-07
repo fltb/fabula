@@ -63,7 +63,7 @@ describe('Core public runtime contract', () => {
     for (const name of [
       'initializeProject',
       'EntityMapper',
-      'AiSdkProvider',
+      'PiOpenAICompatibleProvider',
       'ResultAggregator',
       'TimelineValidator',
       'buildLogicalKeyMaterial',

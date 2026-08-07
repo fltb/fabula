@@ -29,7 +29,7 @@ import {
   inspectProjectGraph,
 } from '@novalistically/core/tooling';
 import {
-  AiSdkProvider,
+  PiOpenAICompatibleProvider,
   createFileCoreRuntimeServices,
   FileMockPass2Provider,
   FileProjectSourceLoader,
@@ -105,7 +105,7 @@ function selector(input: { eventId?: string; all?: boolean; chapter?: string }):
 
 function provider(options: { provider?: string; referenceDir?: string }): LLMProvider {
   if (options.provider === undefined || options.provider === 'ai-sdk') {
-    return new AiSdkProvider();
+    return new PiOpenAICompatibleProvider();
   }
   if (options.provider === 'mock-pass2') {
     if (!options.referenceDir) {

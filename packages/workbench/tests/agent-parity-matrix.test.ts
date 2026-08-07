@@ -17,9 +17,10 @@
 //      promotes a late result, and an explicit retry with the same
 //      idempotency key after the interrupted sweep completes.
 //   4. Capability gate — the launch-level `agentReady` flag (the parity
-//      outcome) flips `agent-chat` only when V3 `agent.enabled` AND the
-//      model port's `supportsToolCalls` are also true; any of the three
-//      false keeps the feature hidden and every Agent route a 404.
+//      outcome) flips `agent-chat` only when V3 `agent.enabled` is also
+//      true; either false keeps the feature hidden and every Agent route a
+//      404. (The pi-ai model always supports tool calls, so the launch gate
+//      is binary — there is no separate tool-call-support input anymore.)
 //
 // The whole matrix runs on ONE ProjectSession over a temp copy of the
 // `workbench-authoring` fixture (with `releasePolicy.warnings:
@@ -43,7 +44,9 @@ import type {
   WorkflowStatusV1,
 } from '@novalistically/core';
 import { MockProvider } from '@novalistically/core/testing';
-import type { WorkbenchAgentModelPort } from '@novalistically/node-host';
+import type { Api, Model } from '@earendil-works/pi-ai';
+import type { StreamFn } from '@earendil-works/pi-agent-core';
+import { assistantPartial, doneEvent, scriptedStream } from './helpers/scripted-stream.js';
 import { createFileCoreRuntimeServices, FileProjectSourceLoader } from '@novalistically/node-host';
 import {
   DEFAULT_WORKBENCH_OPERATION_LIMITS,
@@ -71,6 +74,7 @@ import type {
   McpToolRegistry,
 } from '../src/host/mcp/registry.js';
 import { createProjectSessionMcpRegistry } from '../src/host/mcp/registry.js';
+import { createWorkbenchReferencePort } from '../src/host/mcp/reference-port.js';
 import {
   createProjectOperationService,
   type ProjectOperationService,
@@ -359,7 +363,6 @@ interface ParityHarness {
   readonly dispose(): Promise<void>;
 }
 
-/** Registry options shared by the executor AND the external-device registry. */
 function registryOptions(
   services: {
     readonly session: ProjectSession;
@@ -368,6 +371,7 @@ function registryOptions(
     readonly revision: McpRegistryOptions['revision'];
     readonly review: HostReviewService;
     readonly publication: ProjectPublicationService;
+    readonly reference: McpRegistryOptions['reference'];
   },
   now: () => string,
 ): McpRegistryOptions {
@@ -378,6 +382,7 @@ function registryOptions(
     coordinator: services.coordinator,
     review: services.review,
     publication: services.publication,
+    reference: services.reference,
     status: {
       review: () => services.review.workflowReviewProjection(),
       publication: () => services.publication.workflowPublicationProjection(),
@@ -466,6 +471,15 @@ async function buildParityHarness(): Promise<ParityHarness> {
     documents: authoring.documents,
     capabilities,
   });
+  // Reference tools enter the registry only when a port is wired (plan 3.8);
+  // the shared options hand the SAME port to the executor and the external
+  // registry so the parity view stays byte-identical at every scope.
+  const reference = createWorkbenchReferencePort({
+    projectId: PROJECT_ID,
+    projectRoot: root,
+    jobsRoot: newTempDir('fabula-parity-reference-'),
+    referenceLimits: DEFAULT_WORKBENCH_REFERENCE_LIMITS,
+  });
   const options = registryOptions(
     {
       session,
@@ -474,6 +488,7 @@ async function buildParityHarness(): Promise<ParityHarness> {
       revision: authoring.revision,
       review,
       publication,
+      reference,
     },
     now,
   );
@@ -566,10 +581,8 @@ function shapeOf(definitions: readonly McpToolDefinition[]) {
 let parityMatrixPassed = false;
 
 // ─── Launch smoke boot helper (test 4 gate flips + test 5 builtin grant) ────
-
 interface LaunchSmokeBootOptions {
   readonly enabled: boolean;
-  readonly supportsToolCalls: boolean;
   readonly agentReady?: boolean;
   readonly tag: string;
   /** Reuse an existing host home (persisted users) instead of a fresh one. */
@@ -578,8 +591,8 @@ interface LaunchSmokeBootOptions {
   readonly ownerSessionId?: string;
   /** Deterministic render provider; absent = the launch's built-in mock. */
   readonly providerOverride?: LLMProvider;
-  /** Agent model port; absent = finish-only (never calls tools). */
-  readonly agentModel?: WorkbenchAgentModelPort;
+  /** Scripted pi-ai agentModel; absent = finish-only (never calls tools). */
+  readonly agentModel?: { readonly model: Model<Api>; readonly streamFn: StreamFn };
 }
 
 interface LaunchSmokeHandle {
@@ -587,6 +600,62 @@ interface LaunchSmokeHandle {
   readonly ownerHeaders: Record<string, string>;
   readonly endpoint: string;
   readonly hostHome: string;
+}
+
+/** Minimal pi-ai model identity; the scripted streamFn never streams it. */
+const launchFakeModel: Model<Api> = {
+  id: 'test-model',
+  name: 'test-model',
+  api: 'openai-completions',
+  provider: 'pi-provider',
+  baseUrl: 'http://localhost:1',
+  reasoning: false,
+  input: ['text'],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: 128_000,
+  maxTokens: 32_000,
+};
+
+const finishOnlyFinal = assistantPartial([]);
+
+/** Finish-only streamFn (one `done('stop')` turn; never calls tools). */
+function finishOnlyAgentModel(): { readonly model: Model<Api>; readonly streamFn: StreamFn } {
+  return {
+    model: launchFakeModel,
+    streamFn: () => scriptedStream([doneEvent('stop', finishOnlyFinal)], finishOnlyFinal),
+  };
+}
+
+/** Scripted tool-then-stop streamFn (turn 1 calls the tool, turn 2 finishes). */
+function toolThenStopAgentModel(
+  toolCall: { readonly id: string; readonly name: string; readonly args: Record<string, unknown> },
+): { readonly model: Model<Api>; readonly streamFn: StreamFn } {
+  const toolFinal = assistantPartial([
+    { type: 'toolCall', id: toolCall.id, name: toolCall.name, arguments: toolCall.args },
+  ]);
+  let toolTurnSent = false;
+  return {
+    model: launchFakeModel,
+    streamFn: () => {
+      if (!toolTurnSent) {
+        toolTurnSent = true;
+        return scriptedStream(
+          [
+            { type: 'start', partial: toolFinal },
+            {
+              type: 'toolcall_end',
+              contentIndex: 0,
+              toolCall: { type: 'toolCall', id: toolCall.id, name: toolCall.name, arguments: toolCall.args },
+              partial: toolFinal,
+            },
+            doneEvent('toolUse', toolFinal),
+          ],
+          toolFinal,
+        );
+      }
+      return scriptedStream([doneEvent('stop', finishOnlyFinal)], finishOnlyFinal);
+    },
+  };
 }
 
 async function boot(options: LaunchSmokeBootOptions): Promise<LaunchSmokeHandle> {
@@ -651,14 +720,7 @@ async function boot(options: LaunchSmokeBootOptions): Promise<LaunchSmokeHandle>
     ...(options.providerOverride === undefined
       ? {}
       : { providerOverride: options.providerOverride }),
-    agentModel:
-      options.agentModel ??
-      ({
-        supportsToolCalls: options.supportsToolCalls,
-        run: async function* () {
-          yield { type: 'finish', finishReason: 'stop' };
-        },
-      }) satisfies WorkbenchAgentModelPort,
+    agentModel: options.agentModel ?? finishOnlyAgentModel(),
     ...(options.agentReady === undefined ? {} : { agentReady: options.agentReady }),
   });
   const ownerHeaders =
@@ -1179,7 +1241,7 @@ describe('Workbench Agent parity matrix (plan 9.6)', () => {
     await restarted.close();
   }, 120_000);
 
-  it('4) flips the launch agent-chat gate only when enabled + tool-call support + the parity flag all hold', async () => {
+  it('4) flips the launch agent-chat gate only when enabled + the parity flag all hold', async () => {
     // The launch-level `agentReady` injection is the parity outcome; the
     // matrix above must have passed before the flag may be toggled true.
     expect(parityMatrixPassed).toBe(true);
@@ -1209,10 +1271,9 @@ describe('Workbench Agent parity matrix (plan 9.6)', () => {
       return { features: [...body.features], conversationsStatus: conversations.status };
     }
 
-    // All three true → the feature appears and the conversation route lives.
+    // Both gate inputs true → the feature appears and the route lives.
     const on = await boot({
       enabled: true,
-      supportsToolCalls: true,
       agentReady: true,
       tag: 'on',
     });
@@ -1224,14 +1285,12 @@ describe('Workbench Agent parity matrix (plan 9.6)', () => {
       await on.handle.close();
     }
 
-    // Any one of the three false → the feature stays hidden. With the flag
-    // absent or agent disabled the routes are never registered (404); when
-    // only the model port lacks tool-call support the routes exist but fail
-    // closed with AGENT_CHAT_UNAVAILABLE (503) — never a working chat.
+    // Either gate input false → the feature stays hidden and the routes are
+    // never registered (404). The pi model always supports tool calls, so
+    // there is no separate tool-call-support input to flip anymore.
     const cases: Array<LaunchSmokeBootOptions & { expectedStatus: number }> = [
-      { enabled: true, supportsToolCalls: true, agentReady: false, tag: 'no-flag', expectedStatus: 404 },
-      { enabled: true, supportsToolCalls: false, agentReady: true, tag: 'no-toolcall', expectedStatus: 503 },
-      { enabled: false, supportsToolCalls: true, agentReady: true, tag: 'disabled', expectedStatus: 404 },
+      { enabled: true, agentReady: false, tag: 'no-flag', expectedStatus: 404 },
+      { enabled: false, agentReady: true, tag: 'disabled', expectedStatus: 404 },
     ];
     for (const bootCase of cases) {
       const booted = await boot(bootCase);
@@ -1254,7 +1313,6 @@ describe('Workbench Agent parity matrix (plan 9.6)', () => {
     // session creation (the parity harness persisted the identical row).
     const first = await boot({
       enabled: true,
-      supportsToolCalls: true,
       agentReady: true,
       tag: 'builtin-grant',
     });
@@ -1264,25 +1322,15 @@ describe('Workbench Agent parity matrix (plan 9.6)', () => {
     // uses) so the render completes; the model calls nova_render exactly
     // once as the built-in principal, then finishes.
     const renderProvider = new MockProvider({ generator: () => makeAnalysisJson() });
-    let renderSent = false;
-    const renderModel: WorkbenchAgentModelPort = {
-      supportsToolCalls: true,
-      run: async function* () {
-        if (!renderSent) {
-          renderSent = true;
-          yield {
-            type: 'tool-call',
-            id: 'call-render',
-            name: 'nova_render',
-            args: { sceneSelector: { type: 'events', eventIds: ['E0'] } },
-          };
-        }
-        yield { type: 'finish', finishReason: 'stop' };
-      },
-    };
+    // Scripted pi-ai model: turn 1 calls nova_render once as the built-in
+    // principal, turn 2 finishes.
+    const renderModel = toolThenStopAgentModel({
+      id: 'call-render',
+      name: 'nova_render',
+      args: { sceneSelector: { type: 'events', eventIds: ['E0'] } },
+    });
     const second = await boot({
       enabled: true,
-      supportsToolCalls: true,
       agentReady: true,
       tag: 'builtin-grant',
       hostHome: first.hostHome,

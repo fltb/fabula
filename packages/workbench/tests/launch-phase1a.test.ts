@@ -51,6 +51,8 @@ import {
   type WorkbenchLaunchConfig,
   type WorkbenchLaunchHandle,
 } from '../src/host/workbench-launch.js';
+import type { Api, Model } from '@earendil-works/pi-ai';
+import { assistantPartial, doneEvent, scriptedStream } from './helpers/scripted-stream.js';
 
 // ─── Temp workspace helper ──────────────────────────────────────────────────
 
@@ -2025,6 +2027,26 @@ describe('trusted plugin activation and discovery (plan 7)', () => {
 // flag. Disabled Agent ⇒ no feature, no route. Enabled + parity ⇒ feature
 // present and the guarded routes are mounted.
 
+// Minimal pi-ai model identity for the launch seam; the finish-only streamFn
+// never streams it (the gate tests never execute a run).
+const launchFakeModel: Model<Api> = {
+  id: 'test-model',
+  name: 'test-model',
+  api: 'openai-completions',
+  provider: 'pi-provider',
+  baseUrl: 'http://localhost:1',
+  reasoning: false,
+  input: ['text'],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: 128_000,
+  maxTokens: 32_000,
+};
+const launchFinishOnlyFinal = assistantPartial([]);
+const launchFinishOnlyAgentModel = {
+  model: launchFakeModel,
+  streamFn: () => scriptedStream([doneEvent('stop', launchFinishOnlyFinal)], launchFinishOnlyFinal),
+};
+
 describe('agent-chat launch capability gate', () => {
   /** Shared V1 launch (agent defaults to disabled under normalization). */
   async function bootDisabledAgent(): Promise<{
@@ -2172,14 +2194,9 @@ describe('agent-chat launch capability gate', () => {
         workerTerminationTimeoutMs: 2_000,
         host: 'loopback',
         port: 0,
-        // Deterministic tool-calling port (parity fixture shape); the real
-        // launch constructs the credential-backed adapter.
-        agentModel: {
-          supportsToolCalls: true,
-          run: async function* () {
-            yield { type: 'finish', finishReason: 'stop' };
-          },
-        },
+        // Deterministic finish-only pi-ai model (parity fixture shape); the
+        // real launch constructs the credential-backed pi model.
+        agentModel: launchFinishOnlyAgentModel,
         ...(agentReady === undefined ? {} : { agentReady }),
       });
 

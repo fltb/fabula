@@ -22,7 +22,7 @@ import { renderNovel } from '../../core/dist/editorial.js';
 import { sanitizeError } from '../../core/dist/index.js';
 import { provenanceManifestSchema, responseReferenceSchema } from '../../core/dist/tooling.js';
 import {
-  AiSdkProvider,
+  PiOpenAICompatibleProvider,
   createFileCoreRuntimeServices,
   FileProjectSourceLoader,
 } from '../../node-host/dist/index.js';
@@ -86,7 +86,7 @@ async function main() {
   console.log(`\nLive smoke for ${projectName} (model: ${model}, seed: ${SEED})`);
   console.log(`  Work dir:     ${workDir}`);
   console.log(`  Candidate dir: ${candidateDir}\n`);
-  const provider = new AiSdkProvider({ apiKey, baseURL: baseUrl, model });
+  const provider = new PiOpenAICompatibleProvider({ apiKey, baseURL: baseUrl, model });
 
   let result;
   try {

@@ -33,11 +33,21 @@ export type ProjectAccessRole = (typeof PROJECT_ACCESS_ROLES)[number];
  * head, so it is granted only from `author` up — never to `reader`.
  */
 export const PROJECT_ACCESS_ROLE_GRANTS = {
-  reader: { rank: 1, scopes: ['mcp:read'] },
-  author: { rank: 2, scopes: ['mcp:read', 'mcp:render', 'mcp:author'] },
+  reader: { rank: 1, scopes: ['mcp:read', 'mcp:reference:read'] },
+  author: {
+    rank: 2,
+    scopes: ['mcp:read', 'mcp:render', 'mcp:author', 'mcp:reference:read', 'mcp:reference:write'],
+  },
   maintainer: {
     rank: 3,
-    scopes: ['mcp:read', 'mcp:render', 'mcp:author', 'mcp:submit'],
+    scopes: [
+      'mcp:read',
+      'mcp:render',
+      'mcp:author',
+      'mcp:submit',
+      'mcp:reference:read',
+      'mcp:reference:write',
+    ],
   },
 } as const satisfies Readonly<
   Record<ProjectAccessRole, { readonly rank: number; readonly scopes: readonly string[] }>

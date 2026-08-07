@@ -13,6 +13,11 @@ import type {
   BrowserAuthoringRevisionV1,
   BrowserAuthoringSubmitRequestV1,
   BrowserGraphRouteSelectorV1,
+  BrowserProjectReferenceImportResultV1,
+  BrowserProjectReferenceListV1,
+  BrowserProjectReferenceReadQueryV1,
+  BrowserProjectReferenceReadResultV1,
+  BrowserProjectReferenceRetryResultV1,
   BrowserProjectSummaryV1,
   BrowserPublicationListV1,
   BrowserPublicationReadQueryV1,
@@ -346,6 +351,8 @@ function WorkspaceRoute(props: {
   const [reviewHistory, setReviewHistory] = createSignal<BrowserReviewHistoryV1 | null>(null);
   const [publications, setPublications] = createSignal<BrowserPublicationListV1 | null>(null);
   const [publicationsError, setPublicationsError] = createSignal<string | null>(null);
+  const [references, setReferences] = createSignal<BrowserProjectReferenceListV1 | null>(null);
+  const [referencesError, setReferencesError] = createSignal<string | null>(null);
   const [sceneAdoption, setSceneAdoption] = createSignal<SceneAdoptionViewV1 | null>(null);
   const [sessionProjectRole, setSessionProjectRole] = createSignal<ProjectAccessRole | null>(null);
   const [yjsStatus, setYjsStatus] = createSignal<
@@ -391,6 +398,9 @@ function WorkspaceRoute(props: {
       await refreshReview(nextWorkspace.capabilities?.features?.includes('review-hub') === true);
       await refreshPublication(
         nextWorkspace.capabilities?.features?.includes('publication') === true,
+      );
+      await refreshReferences(
+        nextWorkspace.capabilities?.features?.includes('references') === true,
       );
       // The adoption preview is keyed by one released scene revision; the
       // workspace projection carries no scene-revision pointer, so the
@@ -537,6 +547,49 @@ function WorkspaceRoute(props: {
   ): Promise<BrowserPublicationReadResultV1> =>
     props.client.publication.read(projectId, publicationId, query);
   /**
+   * Load the first reference page. Absent feature or load failure keeps the
+   * catalog signal null; a load failure additionally sets `referencesError`
+   * so the view renders a distinct error state with Retry. The workspace
+   * load itself never depends on the reference surface.
+   */
+  const refreshReferences = async (enabled: boolean): Promise<void> => {
+    if (!enabled) {
+      setReferences(null);
+      setReferencesError(null);
+      return;
+    }
+    try {
+      setReferences(await props.client.read.listReferences(props.projectId));
+      setReferencesError(null);
+    } catch (cause) {
+      setReferences(null);
+      setReferencesError(runtimeErrorMessage(cause));
+    }
+  };
+  /** One more server page; null keeps the view's accumulated list unchanged. */
+  const loadMoreReferences = async (
+    cursor: string,
+  ): Promise<BrowserProjectReferenceListV1 | null> =>
+    props.client.read.listReferences(props.projectId, { cursor }).catch(() => null);
+  const importReference = async (
+    file: File,
+  ): Promise<BrowserProjectReferenceImportResultV1> =>
+    props.client.read.importReference(props.projectId, file);
+  const retryReference = async (
+    jobId: string,
+  ): Promise<BrowserProjectReferenceRetryResultV1 | null> =>
+    props.client.read.retryReference(props.projectId, jobId).catch(() => null);
+  const deleteReference = async (referenceId: string): Promise<void> => {
+    await props.client.read.deleteReference(props.projectId, referenceId);
+  };
+  const readReferenceContent = async (
+    referenceId: string,
+    query?: BrowserProjectReferenceReadQueryV1,
+  ): Promise<BrowserProjectReferenceReadResultV1 | null> =>
+    props.client.read
+      .getReferenceContent(props.projectId, referenceId, query ?? { offset: 0, limit: 1 })
+      .catch(() => null);
+  /**
    * Load the Scene Canvas adoption preview (plan 5.2). The Host preview is
    * keyed by exactly one released scene revision (`eventId` + `revisionId`);
    * without that pair the signal stays null and the view renders an honest
@@ -633,6 +686,16 @@ function WorkspaceRoute(props: {
             refreshPublication(current().capabilities?.features?.includes('publication') === true)
           }
           onReadPublication={readPublication}
+          references={references()}
+          referencesError={referencesError()}
+          onRefreshReferences={() =>
+            refreshReferences(current().capabilities?.features?.includes('references') === true)
+          }
+          onLoadMoreReferences={loadMoreReferences}
+          onImportReference={importReference}
+          onRetryReference={retryReference}
+          onDeleteReference={deleteReference}
+          onReadReferenceContent={readReferenceContent}
         />
       )}
     </Show>

@@ -11,7 +11,9 @@
 
 import type {
   ProjectSessionProjectionV1,
+  ReferenceContentV1,
   ReferenceItemV1,
+  ReferenceJobV1,
 } from '@novalistically/workbench-protocol';
 import type { UserRole } from './persistence.js';
 import type { ProjectAccessRole } from './configuration.js';
@@ -45,6 +47,14 @@ export const BROWSER_PROJECT_OVERVIEW_PATH = `${BROWSER_API_BASE_PATH}/projects/
 export const BROWSER_PROJECT_GRAPHS_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/graphs`;
 /** `GET /api/v1/projects/:projectId/references` — safe reference catalog. */
 export const BROWSER_PROJECT_REFERENCES_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/references`;
+/** `POST /api/v1/projects/:projectId/references/import` — multipart reference import. */
+export const BROWSER_PROJECT_REFERENCES_IMPORT_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/references/import`;
+/** `GET/DELETE /api/v1/projects/:projectId/references/:referenceId` — one reference. */
+export const BROWSER_PROJECT_REFERENCE_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/references/:referenceId`;
+/** `GET /api/v1/projects/:projectId/references/:referenceId/content` — bounded content slice. */
+export const BROWSER_PROJECT_REFERENCE_CONTENT_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/references/:referenceId/content`;
+/** `POST /api/v1/projects/:projectId/references/import/retry` — retry one failed import job. */
+export const BROWSER_PROJECT_REFERENCE_RETRY_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/references/import/retry`;
 /** `GET /api/v1/projects/:projectId/capabilities` — Host-derived feature gates. */
 export const BROWSER_PROJECT_CAPABILITIES_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/capabilities`;
 /** `GET /api/v1/projects/:projectId/scene-adoption` — adoption preview for one scene revision. */
@@ -161,6 +171,7 @@ export type WorkbenchProjectFeatureV1 =
   | 'graph-route'
   | 'review-hub'
   | 'publication'
+  | 'references'
   | 'agent-chat';
 
 /** Versioned capabilities envelope for one project. */
@@ -209,6 +220,56 @@ export interface BrowserProjectReferenceListQueryV1 {
   readonly cursor?: string;
 }
 
+/** One reference result (get returns the projected item or null). */
+export interface BrowserProjectReferenceGetResultV1 {
+  readonly version: BrowserApiVersion;
+  readonly projectId: string;
+  readonly item: ReferenceItemV1 | null;
+}
+
+/** Bounded byte-range query accepted by the reference content endpoint. */
+export interface BrowserProjectReferenceReadQueryV1 {
+  readonly offset: number;
+  readonly limit: number;
+}
+
+/**
+ * One bounded content slice of a reference object. `byteLength` is the slice
+ * size and `nextOffset` (when non-null) continues the read, so a reader can
+ * page through a reference without ever learning a Host path.
+ */
+export interface BrowserProjectReferenceReadResultV1 {
+  readonly version: BrowserApiVersion;
+  readonly projectId: string;
+  readonly content: ReferenceContentV1;
+}
+
+/**
+ * One reference import result. The Host drives the durable three-phase
+ * import synchronously, so `job` is terminal when the response arrives;
+ * `job.status === 'failed'` keeps `jobId` available for a retry.
+ */
+export interface BrowserProjectReferenceImportResultV1 {
+  readonly version: BrowserApiVersion;
+  readonly projectId: string;
+  readonly job: ReferenceJobV1;
+}
+
+/** One reference delete result; the durable delete job has already run. */
+export interface BrowserProjectReferenceDeleteResultV1 {
+  readonly version: BrowserApiVersion;
+  readonly projectId: string;
+  readonly job: ReferenceJobV1;
+  readonly deletedReferenceId: string;
+}
+
+/** One reference import-job retry result. */
+export interface BrowserProjectReferenceRetryResultV1 {
+  readonly version: BrowserApiVersion;
+  readonly projectId: string;
+  readonly job: ReferenceJobV1;
+}
+
 /** Typed browser read API error codes, grouped by HTTP status class. */
 export type BrowserApiErrorCode =
   /** 401 — the presented session is missing, revoked, or unknown. */
@@ -233,6 +294,10 @@ export type BrowserApiErrorCode =
   | 'REFERENCE_UNAVAILABLE'
   /** 409 — an import lifecycle operation conflicts with the current job state. */
   | 'REFERENCE_CONFLICT'
+  /** 500 — a reference import/retry job terminated with a host failure. */
+  | 'REFERENCE_IMPORT_FAILED'
+  /** 413 — the uploaded reference file exceeds the documented size bound. */
+  | 'REFERENCE_SIZE_EXCEEDED'
   /** 404 — the review comment does not exist or is superseded away. */
   | 'REVIEW_COMMENT_NOT_FOUND'
   /** 400 — a review request is malformed or violates a documented bound. */

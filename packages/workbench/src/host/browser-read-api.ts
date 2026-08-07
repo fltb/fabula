@@ -18,12 +18,15 @@
  */
 
 import type { Context, Handler } from 'hono';
+import { REFERENCE_MCP_LIMITS_V1 } from '@novalistically/workbench-protocol';
 import {
   BROWSER_API_VERSION,
   BROWSER_GRAPH_ROUTE_QUERY,
   BROWSER_PROJECT_CAPABILITIES_PATH,
   BROWSER_PROJECT_GRAPHS_PATH,
   BROWSER_PROJECT_OVERVIEW_PATH,
+  BROWSER_PROJECT_REFERENCE_CONTENT_PATH,
+  BROWSER_PROJECT_REFERENCE_PATH,
   BROWSER_PROJECT_REFERENCES_PATH,
   BROWSER_PROJECT_ROLE_PATH,
   BROWSER_PROJECT_SCENE_ADOPTION_PATH,
@@ -35,6 +38,9 @@ import {
   type BrowserApiErrorV1,
   type BrowserGraphRouteSelectorV1,
   type BrowserProjectCapabilitiesV1,
+  type BrowserProjectReferenceGetResultV1,
+  type BrowserProjectReferenceReadQueryV1,
+  type BrowserProjectReferenceReadResultV1,
   type BrowserProjectRoleV1,
   type BrowserProjectListV1,
   type BrowserProjectOverviewV1,
@@ -184,12 +190,26 @@ export interface BrowserSourceStudioSource {
   loadSourceStudio(projectId: string): Promise<SourceStudioStateV1 | null>;
 }
 
-/** Browser-safe reference catalog source for one project. */
+/**
+ * Browser-safe reference library source for one project. The list route is
+ * always present; `get` and `readContent` are optional until the Host wires
+ * the full reference port, so the get/content routes register only when
+ * their method is supplied.
+ */
 export interface BrowserReferenceLibrarySource {
   loadReferences(
     projectId: string,
     query: BrowserProjectReferenceListQueryV1,
   ): Promise<BrowserProjectReferenceListV1 | null>;
+  get?(
+    projectId: string,
+    referenceId: string,
+  ): Promise<BrowserProjectReferenceGetResultV1 | null>;
+  readContent?(
+    projectId: string,
+    referenceId: string,
+    query: BrowserProjectReferenceReadQueryV1,
+  ): Promise<BrowserProjectReferenceReadResultV1 | null>;
 }
 
 /**
@@ -256,6 +276,8 @@ const BROWSER_ERROR_STATUS: Readonly<Record<BrowserApiErrorV1['error']['code'], 
   REFERENCE_INVALID: 400,
   REFERENCE_UNAVAILABLE: 503,
   REFERENCE_CONFLICT: 409,
+  REFERENCE_IMPORT_FAILED: 500,
+  REFERENCE_SIZE_EXCEEDED: 413,
   REVIEW_COMMENT_NOT_FOUND: 404,
   REVIEW_INVALID: 400,
   REVIEW_UNAVAILABLE: 503,
@@ -739,6 +761,101 @@ function referencesHandler(api: BrowserReadApiImpl): Handler<HostListenerEnv> {
   };
 }
 
+/**
+ * Shared guard chain for the one-reference and content routes: principal →
+ * project ACL → catalog listing → reference port presence. Returns the
+ * resolved project id on success, or an error Response to short-circuit.
+ */
+async function referenceRouteGuard(
+  api: BrowserReadApiImpl,
+  c: Context<HostListenerEnv>,
+): Promise<Response | { readonly projectId: string; readonly referenceId: string }> {
+  const principal = await resolveOrDeny(api, c);
+  if (principal instanceof Response) return principal;
+  const projectId = c.req.param('projectId');
+  const referenceId = c.req.param('referenceId');
+  if (projectId === undefined || projectId.length === 0) {
+    return errorResponse('PROJECT_NOT_FOUND', "The project is not in this session's catalog.");
+  }
+  if (referenceId === undefined || referenceId.length === 0 || referenceId.length > 128) {
+    return errorResponse('REFERENCE_INVALID', 'The reference id is missing or exceeds its bound.');
+  }
+  if (!(await canAccess(api, principal, projectId))) {
+    return errorResponse('PROJECT_MISMATCH', 'The session is not authorized for this project.');
+  }
+  if (!(await projectIsListed(api, principal, projectId))) {
+    return errorResponse('PROJECT_NOT_FOUND', "The project is not in this session's catalog.");
+  }
+  if (api.options.references === undefined) {
+    return errorResponse(
+      'REFERENCE_UNAVAILABLE',
+      'The reference library is not enabled for this project.',
+    );
+  }
+  return { projectId, referenceId };
+}
+
+function referenceGetHandler(api: BrowserReadApiImpl): Handler<HostListenerEnv> {
+  return async (c) => {
+    const guarded = await referenceRouteGuard(api, c);
+    if (guarded instanceof Response) return guarded;
+    try {
+      const result = await api.options.references!.get?.(guarded.projectId, guarded.referenceId);
+      if (result === null || result === undefined) {
+        return errorResponse('REFERENCE_NOT_FOUND', 'The requested reference does not exist.');
+      }
+      return c.json(result);
+    } catch {
+      return errorResponse(
+        'REFERENCE_UNAVAILABLE',
+        'The reference library could not be read by the host.',
+      );
+    }
+  };
+}
+
+function referenceContentHandler(api: BrowserReadApiImpl): Handler<HostListenerEnv> {
+  return async (c) => {
+    const guarded = await referenceRouteGuard(api, c);
+    if (guarded instanceof Response) return guarded;
+    const rawOffset = c.req.query('offset');
+    const rawLimit = c.req.query('limit');
+    const offset = rawOffset === undefined ? undefined : Number(rawOffset);
+    const limit = rawLimit === undefined ? undefined : Number(rawLimit);
+    if (
+      offset === undefined ||
+      limit === undefined ||
+      !Number.isSafeInteger(offset) ||
+      offset < 0 ||
+      !Number.isSafeInteger(limit) ||
+      limit <= 0 ||
+      limit > REFERENCE_MCP_LIMITS_V1.maxRangeBytes
+    ) {
+      return errorResponse(
+        'REFERENCE_INVALID',
+        'The content read requires a bounded offset and limit.',
+      );
+    }
+    const query: BrowserProjectReferenceReadQueryV1 = { offset, limit };
+    try {
+      const result = await api.options.references!.readContent?.(
+        guarded.projectId,
+        guarded.referenceId,
+        query,
+      );
+      if (result === null || result === undefined) {
+        return errorResponse('REFERENCE_NOT_FOUND', 'The requested reference does not exist.');
+      }
+      return c.json(result);
+    } catch {
+      return errorResponse(
+        'REFERENCE_UNAVAILABLE',
+        'The reference content could not be read by the host.',
+      );
+    }
+  };
+}
+
 // ─── Scene adoption query parsing ────────────────────────────────────────────
 
 type SceneAdoptionQueryParse =
@@ -909,7 +1026,20 @@ export function createBrowserReadApi(options: BrowserReadApiOptions): BrowserRea
       { path: BROWSER_PROJECT_ROLE_PATH, handler: projectRoleHandler(api) },
       ...(options.references === undefined
         ? []
-        : [{ path: BROWSER_PROJECT_REFERENCES_PATH, handler: referencesHandler(api) }]),
+        : [
+            { path: BROWSER_PROJECT_REFERENCES_PATH, handler: referencesHandler(api) },
+            ...(options.references.get === undefined
+              ? []
+              : [{ path: BROWSER_PROJECT_REFERENCE_PATH, handler: referenceGetHandler(api) }]),
+            ...(options.references.readContent === undefined
+              ? []
+              : [
+                  {
+                    path: BROWSER_PROJECT_REFERENCE_CONTENT_PATH,
+                    handler: referenceContentHandler(api),
+                  },
+                ]),
+          ]),
     ],
   };
 }

@@ -14,12 +14,17 @@ import type {
   BrowserAuthoringRevisionV1,
   BrowserAuthoringSubmitRequestV1,
   BrowserProjectOverviewV1,
+  BrowserProjectReferenceImportResultV1,
+  BrowserProjectReferenceListV1,
+  BrowserProjectReferenceReadQueryV1,
+  BrowserProjectReferenceReadResultV1,
+  BrowserProjectReferenceRetryResultV1,
   BrowserPublicationListV1,
   BrowserPublicationReadQueryV1,
   BrowserPublicationReadResultV1,
   BrowserPublishRequestV1,
-  BrowserReviewAddRequestV1,
   BrowserReviewGateDecideRequestV1,
+  BrowserReviewAddRequestV1,
   BrowserReviewGateListV1,
   BrowserReviewHistoryV1,
   BrowserReviewListV1,
@@ -35,6 +40,7 @@ import type {
 import { AgentChat } from './AgentChat';
 import type { AgentChatClient } from './agent-chat-client.js';
 import { PublicationView } from './PublicationView';
+import { ReferencesView } from './ReferencesView';
 import {
   loadWorkbenchPreferences,
   saveWorkbenchPreferences,
@@ -60,6 +66,7 @@ const WORKBENCH_VIEW_CATALOG = [
   { id: 'review-hub', label: 'Review Hub', glyph: '✓' },
   { id: 'scene-canvas', label: 'Scene Canvas', glyph: '◇' },
   { id: 'publication', label: 'Publication', glyph: '◫' },
+  { id: 'references', label: 'References', glyph: '▤' },
 ] as const;
 
 export type WorkbenchViewId = (typeof WORKBENCH_VIEW_CATALOG)[number]['id'];
@@ -190,6 +197,33 @@ export interface AppProps {
     query?: BrowserPublicationReadQueryV1,
   ) => Promise<BrowserPublicationReadResultV1>;
   /**
+   * Reference library surface (plan 9.1): the first server page plus the
+   * mutation/read callbacks. Supplied only when the Host feature set
+   * includes `references`; absent here the view is never rendered.
+   */
+  readonly references?: BrowserProjectReferenceListV1 | null;
+  /** Catalog load failure from the Host surface; non-null renders a retry state. */
+  readonly referencesError?: string | null;
+  /** Re-requests the first server page after an import or delete. */
+  readonly onRefreshReferences?: () => void | Promise<void>;
+  /** Fetches one more server page for the accumulated list. */
+  readonly onLoadMoreReferences?: (
+    cursor: string,
+  ) => Promise<BrowserProjectReferenceListV1 | null>;
+  /** Uploads one file through the Host's durable three-phase import. */
+  readonly onImportReference?: (file: File) => Promise<BrowserProjectReferenceImportResultV1>;
+  /** Re-runs one failed import job from its persisted chunks. */
+  readonly onRetryReference?: (
+    jobId: string,
+  ) => Promise<BrowserProjectReferenceRetryResultV1 | null>;
+  /** Deletes one reference through the Host's durable delete job. */
+  readonly onDeleteReference?: (referenceId: string) => void | Promise<void>;
+  /** Reads one bounded content slice for the detail preview. */
+  readonly onReadReferenceContent?: (
+    referenceId: string,
+    query?: BrowserProjectReferenceReadQueryV1,
+  ) => Promise<BrowserProjectReferenceReadResultV1 | null>;
+  /**
    * Agent chat surface (plan 9.5): supplied only when the Host feature set
    * includes `agent-chat`; absent here the view is never rendered.
    */
@@ -290,6 +324,21 @@ interface WorkspaceProps {
     publicationId: string,
     query?: BrowserPublicationReadQueryV1,
   ) => Promise<BrowserPublicationReadResultV1>;
+  readonly references?: BrowserProjectReferenceListV1 | null;
+  readonly referencesError?: string | null;
+  readonly onRefreshReferences?: () => void | Promise<void>;
+  readonly onLoadMoreReferences?: (
+    cursor: string,
+  ) => Promise<BrowserProjectReferenceListV1 | null>;
+  readonly onImportReference?: (file: File) => Promise<BrowserProjectReferenceImportResultV1>;
+  readonly onRetryReference?: (
+    jobId: string,
+  ) => Promise<BrowserProjectReferenceRetryResultV1 | null>;
+  readonly onDeleteReference?: (referenceId: string) => void | Promise<void>;
+  readonly onReadReferenceContent?: (
+    referenceId: string,
+    query?: BrowserProjectReferenceReadQueryV1,
+  ) => Promise<BrowserProjectReferenceReadResultV1 | null>;
   readonly agentChat?: { readonly projectId: string; readonly client: AgentChatClient } | null;
 }
 
@@ -495,6 +544,20 @@ export function Workspace(props: WorkspaceProps) {
           onPublish={props.onPublish}
           onRefresh={props.onRefreshPublication}
           onReadPublication={props.onReadPublication}
+        />
+      </Show>
+      <Show when={props.hostStatus === 'ready' && props.activeView === 'references'}>
+        <ReferencesView
+          projectId={props.overview?.projectId ?? null}
+          references={props.references ?? null}
+          referencesError={props.referencesError ?? null}
+          sessionRole={props.sessionProjectRole ?? null}
+          onRefresh={props.onRefreshReferences}
+          onLoadMore={props.onLoadMoreReferences}
+          onImport={props.onImportReference}
+          onRetry={props.onRetryReference}
+          onDelete={props.onDeleteReference}
+          onReadContent={props.onReadReferenceContent}
         />
       </Show>
       <Show
@@ -992,6 +1055,14 @@ export function WorkbenchShell(props: AppProps = {}) {
             onPublish={props.onPublish}
             onRefreshPublication={props.onRefreshPublication}
             onReadPublication={props.onReadPublication}
+            references={props.references}
+            referencesError={props.referencesError}
+            onRefreshReferences={props.onRefreshReferences}
+            onLoadMoreReferences={props.onLoadMoreReferences}
+            onImportReference={props.onImportReference}
+            onRetryReference={props.onRetryReference}
+            onDeleteReference={props.onDeleteReference}
+            onReadReferenceContent={props.onReadReferenceContent}
             agentChat={props.agentChat}
           />
           <OperationCenter

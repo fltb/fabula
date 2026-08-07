@@ -3,7 +3,11 @@ import {
   BROWSER_PROJECT_CAPABILITIES_PATH,
   BROWSER_PROJECT_GRAPHS_PATH,
   BROWSER_PROJECT_OVERVIEW_PATH,
+  BROWSER_PROJECT_REFERENCE_CONTENT_PATH,
+  BROWSER_PROJECT_REFERENCE_PATH,
+  BROWSER_PROJECT_REFERENCES_IMPORT_PATH,
   BROWSER_PROJECT_REFERENCES_PATH,
+  BROWSER_PROJECT_REFERENCE_RETRY_PATH,
   BROWSER_PROJECT_ROLE_PATH,
   BROWSER_PROJECT_SCENE_ADOPTION_PATH,
   BROWSER_PROJECTS_PATH,
@@ -19,8 +23,14 @@ import type {
   BrowserProjectCapabilitiesV1,
   BrowserProjectListV1,
   BrowserProjectOverviewV1,
+  BrowserProjectReferenceDeleteResultV1,
+  BrowserProjectReferenceGetResultV1,
+  BrowserProjectReferenceImportResultV1,
   BrowserProjectReferenceListQueryV1,
   BrowserProjectReferenceListV1,
+  BrowserProjectReferenceReadQueryV1,
+  BrowserProjectReferenceReadResultV1,
+  BrowserProjectReferenceRetryResultV1,
   BrowserSessionPrincipalV1,
   SceneAdoptionViewV1,
   SourceStudioStateV1,
@@ -58,6 +68,27 @@ export interface BrowserReadClient {
     projectId: string,
     query?: BrowserProjectReferenceListQueryV1,
   ): Promise<BrowserProjectReferenceListV1>;
+  /** One reference item; null when the reference does not exist. */
+  getReference(projectId: string, referenceId: string): Promise<BrowserProjectReferenceGetResultV1>;
+  /** One bounded content slice of a reference object. */
+  getReferenceContent(
+    projectId: string,
+    referenceId: string,
+    query: BrowserProjectReferenceReadQueryV1,
+  ): Promise<BrowserProjectReferenceReadResultV1>;
+  /** Multipart reference import; the returned job is terminal (succeeded or failed). */
+  importReference(
+    projectId: string,
+    file: File,
+    metadata?: { readonly displayName?: string },
+  ): Promise<BrowserProjectReferenceImportResultV1>;
+  /** Re-run one failed import job from its persisted chunks. */
+  retryReference(projectId: string, jobId: string): Promise<BrowserProjectReferenceRetryResultV1>;
+  /** Delete one reference; 404 when the reference does not exist. */
+  deleteReference(
+    projectId: string,
+    referenceId: string,
+  ): Promise<BrowserProjectReferenceDeleteResultV1>;
   getSceneAdoption(
     projectId: string,
     eventId: string,
@@ -90,6 +121,8 @@ const BROWSER_ERROR_CODES = new Set<BrowserApiErrorV1['error']['code']>([
   'REFERENCE_INVALID',
   'REFERENCE_UNAVAILABLE',
   'REFERENCE_CONFLICT',
+  'REFERENCE_IMPORT_FAILED',
+  'REFERENCE_SIZE_EXCEEDED',
   'SCENE_ADOPTION_NOT_FOUND',
   'SCENE_ADOPTION_INVALID',
   'SCENE_ADOPTION_UNAVAILABLE',
@@ -149,6 +182,29 @@ export function createBrowserReadClient(options: BrowserReadClientOptions = {}):
       }),
     );
   };
+  const mutate = async <T>(
+    path: string,
+    method: 'POST' | 'DELETE',
+    body?: BodyInit,
+    headers?: HeadersInit,
+  ): Promise<T> => {
+    const sessionId = options.getSessionId?.();
+    const combined = new Headers({ accept: 'application/json' });
+    if (headers !== undefined) {
+      new Headers(headers).forEach((value, key) => combined.set(key, value));
+    }
+    if (typeof sessionId === 'string' && sessionId.length > 0) {
+      combined.set(BROWSER_SESSION_HEADER, sessionId);
+    }
+    return decode<T>(
+      await execute(`${prefix}${path}`, {
+        method,
+        headers: combined,
+        body,
+        credentials: 'same-origin',
+      }),
+    );
+  };
   return {
     getSession: () => request(BROWSER_SESSION_PATH),
     listProjects: () => request(BROWSER_PROJECTS_PATH),
@@ -172,6 +228,58 @@ export function createBrowserReadClient(options: BrowserReadClientOptions = {}):
       const suffix = params.size === 0 ? '' : `?${params.toString()}`;
       return request(`${path}${suffix}`);
     },
+    getReference: (projectId, referenceId) =>
+      request(
+        BROWSER_PROJECT_REFERENCE_PATH.replace(':projectId', encodeURIComponent(projectId)).replace(
+          ':referenceId',
+          encodeURIComponent(referenceId),
+        ),
+      ),
+    getReferenceContent: (projectId, referenceId, query) => {
+      const path = BROWSER_PROJECT_REFERENCE_CONTENT_PATH.replace(
+        ':projectId',
+        encodeURIComponent(projectId),
+      ).replace(':referenceId', encodeURIComponent(referenceId));
+      const params = new URLSearchParams();
+      params.set('offset', String(query.offset));
+      params.set('limit', String(query.limit));
+      return request(`${path}?${params.toString()}`);
+    },
+    importReference: (projectId, file, metadata) => {
+      const form = new FormData();
+      form.append('file', file);
+      if (metadata?.displayName !== undefined && metadata.displayName.length > 0) {
+        form.append('displayName', metadata.displayName);
+      }
+      return mutate(
+        BROWSER_PROJECT_REFERENCES_IMPORT_PATH.replace(
+          ':projectId',
+          encodeURIComponent(projectId),
+        ),
+        'POST',
+        form,
+      );
+    },
+    retryReference: (projectId, jobId) => {
+      const path = BROWSER_PROJECT_REFERENCE_RETRY_PATH.replace(
+        ':projectId',
+        encodeURIComponent(projectId),
+      );
+      return mutate<BrowserProjectReferenceRetryResultV1>(
+        path,
+        'POST',
+        JSON.stringify({ version: 1, jobId }),
+        { 'content-type': 'application/json' },
+      );
+    },
+    deleteReference: (projectId, referenceId) =>
+      mutate(
+        BROWSER_PROJECT_REFERENCE_PATH.replace(':projectId', encodeURIComponent(projectId)).replace(
+          ':referenceId',
+          encodeURIComponent(referenceId),
+        ),
+        'DELETE',
+      ),
     getSceneAdoption: (projectId, eventId, revisionId) => {
       const path = BROWSER_PROJECT_SCENE_ADOPTION_PATH.replace(
         ':projectId',

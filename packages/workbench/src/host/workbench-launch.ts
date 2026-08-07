@@ -52,6 +52,7 @@ import {
   DEFAULT_WORKBENCH_OPERATION_LIMITS,
   DEFAULT_WORKBENCH_REFERENCE_LIMITS,
   DEFAULT_WORKBENCH_RENDER_POLICY,
+  type WorkbenchReferenceLimitsV1,
 } from '@novalistically/workbench-protocol';
 import type { Api, Model } from '@earendil-works/pi-ai';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
@@ -122,6 +123,7 @@ import {
   createBrowserAuthoringApi,
 } from './browser-authoring-api.js';
 import { createBrowserPublicationApi } from './browser-publication-api.js';
+import { createBrowserReferenceApi } from './browser-reference-api.js';
 import { createBrowserPrincipalResolver } from './browser-read-api.js';
 import { createBrowserReviewApi } from './browser-review-api.js';
 import { ConfigurationFileStore } from './configuration-file-store.js';
@@ -1051,14 +1053,19 @@ export async function startWorkbench(
       pluginActivations.clear();
     };
     const listeners = new Map<string, Set<(event: AuthoringActivityEventV1) => void>>();
+    const referenceLimitsFor = async (): Promise<WorkbenchReferenceLimitsV1> => {
+      const current = await configurationService.readActive();
+      return (
+        current?.configuration.referenceLimits ??
+        activeConfiguration?.referenceLimits ??
+        DEFAULT_WORKBENCH_REFERENCE_LIMITS
+      );
+    };
+    const referencesEnabled = (await referenceLimitsFor()).enabled;
     const referencePortFor = async (projectId: string) => {
       const project = projectConfiguration.get(projectId);
       if (project === undefined) return undefined;
-      const current = await configurationService.readActive();
-      const referenceLimits =
-        current?.configuration.referenceLimits ??
-        activeConfiguration?.referenceLimits ??
-        DEFAULT_WORKBENCH_REFERENCE_LIMITS;
+      const referenceLimits = await referenceLimitsFor();
       if (!referenceLimits.enabled) return undefined;
       return createWorkbenchReferencePort({
         projectId,
@@ -1499,6 +1506,10 @@ export async function startWorkbench(
       'graph-route',
       'review-hub',
       'publication',
+      // References (plan 9.1): derived from referenceLimits.enabled, the same
+      // gate the MCP reference port uses; disabled limits remove the feature
+      // (and with it every browser reference route) for the whole Host.
+      ...(referencesEnabled ? (['references'] as const) : []),
       ...(agentChatEnabled ? (['agent-chat'] as const) : []),
     ];
     const browser: HostServerOptions['browser'] =
@@ -1573,19 +1584,45 @@ export async function startWorkbench(
                 };
               },
             },
-            references: {
-              loadReferences: async (projectId, query) => {
-                const reference = await referencePortFor(projectId);
-                if (reference === undefined) return null;
-                const listed = await reference.list({ version: 1, ...query });
-                return {
-                  version: 1,
-                  projectId,
-                  items: listed.items,
-                  nextCursor: listed.nextCursor,
-                };
-              },
-            },
+            // Reference library surface (plan 9.1): present only while
+            // referenceLimits.enabled, so a disabled library registers no
+            // read or mutation route at all (the feature also disappears).
+            ...(referencesEnabled
+              ? {
+                  references: {
+                    loadReferences: async (projectId, query) => {
+                      const reference = await referencePortFor(projectId);
+                      if (reference === undefined) return null;
+                      const listed = await reference.list({ version: 1, ...query });
+                      return {
+                        version: 1,
+                        projectId,
+                        items: listed.items,
+                        nextCursor: listed.nextCursor,
+                      };
+                    },
+                    get: async (projectId, referenceId) => {
+                      const reference = await referencePortFor(projectId);
+                      if (reference === undefined) return null;
+                      const result = await reference.get({ version: 1, referenceId });
+                      return result === null
+                        ? { version: 1, projectId, item: null }
+                        : { version: 1, projectId, item: result.item };
+                    },
+                    readContent: async (projectId, referenceId, query) => {
+                      const reference = await referencePortFor(projectId);
+                      if (reference === undefined) return null;
+                      const result = await reference.readContent({
+                        version: 1,
+                        referenceId,
+                        offset: query.offset,
+                        limit: query.limit,
+                      });
+                      return { version: 1, projectId, content: result.content };
+                    },
+                  },
+                }
+              : {}),
             // Scene Canvas adoption preview (plan 5.2): the route mounts only
             // under the `scene-canvas` feature (always-on today). The port
             // bridges the Host-only `prepareSceneAdoption` service, so the
@@ -1926,6 +1963,20 @@ export async function startWorkbench(
           },
         },
       }).register(hostServer);
+      // Guarded browser reference mutations (plan 9.1): multipart import,
+      // one-reference delete, and failed-import retry, all through the same
+      // McpReferencePort the MCP tools drive. Registered ONLY while
+      // referenceLimits.enabled so a disabled library has no reachable route.
+      if (referencesEnabled) {
+        createBrowserReferenceApi({
+          principal,
+          access: projectAccess,
+          authorization,
+          catalog,
+          references: { get: referencePortFor },
+          referenceLimits: await referenceLimitsFor(),
+        }).register(hostServer);
+      }
       // Guarded Agent chat surface (plan 9.5): conversation/run routes plus
       // SSE progress and cancel/retry. Registered ONLY when the `agent-chat`
       // gate passes, so a disabled Agent has no reachable route at all.

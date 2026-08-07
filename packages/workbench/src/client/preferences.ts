@@ -34,6 +34,7 @@ export type WorkbenchNavigationView =
   | 'graph-route'
   | 'review-hub'
   | 'publication'
+  | 'references'
   | 'agent-chat';
 
 /**
@@ -75,6 +76,7 @@ const NAVIGATION_VIEWS: readonly WorkbenchNavigationView[] = [
   'graph-route',
   'review-hub',
   'publication',
+  'references',
   'agent-chat',
 ];
 

@@ -41,7 +41,7 @@ let ownerUserId = '';
 
 const OWNER_DISPLAY_NAME = 'E2E Owner';
 
-/** The six features a plain production spawn must publish; agent-chat is the seventh and must be ABSENT. */
+/** The seven features a plain production spawn must publish; agent-chat is the eighth and must be ABSENT. */
 const EXPECTED_FEATURES: readonly string[] = [
   'project-home',
   'source-studio',
@@ -49,6 +49,7 @@ const EXPECTED_FEATURES: readonly string[] = [
   'graph-route',
   'review-hub',
   'publication',
+  'references',
 ];
 
 /** Explicitly empty session header: the fixture auto-attach skips present headers. */

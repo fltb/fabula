@@ -6,17 +6,17 @@ Narrative engineering system: structured YAML source → immutable source snapsh
 
 ## Status
 
-Current source-verified baseline: `docs/current-state.md` (authoritative; current source wins over dated plans and design docs). Document index: `docs/INDEX.md`. `docs/README.md` is kept as a compatibility entry that points to both. This file is current working guidance, not a dated design record. Gate status is not all green: as of 2026-08-05 `node scripts/check-public-api.mjs` and `npm run test:e2e` are red (workbench-protocol not registered in the public-api manifest; workbench package has no `test:e2e` script) — see `docs/current-state.md`, never claim otherwise.
+Current source-verified baseline: `docs/current-state.md` (authoritative; current source wins over dated plans and design docs). Document index: `docs/INDEX.md`. `docs/README.md` is kept as a compatibility entry that points to both. This file is current working guidance, not a dated design record. Gate status is not all green: the b90d472 bench closed-loop orphan still breaks `tsc -b packages/bench`, and Node 24 cannot run the argon2-dependent Workbench tests (`crypto.argon2` is a Node 26 API) — see `docs/current-state.md`, never claim otherwise.
 
 ## Boundary
 
 Six workspace packages, not a derivable linear chain:
 
 - **`@novalistically/core`** — pure narrative semantics: immutable source-snapshot analysis, entity/graph/state computation, context, render orchestration, validation, assembly intent. Depends only on `yaml` and `zod`. It does not hold project directories, Git, SQLite, credentials, or browser transports, and it does not write `scenes/`, `.nova/`, or derived files.
-- **`@novalistically/node-host`** — Node adapters: filesystem source loader/writer, execution/state/cache/report repositories, AI SDK provider, plugin runtime. It is the filesystem boundary for CLI and Bench.
+- **`@novalistically/node-host`** — Node adapters: filesystem source loader/writer, execution/state/cache/report repositories, pi-ai provider (`@earendil-works/pi-ai`), plugin runtime. It is the filesystem boundary for CLI and Bench.
 - **`@novalistically/bench`** — regression, variant, and performance benchmarks running through Core and Node Host. Never a Core dependency.
 - **`@novalistically/cli`** — `commander` CLI and typed Workbench MCP client. Standalone mutation checks the Host authority lease; via-workbench operations are authenticated project-scoped Host calls and never load project files or credentials locally.
-- **`@novalistically/workbench`** — private native Host + browser client. Host owns local auth, Yjs, SQLite worker, credentials, ProjectSession, native immutable revision acceptance, and project-scoped reference storage; the browser consumes secret-free DTOs. Controlled Git is optional best-effort mirroring after native acceptance, never authoring authority.
+- **`@novalistically/workbench`** — private native Host + browser client. Host owns local auth, Yjs, SQLite worker, credentials, ProjectSession, native immutable revision acceptance, and project-scoped reference storage; the browser consumes secret-free DTOs. Controlled Git is optional best-effort mirroring after native acceptance, never authoring authority. The only in-process agent runs on `@earendil-works/pi-agent-core` (model built by `createPiAgentModel`).
 - **`@novalistically/workbench-protocol`** — shared protocol contracts: the MCP tool catalog (`nova_*` names and scopes), typed client contracts, configuration, authoring/host/reference DTOs, and device credential constants. Consumed by Workbench Host and the CLI client; only build/build:js/build:types scripts, no tests.
 
 Core input is `ProjectSourceSnapshotV1` plus injected semantic ports; source hashes represent content, not Git history. Node Host and Workbench Host own files. Workbench native revision content is the authoring acceptance model; bundles contain only explicit `AuthoringManifest` entries and never include `.nova/**`, caches, responses, journals, Yjs, SQLite, output, or derived artifacts.
@@ -68,7 +68,7 @@ Run a single test: `npx vitest run packages/core/tests/validator/`. The core E2E
 
 ## CLI
 
-Host-bound commands: `project init`, `validate`, `status`, `entity`, `graph`, `source`, `render`, `revise`, and `render-tree`. The CLI does not read `.env` automatically. Workbench launch commands and environment configuration are documented in the root README; `start:listener` is the bare smoke listener, while `start:workbench` is the composed entry.
+Host-bound commands: `project init`, `validate`, `status`, `entity`, `graph`, `source`, `render`, `revise`, and `render-tree`. The CLI does not read `.env` automatically. `npm start` is the product entry (builds the Host, then `scripts/start.mjs workbench`); `start:listener` is the bare loopback smoke listener only. Launch commands and environment configuration are documented in the root README and `docs/reference/workbench-host.md`.
 
 For `via-workbench`, `WorkbenchClient.render()` may send bounded `referenceChunks` selectors. They require `mcp:reference:read`; the Host resolves them only inside the serialized, freshly capability-validated render operation and passes Core a non-authoritative packet scoped to the bound project.
 
@@ -101,6 +101,13 @@ Per-project YAML projects live in `fixtures/` (e.g. `zhu-fu` 祝福, `dream-of-r
 ## Gotchas
 
 - `.env` is gitignored; `.env.example` has the template. The CLI does not auto-load `.env`.
+- The Workbench is an **MCP server**: any external agent (any MCP client, including codex CLI / Claude Code) connects to `/mcp/projects/:projectId` and gets the same `nova_*` tool surface as the built-in agent, filtered by role scope. The built-in agent (pi-agent-core) is the **only in-process agent**; the Workbench does not discover, spawn, or host any external local agent runtime. No interface is reserved for future runtime hosting — a real need gets a separate review.
+- `nova.yaml` project files and `nova_*` MCP tool names are stable contracts — the CLI rename to `fabula` did not change them; `NOVALISTICALLY_*` env contracts stay as they are.
+- `createWorkbenchAgentModelAdapter` is deleted — build the built-in agent model with `createPiAgentModel` (`packages/workbench/src/host/agent/pi-agent-model.ts`, pi-ai + pi-agent-core).
+- The built-in agent system prompt is **English** — keep it English (`buildAgentSystemPrompt` in `packages/workbench/src/host/agent/run-service.ts` is a deterministic prompt).
+- dotenv serves only the Workbench startup scripts (`packages/workbench/scripts/dev.mjs`, `scripts/start.mjs`); no other package loads `.env`. Provider keys live in the credential store / settings UI, never in `.env`.
+- `npm start` is the product entry (Workbench); the CLI (`fabula`) is a headless automation/testing tool, not the product.
+- The built-in agent is production-hidden by default: `agentReady=false` — parity/e2e matrices are deterministic evidence; live conformance is a separate run.
 - `allowImportingTsExtensions` is set — source imports use `.ts`; esbuild handles bundling.
 - When adding types/schemas, export from `types/index.ts` and `schemas/index.ts` barrels.
 - Rebuild (`npm run build`) before exercising CLI/dist consumers.

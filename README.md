@@ -26,7 +26,9 @@ The built-in agent completes the whole creation loop through its tools — view 
 
 ## 外部 agent 接入
 
-The Workbench is an MCP server. Any MCP client — including external agents such as the codex CLI — can connect to `/mcp/projects/:projectId` (Streamable HTTP) and use the same `nova_*` 72-tool catalog as the built-in agent, filtered by role scope. The endpoint and tool catalog are unchanged by the CLI rename; `nova.yaml` project files and `NOVALISTICALLY_*` environment contracts stay as they are.
+The Workbench is an MCP server. Any MCP client — including external agents such as the codex CLI or Claude Code — can connect to `/mcp/projects/:projectId` (Streamable HTTP) and use the same `nova_*` 72-tool catalog as the built-in agent, filtered by role scope. The endpoint and tool catalog are unchanged by the CLI rename; `nova.yaml` project files and `NOVALISTICALLY_*` environment contracts stay as they are.
+
+**Runtime boundary**: the built-in agent (pi-agent-core) is the **only in-process agent**. The Workbench does not discover, spawn, or host any external local agent runtime (codex CLI, etc.) — external agents connect to the MCP endpoint as clients, and that is the whole integration surface. No interface is reserved for future runtime hosting; a real need (for example driving an external coding agent from inside the Workbench) is a new feature request and gets a separate review.
 
 ## Headless CLI（自动化/测试）
 

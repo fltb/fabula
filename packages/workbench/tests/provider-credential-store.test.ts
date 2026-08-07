@@ -121,13 +121,16 @@ describe('provider credential store', () => {
     await expect(store.get('ai-sdk:default')).resolves.toBe('sk-default-profile');
   });
 
-  it('falls back to the legacy bare ai-sdk key when reading ai-sdk:default', async () => {
+  it('does not fall back to the legacy bare ai-sdk key for profile-scoped reads', async () => {
     const configDir = newTempConfigDir();
     const legacy = new XdgCredentialFileStore({ configDir });
     await legacy.set('ai-sdk', 'sk-legacy-bare');
     const store = createProviderCredentialStore({ configDir });
-    await expect(store.get('ai-sdk:default')).resolves.toBe('sk-legacy-bare');
-    // A profile-scoped write supersedes the legacy key without losing unrelated entries.
+    // Only the profile-scoped key is recognized; a bare legacy key is ignored.
+    await expect(store.get('ai-sdk:default')).resolves.toBeNull();
+    // The bare key is still addressable directly, but never satisfies ai-sdk:default.
+    await expect(store.get('ai-sdk')).resolves.toBe('sk-legacy-bare');
+    // A profile-scoped write stores under the canonical key, not the bare one.
     await store.set('ai-sdk:default', 'sk-canonical');
     await expect(store.get('ai-sdk:default')).resolves.toBe('sk-canonical');
     await expect(store.get('ai-sdk')).resolves.toBe('sk-legacy-bare');

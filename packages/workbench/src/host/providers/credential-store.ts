@@ -79,17 +79,14 @@ export interface OsCredentialStore extends ProviderCredentialStore {
  * 62 lowercase letters, digits, or hyphens, optionally prefixed by the
  * profile-scoped AI-SDK form `ai-sdk:<profileId>` (the `<profileId>` part
  * follows the same rules). Covers known providers (`openai`, `anthropic`,
- * `deepseek`, `openrouter`, ...), the legacy bare `ai-sdk` key, and
- * profile-scoped keys such as `ai-sdk:default`, without a hardcoded
+ * `deepseek`, `openrouter`, ...) and profile-scoped AI-SDK keys such as
+ * `ai-sdk:default`, without a hardcoded
  * allowlist that would go stale.
  */
 export const PROVIDER_ID_PATTERN = /^(?:ai-sdk:)?[a-z][a-z0-9-]{0,62}$/;
 
 /** Default provider profile bound by every legacy (V1/V2) project. */
 export const DEFAULT_PROVIDER_PROFILE = 'default' as const;
-
-/** Legacy bare credential key used by V1/V2 Hosts before profile-scoped keys. */
-export const LEGACY_AI_SDK_CREDENTIAL_KEY = 'ai-sdk' as const;
 
 /** Canonical credential key for the AI-SDK provider under one profile. */
 export function providerCredentialKey(profileId: string): string {
@@ -493,15 +490,7 @@ class ValidatedProviderCredentialStore implements ProviderCredentialStore {
   async get(providerId: string): Promise<string | null> {
     assertValidProviderId(providerId);
     try {
-      const value = await this.backend.get(providerId);
-      if (value !== null) return value;
-      // Legacy fallback: pre-profile Hosts stored the default AI-SDK key under
-      // the bare `ai-sdk` id. Reading the canonical `ai-sdk:default` key
-      // resolves it so existing setups keep working without re-entry.
-      if (providerId === providerCredentialKey(DEFAULT_PROVIDER_PROFILE)) {
-        return this.backend.get(LEGACY_AI_SDK_CREDENTIAL_KEY);
-      }
-      return null;
+      return this.backend.get(providerId);
     } catch (error) {
       throw this.#normalize(error);
     }

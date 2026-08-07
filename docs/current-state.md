@@ -1,24 +1,29 @@
 # 当前系统状态（源码核验）
 
-**时间**：2026-08-06 CST
-**当前实现检查点**：`main` 当前工作树（Agent-first 工作流完整交付：plan 已全部执行完毕、接线缺口全部关闭；门禁结果见下表，全绿）
+**时间**：2026-08-08 CST
+**当前实现检查点**：`main` 当前工作树（Workbench 产品收敛 Stage 1–7 + 8.3 已交付，Stage 8 收口进行中：config `version:1` 单一契约 + renderPolicy、`@earendil-works/pi-ai` / `pi-agent-core` 换核、CLI 改名 `fabula`、`npm start` 产品入口、agent 消息持久化 schema v8、运行时边界声明；门禁状态诚实记录见下表——Node 26 下五包 typecheck 通过、bench 包受 b90d472 orphan 影响，Node 24 下 argon2 相关测试不可运行）
 **权威顺序**：当前源码、package manifests、可复现门禁结果；本页优先于历史计划、阶段报告和归档设计。
 
 > 本页描述已经由源码或门禁证明的现状，不把设计目标、未接线类型或历史测量当作已交付能力。历史文档应保留其当时的证据与日期，并链接到本页，而不应改写历史。
 
-## 已核验的工程基线
-
 | 门禁 | 结果 |
 |---|---|
-| `npm test` | 通过：根 Vitest 3,197 tests、Workbench Host 716 tests、Workbench Client 156 tests |
-| `npm run typecheck` | 通过（六个包逐包 tsc） |
-| `npm run typecheck:dead-code` | 通过 |
-| `npm run typecheck:e2e` | 通过（workbench Playwright 测试的 tsc 校验） |
-| `npm run build` | 通过 |
-| `npm run bundle-check` | 通过 |
-| `npm run check:public-api` | 通过：六个包全部登记（含 `@novalistically/workbench-protocol`），manifest 与源码导出表面一致 |
-| `npm run test:e2e` | 通过：23/23（Playwright：harness self-test 1、host-http 5、mcp-chain 3、browser 3、concurrency-recovery 5、plugin-snapshot 6） |
-| `npm run lint` | 通过：Biome 0 errors、0 warnings |
+| `npm run typecheck`（Node 26 / fnm 26.5.0，收敛会话记录） | core / node-host / cli / workbench-protocol / workbench 五包 `tsc -b` 通过；**bench 包不 clean（源码核验）**：b90d472 遗留的 closed-loop orphan 仍在——`packages/bench/src/closed-loop-runner.ts` 导入从未提交的 `./closed-loop.js`（按 NodeNext 解析即 TS2307），且该文件未从 `index.ts` 导出（孤儿文件，无调用方）；`dist/closed-loop.d.ts` 是陈旧构建产物 |
+| Node 24 环境（本会话 v24.1.0） | argon2 相关 workbench 测试（`auth-password` / `auth-service` / `setup-api` / `launch` / `parity`）失败：`crypto.argon2` 是 Node 26 API，本环境不可用（`packages/workbench/src/host/auth/password.ts` 从 `node:crypto` 导入 `argon2`）。**Node 24 下不宣称全绿** |
+| 2026-08-06 基线（收敛前，供参考） | `npm test` 根 3,197 + Host 716 + Client 156、`typecheck:dead-code`、`typecheck:e2e`、`build`、`bundle-check`、`check:public-api`（六包全部登记）、`test:e2e` 23/23、`lint` 0 errors / 0 warnings——均为收敛前记录，收敛后未全量重跑 |
+
+## 2026-08-08 产品收敛记录（Stage 1–7 + 8.3 已交付；8.1/8.2 收口在工作树中未提交）
+
+对应 `docs/todos/workbench-product-convergence-2026-08-07.md`：Stage 1–7 与 Stage 8.3（本文档 + AGENTS.md）已交付；Stage 8.1（credential-store 移除 legacy 裸 key）与 8.2（`.env` 清理）正在工作树中执行（`packages/workbench/src/host/providers/credential-store.ts` 已有未提交修改）。Stage 9「前端能力对齐 + 产品化门禁」是独立计划，未在本检查点宣称完成。已核验现状：
+
+- **config `version:1` 单一契约 + renderPolicy**：`WorkbenchConfigurationV1`（`@novalistically/workbench-protocol`）是唯一规范配置源形状，owner 直接序列化、无迁移/归一化层；`renderPolicy`（`WorkbenchRenderPolicyV1`：pass1/pass2 温度、maxTokens、pass2 seed）统一应用于 Host 的每次 render。
+- **依赖换核（替换 AI SDK）**：`@earendil-works/pi-ai`（node-host + workbench，`^0.84.1`）与 `@earendil-works/pi-agent-core`（workbench，`^0.84.1`）；生产 provider 为 `PiOpenAICompatibleProvider`（`createPiProviderStack`，`packages/node-host/src/providers/`）；内置 Agent 循环为 pi-agent-core `Agent`（`packages/workbench/src/host/agent/run-service.ts`），模型缝为 `createPiAgentModel`（`agent/pi-agent-model.ts`）。`createWorkbenchAgentModelAdapter` 与 `WorkbenchAgentModel` 已删除。
+- **CLI 改名 `fabula`**：root `package.json` `name: "fabula"`、cli bin `fabula`；`nova.yaml` 项目文件、`nova_*` MCP 工具名与 `NOVALISTICALLY_*` env 契约不变。
+- **`npm start` 产品入口**：build:host + `packages/workbench/scripts/start.mjs workbench`（loopback `http://127.0.0.1:8787`、自动开浏览器、首次引导；`WORKBENCH_OPEN_BROWSER=false` 关闭）。
+- **agent 消息持久化 schema v8**：`packages/workbench/src/persistence/schema.ts` 迁移至 version 8（`agent_conversations` / `agent_conversation_messages` / `agent_runs` / `agent_tool_calls`；`newestBundled` = 8）。
+- **内置 agent 换核后 production 默认仍 `agentReady=false`（隐藏）**：capability 门 = V3 `agent.enabled` && `supportsToolCalls`（`workbench-launch.ts` production 从不硬编码 true）；parity matrix（`agent-parity-matrix.test.ts`）与 e2e 是确定性证据；live conformance 是单独运行（`npm run smoke:workbench-agent:live`），不作为 CI 证据。
+- **运行时边界（Stage 7 决策，2026-08-08）**：workbench 是 MCP server——外部 agent（任意 MCP client，包括 codex CLI / Claude Code）连入 `/mcp/projects/:projectId` 即获得与内置 agent 相同的工具面（按角色 scope 过滤）；内置 agent（pi-agent-core）是**唯一**的进程内 agent，不发现、不派生、不托管任何外部本地运行时；未预留未来运行时托管接口，真实需求按新需求单独评审。
+- **FilePublicationWriter 已恢复并在位**：`packages/node-host/src/output/file-publication-writer.ts`（写 `output/novel.md`，`PUBLICATION_OUTPUT_DIRECTORY`）继续从 `@novalistically/node-host` 导出（`index.ts`），`refreshCanonical()` 在 accepted commit / gate 决议 / review-driven revise 后 best-effort 刷新。
 
 
 ## 包与依赖边界
@@ -28,10 +33,10 @@
 | 包 | 已核验职责 |
 |---|---|
 | `@novalistically/core` | 纯叙事语义：不可变 source-snapshot 分析、实体/图/状态计算、上下文、render 编排、验证、组装意图；也定义 bounded non-authoritative reference packets。仅依赖 `yaml` 和 `zod`。 |
-| `@novalistically/node-host` | Node 适配器：filesystem source loader/writer、execution/state/cache/report repositories、AI SDK provider、plugin runtime 和可移植 reference object store。 |
+| `@novalistically/node-host` | Node 适配器：filesystem source loader/writer、execution/state/cache/report repositories、pi-ai provider（`@earendil-works/pi-ai`，`PiOpenAICompatibleProvider`）、plugin runtime 和可移植 reference object store。 |
 | `@novalistically/bench` | 通过 Core 与 Node Host 运行回归、变体和性能基准；不是 Core 依赖。 |
-| `@novalistically/cli` | `commander` CLI 与 typed Workbench MCP client；standalone 写入受 Host authority lease 保护，via-workbench 操作只走项目 scoped 的 authenticated Host route。 |
-| `@novalistically/workbench` | 私有 native Host + browser client。Host 持有本地认证、Yjs、SQLite worker、ProjectSession、native immutable revisions 和 project-scoped reference library；浏览器只消费 secret-free DTO。可选 Git 仅镜像已接受 revision，不参与 authoring acceptance。 |
+| `@novalistically/cli` | `fabula` CLI（`commander`）与 typed Workbench MCP client；standalone 写入受 Host authority lease 保护，via-workbench 操作只走项目 scoped 的 authenticated Host route。 |
+| `@novalistically/workbench` | 私有 native Host + browser client。Host 持有本地认证、Yjs、SQLite worker、ProjectSession、native immutable revisions 和 project-scoped reference library；浏览器只消费 secret-free DTO。可选 Git 仅镜像已接受 revision，不参与 authoring acceptance。唯一的进程内 agent 跑在 `@earendil-works/pi-agent-core` 上（模型缝 `createPiAgentModel`）。 |
 | `@novalistically/workbench-protocol` | 共享协议契约包：MCP 工具目录（`nova_*` 名与 scopes，当前 72 个）、typed client contracts、configuration、authoring/host/reference DTO 与 device credential 常量。被 Workbench Host 与 CLI client 消费；仅 build/build:js/build:types 三个 script，无测试。已登记进 `public-api.manifest.json`（六个包全部登记）。 |
 
 包关系不是一个可推导的线性链。Core 不依赖工作区包；Node Host 提供适配器；Bench、CLI 和 Workbench 按各自 manifest 直接选择 Core/Node Host 能力；`@novalistically/workbench-protocol` 是共享协议契约，被 Workbench Host 与 CLI client 消费，不依赖其他工作区包。
@@ -68,7 +73,7 @@ chapters/chapter_NN/E*.yaml
 
 ## 当前用户与运行时入口
 
-- 生产 `AiSdkProvider` 在 `@novalistically/node-host`，默认 OpenAI-compatible base URL 为 `https://opencode.ai/zen/v1`，模型可由运行时配置或环境覆盖；CLI 不自动读取 `.env`。Workbench 内置 Agent 复用同一模型 client（`createWorkbenchAgentModelAdapter`）。
+- 生产 provider 是 `PiOpenAICompatibleProvider`（`@novalistically/node-host`，基于 pi-ai 的 `createPiProviderStack`），默认 OpenAI-compatible base URL 为 `https://opencode.ai/zen/v1`，模型可由运行时配置或环境覆盖；CLI 不自动读取 `.env`。Workbench 内置 Agent 模型缝是 `createPiAgentModel`（`packages/workbench/src/host/agent/pi-agent-model.ts`，`@earendil-works/pi-ai` + pi-agent-core `StreamFn`），按 project profile 从 credential store 解析 key，不读 `process.env`。
 - CLI 当前提供 validate/status/entity/graph/source/render/revise/render-tree/event-diff/operation/authoring/review/gate/publish/publication/project-init 这一组命令。本交付新增：`source validate --working`（校验 working authoring 层）、`source submit`、`operation get|wait|cancel`、`authoring conflict|resolve`、`event-diff`、`review list|add|update|history|revise`、`gate list|decide`、`publish`、`publication status|read`。不存在的历史命令或选项不能出现在使用指南中。
 - Core 输出的是结构化 intents/records；文件写入由 Host repositories 负责。不要承诺 Core 直接写 `scenes/`、`.nova/responses/` 或 `.nova/derived/` 目录。
 
@@ -94,7 +99,7 @@ chapters/chapter_NN/E*.yaml
 | assembly 生产 caller | **已存在** | Workbench `ProjectPublicationService` 经 Core `assembleRelease`（`@novalistically/core/editorial`）装配；Node Host `FilePublicationWriter` 写 `output/novel.md`；`refreshCanonical()` 在 accepted commit / release-gate 决议 / review-driven revise 后自动刷新 |
 | review producer | **已存在** | Host `review-service.ts` 的 append-only review stream；`nova_review_list/get/add/update`、`nova_release_gate_list/decide`（`resolveReleaseGate` 零 provider 调用）+ CLI `review`/`gate` 命令；gate identity 是 `computeReleaseGateId` 的 sha256（自 envelope 捕获，多 gate 不漂移） |
 | plugin Host activation | **已激活** | launch 经 `activateNodePlugins` 激活受信任本机插件（`trustedPlugins` manifest/index.js hash 身份）；`PluginExtensionSchemaRegistrar` 接入 accepted/working 验证路径（未知/禁用 namespace = source error）；`plugin-snapshot.spec.ts` e2e 6 tests 为证据 |
-| 内置 Agent project-wide presence pause | **已解除** | 内置 Agent 与外部 device 共享 `ProjectToolExecutor` + `WorkbenchAgentModel`（AI SDK tool-calling）；`agent-chat` capability 门 = V3 `agent.enabled` && `supportsToolCalls` && parity matrix 4/4（确定性测试）；production 默认 `agentReady=false` → 隐藏 |
+| 内置 Agent project-wide presence pause | **已解除** | 内置 Agent 与外部 device 共享 `ProjectToolExecutor` + pi-agent-core `Agent` 循环（`createPiAgentModel`，pi-ai tool-calling）；`agent-chat` capability 门 = V3 `agent.enabled` && `supportsToolCalls` && parity matrix 4/4（确定性测试）；production 默认 `agentReady=false` → 隐藏 |
 | 持久化 operation 队列 | **已实现** | `project_operations` 表 + `ProjectOperationService`：两阶段 detached render（lane 内 prepare/commit、lane 外 execute）、cancel、重启 interrupted sweep 不自动重放；Operation Center 统一 SSE |
 | canonical-world 快照 | **已实现** | `CanonicalStateProjectionService` 按 source/route 派生快照流；等价门禁 `state-projection-equivalence.test.ts`（14 fixtures / 19 tests）断言逐事件 stateBefore/stateAfter hash 与 `compileProject().boundaries` 一致 |
 
@@ -108,7 +113,7 @@ chapters/chapter_NN/E*.yaml
 - **publication 自动刷新**：`FilePublicationWriter`（Node Host）写 `output/novel.md`（`PUBLICATION_OUTPUT_DIRECTORY`）；`refreshCanonical()` 在 accepted commit / gate 决议 / review-driven revise 后 best-effort 刷新，全集未就绪时只降级为 `stale`、绝不写部分小说。
 - **受信任本机插件**：`activateNodePlugins` 以 `trustedPlugins` 的 manifest + index.js 的 SHA-256 身份校验后激活；`PluginExtensionSchemaRegistrar` 把 EventFile `extensions` 命名空间接入 accepted/working 验证（未知/禁用 namespace = source error）；plugin identity（manifest/module hash）进入 validationIdentity 与渲染 cache key。
 - **canonical-world 快照投影**：`CanonicalStateProjectionService`（workbench host）按不可变 source/route 派生快照流；等价门禁 14 fixtures / 19 tests 与完整 canonical compile 逐事件一致。
-- **内置 Agent**：`ProjectToolExecutor`（workbench host）把内置 principal 接到与外部 device 相同的 MCP 工具表面；`createWorkbenchAgentModelAdapter`（Node Host）是 AI SDK tool-calling 模型缝；`agent-chat` capability 门 = V3 `agent.enabled` && `supportsToolCalls` && parity matrix 4/4；production 默认隐藏（`agentReady=false`）。
+- **内置 Agent**：`ProjectToolExecutor`（workbench host）把内置 principal 接到与外部 device 相同的 MCP 工具表面；`createPiAgentModel`（`agent/pi-agent-model.ts`）是 pi-ai tool-calling 模型缝（Node Host 侧 provider 为 `PiOpenAICompatibleProvider`）；`agent-chat` capability 门 = V3 `agent.enabled` && `supportsToolCalls` && parity matrix 4/4；production 默认隐藏（`agentReady=false`）。
 - **确定性 mock provider**：`createDeterministicMockProvider`（Node Host）按项目配置构造 Pass-2-aware 确定性 mock，launch 与 parity/e2e 均用它，保证无网络、可复现。
 
 ## 已修复的产品 bug（均有回归测试）

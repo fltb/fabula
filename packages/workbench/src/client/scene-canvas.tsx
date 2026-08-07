@@ -3,8 +3,12 @@ import type { SceneAdoptionViewV1 } from '../contracts/index.js';
 
 export interface SceneCanvasProps {
   readonly adoption: SceneAdoptionViewV1 | null;
+  /** Adoption preview load failure; non-null renders a distinct retry state. */
+  readonly adoptionError?: string | null;
   /** Opens the Host-backed explicit adoption flow; it never writes source itself. */
   readonly onRequestAdoption?: (candidate: SceneAdoptionViewV1) => void;
+  /** Re-requests the last adoption preview after a load failure. */
+  readonly onRetryAdoption?: () => void | Promise<void>;
 }
 
 /**
@@ -21,10 +25,30 @@ export function SceneCanvas(props: SceneCanvasProps) {
       <Show
         when={props.adoption}
         fallback={
-          <div class="empty-state" aria-live="polite">
-            <h3>No released scene revision</h3>
-            <p>Render or revise a scene in the Host before adoption can be considered.</p>
-          </div>
+          <Show
+            when={props.adoptionError !== null && props.adoptionError !== undefined}
+            fallback={
+              <div class="empty-state" aria-live="polite">
+                <h3>No released scene revision</h3>
+                <p>Render or revise a scene in the Host before adoption can be considered.</p>
+              </div>
+            }
+          >
+            <div class="empty-state" role="alert" data-testid="scene-adoption-error">
+              <h3>Adoption preview could not be loaded</h3>
+              <p>{props.adoptionError}</p>
+              <Show when={props.onRetryAdoption !== undefined}>
+                <button
+                  class="btn"
+                  type="button"
+                  data-testid="scene-adoption-retry"
+                  onClick={() => void props.onRetryAdoption?.()}
+                >
+                  Retry
+                </button>
+              </Show>
+            </div>
+          </Show>
         }
       >
         {(candidate) => (

@@ -25,6 +25,8 @@ export interface ReviewHubProps {
   readonly gates?: BrowserReviewGateListV1 | null;
   /** Host review event trail; null = not loaded yet (or the load failed). */
   readonly history?: BrowserReviewHistoryV1 | null;
+  /** Review Hub load failure from the Host surface; non-null renders a retry state. */
+  readonly reviewError?: string | null;
   /**
    * Project membership role for the current session. Mutations are offered
    * only when the role's grants allow them AND the matching callback is
@@ -440,12 +442,45 @@ export function ReviewHub(props: ReviewHubProps) {
       </Show>
 
       <Show
+        when={
+          props.review !== null &&
+          props.review !== undefined &&
+          props.reviewError !== null &&
+          props.reviewError !== undefined
+        }
+      >
+        <p class="diagnostic diagnostic-error" role="alert" data-testid="review-partial-error">
+          {props.reviewError}
+        </p>
+      </Show>
+
+      <Show
         when={props.review}
         fallback={
-          <section class="screen-empty" aria-live="polite">
-            <h3>No review projection</h3>
-            <p>Open an authenticated project in the Host to load its review comments.</p>
-          </section>
+          <Show
+            when={props.reviewError !== null && props.reviewError !== undefined}
+            fallback={
+              <section class="screen-empty" aria-live="polite">
+                <h3>No review projection</h3>
+                <p>Open an authenticated project in the Host to load its review comments.</p>
+              </section>
+            }
+          >
+            <section class="screen-empty" aria-live="polite" data-testid="review-load-error">
+              <h3>Review Hub could not be loaded</h3>
+              <p>{props.reviewError}</p>
+              <Show when={props.onRefresh !== undefined}>
+                <button
+                  class="text-button"
+                  type="button"
+                  data-testid="review-load-retry"
+                  onClick={() => void props.onRefresh?.()}
+                >
+                  Retry
+                </button>
+              </Show>
+            </section>
+          </Show>
         }
       >
         {(review) => (

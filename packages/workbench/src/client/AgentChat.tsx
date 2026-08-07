@@ -23,7 +23,9 @@ import type {
   AgentChatRunViewV1,
   AgentChatToolCallReceiptV1,
 } from '../contracts/index.js';
+import { BrowserAgentChatApiError } from './agent-chat-client.js';
 import type { AgentChatClient } from './agent-chat-client.js';
+import type { HostStatus } from './App.js';
 
 interface ChatMessage {
   readonly id: string;
@@ -43,26 +45,59 @@ interface ArtifactChip {
 }
 
 /** Agent-first onboarding prompts; clicking one fills the composer. */
-const WELCOME_PROMPTS: readonly { readonly prompt: string; readonly hint: string }[] = [
+const WELCOME_PROMPTS: readonly { readonly glyph: string; readonly prompt: string; readonly hint: string }[] = [
   {
+    glyph: '✳',
     prompt: '查看项目当前状态并告诉我下一步',
     hint: '了解项目进展，由 Agent 规划下一步动作',
   },
   {
+    glyph: '◫',
     prompt: '渲染第 1 章并发布',
     hint: '渲染首章内容并发布为可查看的产物',
   },
   {
+    glyph: '✓',
     prompt: '检查有哪些待处理的评审或门禁',
     hint: '扫描待处理的评审意见与发布门禁',
   },
 ];
+
+/** localStorage gate for the first-visit mini tour (plan 9.4.1). */
+const ONBOARDING_SEEN_KEY = 'workbench.onboardingSeen';
+
+/** Plan 9.4.1: four-step first-visit mini tour shown on the empty Agent Chat. */
+const TOUR_STEPS: readonly { readonly title: string; readonly body: string }[] = [
+  {
+    title: 'Agent Chat 是入口',
+    body: '从这里用自然语言驱动整个写作流程：提问、渲染、发布都由它发起。',
+  },
+  {
+    title: 'Source Studio 编辑源文件',
+    body: '切换到 Source Studio 视图直接编辑章节源文件，Agent 的改动也落在这里。',
+  },
+  {
+    title: 'Review Hub 看评审门禁',
+    body: 'Review Hub 汇总评审意见与发布门禁，Agent 可以代你扫描待办。',
+  },
+  {
+    title: 'Publication 发布产物',
+    body: '发布后的产物在 Publication 视图查看，Agent 的发布调用会生成可查看的产物。',
+  },
+];
+
+/** Plan 9.4.3: inline copy for the agent-unavailable banner. */
+const AGENT_UNAVAILABLE_COPY = 'Agent 未启用（配置：agent.enabled / provider key / parity）';
 
 export interface AgentChatProps {
   readonly projectId: string;
   readonly client: AgentChatClient;
   /** Switch the workspace to another view (artifact chips → publication / review-hub). */
   readonly onViewChange?: (view: string) => void;
+  /** Host readiness; 'error' also renders the agent-unavailable banner (plan 9.4.3). */
+  readonly hostStatus?: HostStatus;
+  /** Open the admin Provider settings; absent → the banner renders text only. */
+  readonly onOpenSettings?: () => void;
 }
 
 function runLabel(run: AgentChatRunViewV1): string {
@@ -78,6 +113,20 @@ function receiptLabel(call: AgentChatToolCallReceiptV1): string {
         : `failed ${call.resultSummary ?? ''}`;
   return `${call.toolName} #${call.callIndex} — ${result}`;
 }
+/** The failed run entry for a message's run id, if any (drives the inline retry chip). */
+function failedRunOf(
+  runs: readonly AgentChatRunHistoryEntryV1[],
+  runId: string,
+): AgentChatRunHistoryEntryV1 | null {
+  return (
+    runs.find(
+      (entry) =>
+        entry.run.runId === runId &&
+        (entry.run.status === 'failed' || entry.run.status === 'interrupted'),
+    ) ?? null
+  );
+}
+
 
 function messageViewOf(message: AgentChatMessageViewV1): ChatMessage {
   return {
@@ -126,6 +175,37 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
   let activeRunId: string | null = null;
   let stopProgress: (() => void) | null = null;
   let loadToken = 0;
+  const [historyState, setHistoryState] = createSignal<
+    'loading' | 'empty' | 'populated' | 'error'
+  >('loading');
+  const [agentUnavailable, setAgentUnavailable] = createSignal(false);
+  const [tourStep, setTourStep] = createSignal(0);
+  const [tourDismissed, setTourDismissed] = createSignal(
+    typeof localStorage !== 'undefined' && localStorage.getItem(ONBOARDING_SEEN_KEY) !== null,
+  );
+  const showTour = (): boolean => historyState() === 'empty' && !tourDismissed();
+
+  const dismissTour = (): void => {
+    if (typeof localStorage !== 'undefined') localStorage.setItem(ONBOARDING_SEEN_KEY, '1');
+    setTourDismissed(true);
+  };
+
+  const nextTourStep = (): void => {
+    if (tourStep() >= TOUR_STEPS.length - 1) {
+      dismissTour();
+      return;
+    }
+    setTourStep((step) => step + 1);
+  };
+
+  const reportError = (cause: unknown): void => {
+    if (cause instanceof BrowserAgentChatApiError && cause.code === 'AGENT_CHAT_UNAVAILABLE') {
+      setAgentUnavailable(true);
+      setError(null);
+      return;
+    }
+    setError(errorMessage(cause));
+  };
 
   const refreshHistory = async (): Promise<void> => {
     const current = conversation();
@@ -147,15 +227,18 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
     setRuns(history.runs);
     setMessages(history.messages.map(messageViewOf));
     setError(null);
+    setAgentUnavailable(false);
   };
 
   const createConversation = async (): Promise<void> => {
     try {
       const created = await props.client.createConversation(props.projectId);
       setConversations((all) => [created, ...all]);
+      setHistoryState('populated');
+      dismissTour();
       await openConversation(created);
     } catch (cause) {
-      setError(errorMessage(cause));
+      reportError(cause);
     }
   };
 
@@ -165,10 +248,12 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
       .then(async (list) => {
         const sorted = [...list].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
         setConversations(sorted);
+        setHistoryState(sorted.length === 0 ? 'empty' : 'populated');
         if (sorted[0] !== undefined) await openConversation(sorted[0]);
       })
       .catch((cause: unknown) => {
-        setError(errorMessage(cause));
+        setHistoryState('error');
+        reportError(cause);
       });
     onCleanup(() => {
       stopProgress?.();
@@ -263,12 +348,15 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
         setConversations((all) => [created, ...all]);
         setConversation(created);
         current = created;
+        setHistoryState('populated');
+        dismissTour();
       } catch (cause) {
-        setError(errorMessage(cause));
+        reportError(cause);
         return;
       }
     }
     setError(null);
+    setAgentUnavailable(false);
     setSending(true);
     const optimisticId = `user-${Date.now()}`;
     setMessages((all) => [
@@ -303,7 +391,7 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
         handleProgressEvent,
       );
     } catch (cause) {
-      setError(errorMessage(cause));
+      reportError(cause);
     } finally {
       setSending(false);
     }
@@ -315,7 +403,7 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
       await props.client.cancel(props.projectId, runId);
       await refreshHistory();
     } catch (cause) {
-      setError(errorMessage(cause));
+      reportError(cause);
     }
   };
 
@@ -348,7 +436,7 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
         );
       }
     } catch (cause) {
-      setError(errorMessage(cause));
+      reportError(cause);
     }
   };
 
@@ -368,6 +456,67 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
           </span>
         </Show>
       </div>
+      <Show when={showTour()}>
+        <aside
+          class="agent-onboarding-tour"
+          data-testid="agent-onboarding-tour"
+          aria-label="首次使用引导"
+        >
+          <div class="agent-onboarding-step">
+            <span class="agent-onboarding-index" aria-hidden="true">
+              {tourStep() + 1}/{TOUR_STEPS.length}
+            </span>
+            <div class="agent-onboarding-copy">
+              <h3 class="agent-onboarding-title">{TOUR_STEPS[tourStep()]?.title}</h3>
+              <p class="agent-onboarding-body">{TOUR_STEPS[tourStep()]?.body}</p>
+            </div>
+          </div>
+          <div class="agent-onboarding-actions">
+            <button
+              class="text-button"
+              type="button"
+              data-testid="agent-tour-skip"
+              onClick={dismissTour}
+            >
+              跳过
+            </button>
+            <button
+              class="text-button"
+              type="button"
+              data-testid="agent-tour-next"
+              onClick={nextTourStep}
+            >
+              下一步
+            </button>
+          </div>
+          <div class="agent-onboarding-dots" aria-hidden="true">
+            <For each={TOUR_STEPS}>
+              {(_, index) => (
+                <span
+                  class="agent-onboarding-dot"
+                  classList={{ 'is-active': index() === tourStep() }}
+                />
+              )}
+            </For>
+          </div>
+        </aside>
+      </Show>
+
+      <Show when={agentUnavailable() || props.hostStatus === 'error'}>
+        <div class="agent-unavailable-banner" role="alert" data-testid="agent-unavailable-banner">
+          <span>{AGENT_UNAVAILABLE_COPY}</span>
+          <Show when={props.onOpenSettings !== undefined}>
+            <button
+              class="text-button"
+              type="button"
+              data-testid="agent-open-settings"
+              onClick={() => props.onOpenSettings?.()}
+            >
+              打开设置
+            </button>
+          </Show>
+        </div>
+      </Show>
 
       <Show when={error() !== null}>
         <p class="agent-chat-error" role="alert" data-testid="agent-chat-error">
@@ -435,8 +584,13 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
                           data-testid={`agent-chat-welcome-card-${index()}`}
                           onClick={() => setDraft(example.prompt)}
                         >
-                          <span class="agent-chat-welcome-prompt">{example.prompt}</span>
-                          <span class="text-xs text-[var(--wb-text-muted)]">{example.hint}</span>
+                          <span class="agent-chat-welcome-glyph" aria-hidden="true">
+                            {example.glyph}
+                          </span>
+                          <span class="agent-chat-welcome-text">
+                            <span class="agent-chat-welcome-prompt">{example.prompt}</span>
+                            <span class="agent-chat-welcome-hint">{example.hint}</span>
+                          </span>
                         </button>
                       )}
                     </For>
@@ -456,6 +610,32 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
                       ) : (
                         <p>{message.content}</p>
                       )}
+                      <Show
+                        when={
+                          message.role === 'assistant' &&
+                          failedRunOf(runs(), message.runId) !== null
+                        }
+                      >
+                        {(failed) => (
+                          <div
+                            class="agent-run-error-chip"
+                            role="alert"
+                            data-testid={`agent-run-error-chip-${message.runId}`}
+                          >
+                            <span class="agent-run-error-code" data-testid="agent-run-error-inline">
+                              {failed().run.errorCode ?? '运行失败'}
+                            </span>
+                            <button
+                              class="text-button"
+                              type="button"
+                              data-testid={`agent-retry-inline-${message.runId}`}
+                              onClick={() => void retryRun(message.runId)}
+                            >
+                              重试
+                            </button>
+                          </div>
+                        )}
+                      </Show>
                     </article>
                   </Show>
                 )}
@@ -511,7 +691,7 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
                                   data-testid={`agent-retry-${entry.run.runId}`}
                                   onClick={() => void retryRun(entry.run.runId)}
                                 >
-                                  Retry
+                                  重试
                                 </button>
                               </Show>
                               <Show when={streamingRun() === entry.run.runId}>

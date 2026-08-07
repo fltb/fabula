@@ -362,12 +362,16 @@ function WorkspaceRoute(props: {
   const [sceneRenderNotice, setSceneRenderNotice] = createSignal<string | null>(null);
   const [sceneRenderError, setSceneRenderError] = createSignal<string | null>(null);
   const [referencesError, setReferencesError] = createSignal<string | null>(null);
+  const [reviewError, setReviewError] = createSignal<string | null>(null);
+  const [sceneAdoptionError, setSceneAdoptionError] = createSignal<string | null>(null);
   const [sceneAdoption, setSceneAdoption] = createSignal<SceneAdoptionViewV1 | null>(null);
   const [sessionProjectRole, setSessionProjectRole] = createSignal<ProjectAccessRole | null>(null);
   const [yjsStatus, setYjsStatus] = createSignal<
     Record<string, 'idle' | 'connecting' | 'connected' | 'disconnected' | 'unavailable'>
   >({});
   let eventClient: ProjectEventClient | null = null;
+  // Last adoption preview pair, kept so the Scene Canvas Retry can re-request it.
+  let lastAdoptionScene: { readonly eventId: string; readonly revisionId: string } | null = null;
   let loadGeneration = 0;
 
   const load = async (selector: BrowserGraphRouteSelectorV1 = DEFAULT_GRAPH_SELECTOR) => {
@@ -380,6 +384,8 @@ function WorkspaceRoute(props: {
     setSessionProjectRole(null);
     setSceneAdoption(null);
     setPublicationsError(null);
+    setReviewError(null);
+    setSceneAdoptionError(null);
     setSceneMap(null);
     setSceneMapError(null);
     setSceneDetail(null);
@@ -514,16 +520,23 @@ function WorkspaceRoute(props: {
       setReviewState(null);
       setReviewGates(null);
       setReviewHistory(null);
+      setReviewError(null);
       return;
     }
+    const failures: string[] = [];
+    const capture = (cause: unknown): null => {
+      failures.push(runtimeErrorMessage(cause));
+      return null;
+    };
     const [nextReview, nextGates, nextHistory] = await Promise.all([
-      props.client.review.list(props.projectId).catch(() => null),
-      props.client.review.gateList(props.projectId).catch(() => null),
-      props.client.review.history(props.projectId).catch(() => null),
+      props.client.review.list(props.projectId).catch(capture),
+      props.client.review.gateList(props.projectId).catch(capture),
+      props.client.review.history(props.projectId).catch(capture),
     ]);
     setReviewState(nextReview);
     setReviewGates(nextGates);
     setReviewHistory(nextHistory);
+    setReviewError(failures.length > 0 ? failures.join('; ') : null);
   };
   const addReviewComment = async (request: BrowserReviewAddRequestV1): Promise<void> => {
     await props.client.review.add(request);
@@ -686,13 +699,19 @@ function WorkspaceRoute(props: {
   ): Promise<void> => {
     if (!enabled || scene === null) {
       setSceneAdoption(null);
+      setSceneAdoptionError(null);
       return;
     }
-    setSceneAdoption(
-      await props.client.read
-        .getSceneAdoption(props.projectId, scene.eventId, scene.revisionId)
-        .catch(() => null),
-    );
+    lastAdoptionScene = scene;
+    try {
+      setSceneAdoption(
+        await props.client.read.getSceneAdoption(props.projectId, scene.eventId, scene.revisionId),
+      );
+      setSceneAdoptionError(null);
+    } catch (cause) {
+      setSceneAdoption(null);
+      setSceneAdoptionError(runtimeErrorMessage(cause));
+    }
   };
   /**
    * Explicit adoption request. The Host derives the authoring-manifest claim
@@ -710,7 +729,7 @@ function WorkspaceRoute(props: {
 
   return (
     <Show
-      when={!pending() && workspace()}
+      when={workspace() !== null}
       fallback={
         <RuntimeStatePanel
           state="workspace"
@@ -724,6 +743,8 @@ function WorkspaceRoute(props: {
       {(current) => (
         <App
           hostStatus="ready"
+          loading={pending()}
+          eventConnected={authoring()?.connected ?? true}
           features={current().capabilities?.features ?? null}
           agentChat={
             current().capabilities?.features?.includes('agent-chat') === true
@@ -754,9 +775,12 @@ function WorkspaceRoute(props: {
           onSourceYjsStatusChange={updateYjsStatus}
           sceneAdoption={sceneAdoption()}
           onRequestAdoption={adoptScene}
+          sceneAdoptionError={sceneAdoptionError()}
+          onRetryAdoption={() => refreshSceneAdoption(true, lastAdoptionScene)}
           reviewState={reviewState()}
           reviewGates={reviewGates()}
           reviewHistory={reviewHistory()}
+          reviewError={reviewError()}
           sessionProjectRole={sessionProjectRole()}
           onAddReviewComment={addReviewComment}
           onUpdateReviewComment={updateReviewComment}

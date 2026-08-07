@@ -114,6 +114,10 @@ export interface AppProps {
   readonly initialView?: WorkbenchViewId;
   /** The shell stays honest until an authenticated Host supplies a status. */
   readonly hostStatus?: HostStatus;
+  /** True while the workspace wiring reloads; the shell shows view-level skeletons. */
+  readonly loading?: boolean;
+  /** Live Host event-stream state; false renders the disconnect banner + red status dot. */
+  readonly eventConnected?: boolean;
   readonly initialNavigatorCollapsed?: boolean;
   readonly initialInspectorPinned?: boolean;
   readonly initialOperationCenterExpanded?: boolean;
@@ -123,6 +127,12 @@ export interface AppProps {
    * without a cast; the shell validates against the visible catalog.
    */
   readonly onViewChange?: (view: string) => void;
+  /**
+   * Open the admin Provider settings (agent enablement). Absent in hosts
+   * without navigation, the agent-unavailable banner renders text only
+   * (plan 9.4.3).
+   */
+  readonly onOpenSettings?: () => void;
   /**
    * Host-derived capability gates for the open project (null = no Host). The
    * visible navigation is derived from these features; a hidden view is never
@@ -176,6 +186,10 @@ export interface AppProps {
   /** Explicit, Host-derived adoption preview for the selected Scene Canvas. */
   readonly sceneAdoption?: SceneAdoptionViewV1 | null;
   readonly onRequestAdoption?: (candidate: SceneAdoptionViewV1) => void;
+  /** Adoption preview load failure; non-null renders a distinct retry state. */
+  readonly sceneAdoptionError?: string | null;
+  /** Re-requests the last adoption preview after a load failure. */
+  readonly onRetryAdoption?: () => void | Promise<void>;
   /** Host review projection for the Review Hub surface. */
   readonly reviewState?: BrowserReviewListV1 | null;
   readonly reviewGates?: BrowserReviewGateListV1 | null;
@@ -186,6 +200,8 @@ export interface AppProps {
   readonly onUpdateReviewComment?: (request: BrowserReviewUpdateRequestV1) => void | Promise<void>;
   readonly onDecideReviewGate?: (request: BrowserReviewGateDecideRequestV1) => void | Promise<void>;
   readonly onRefreshReview?: () => void | Promise<void>;
+  /** Review Hub load failure from the Host surface; non-null renders a retry state. */
+  readonly reviewError?: string | null;
   /** Host publication catalog for the Publication surface. */
   readonly publications?: BrowserPublicationListV1 | null;
   /** Catalog load failure from the Host surface; non-null renders a retry state. */
@@ -329,6 +345,8 @@ interface WorkspaceProps {
   readonly onNodeSelect?: (nodeId: string) => void;
   /** View change forwarding for the Agent chat artifact chips (string views). */
   readonly onViewChange?: (view: string) => void;
+  /** Open the admin Provider settings from the agent-unavailable banner. */
+  readonly onOpenSettings?: () => void;
   readonly onSourceYjsStatusChange?: (
     descriptor: SourceStudioDocumentDescriptorV1,
     status: SourceStudioYjsStatus,
@@ -378,6 +396,11 @@ interface WorkspaceProps {
   readonly onSelectScene?: (eventId: string) => void | Promise<void>;
   readonly onRenderScene?: (eventId: string) => void | Promise<void>;
   readonly agentChat?: { readonly projectId: string; readonly client: AgentChatClient } | null;
+  readonly loading?: boolean;
+  readonly eventConnected?: boolean;
+  readonly reviewError?: string | null;
+  readonly sceneAdoptionError?: string | null;
+  readonly onRetryAdoption?: () => void | Promise<void>;
 }
 
 const STATUS_COPY: Record<
@@ -497,9 +520,13 @@ export function Workspace(props: WorkspaceProps) {
           <p class="region-kicker">Workspace / {view().label}</p>
           <h1 id="workspace-heading">{view().label}</h1>
         </div>
-        <span class={`host-status host-status-${props.hostStatus}`}>
+        <span
+          class={`host-status host-status-${props.hostStatus}${
+            props.eventConnected === false ? ' host-status-disconnected' : ''
+          }`}
+        >
           <span class="status-dot" aria-hidden="true" />
-          {copy().label}
+          {props.eventConnected === false ? 'Host 连接中断，正在重连…' : copy().label}
         </span>
       </div>
 
@@ -518,6 +545,22 @@ export function Workspace(props: WorkspaceProps) {
         </div>
       </section>
 
+      <Show
+        when={!props.loading}
+        fallback={
+          <div
+            class="workspace-skeleton"
+            data-testid="workspace-skeleton"
+            aria-busy="true"
+            role="status"
+          >
+            <div class="skeleton skeleton-title" />
+            <div class="skeleton skeleton-row" />
+            <div class="skeleton skeleton-row" />
+            <div class="skeleton skeleton-list" />
+          </div>
+        }
+      >
       <Show when={props.hostStatus === 'ready' && props.activeView === 'project-home'}>
         <ProjectHome overview={props.overview ?? null} />
       </Show>
@@ -558,6 +601,8 @@ export function Workspace(props: WorkspaceProps) {
         <SceneCanvas
           adoption={props.sceneAdoption ?? null}
           onRequestAdoption={props.onRequestAdoption}
+          adoptionError={props.sceneAdoptionError ?? null}
+          onRetryAdoption={props.onRetryAdoption}
         />
       </Show>
       <Show when={props.hostStatus === 'ready' && props.activeView === 'review-hub'}>
@@ -565,6 +610,7 @@ export function Workspace(props: WorkspaceProps) {
           projectId={props.overview?.projectId ?? null}
           review={props.reviewState ?? null}
           gates={props.reviewGates ?? null}
+          reviewError={props.reviewError ?? null}
           history={props.reviewHistory ?? null}
           sessionRole={props.sessionProjectRole ?? null}
           onAddComment={props.onAddReviewComment}
@@ -626,8 +672,11 @@ export function Workspace(props: WorkspaceProps) {
         <AgentChat
           projectId={props.agentChat!.projectId}
           client={props.agentChat!.client}
+          hostStatus={props.hostStatus}
           onViewChange={props.onViewChange}
+          onOpenSettings={props.onOpenSettings}
         />
+      </Show>
       </Show>
     </main>
   );
@@ -896,6 +945,7 @@ interface TopbarProps {
   readonly activeView: WorkbenchViewId;
   readonly views: readonly ViewDefinition[];
   readonly hostStatus: HostStatus;
+  readonly connected: boolean;
   readonly layoutMode: WorkbenchLayoutMode;
   readonly navigatorOpen: boolean;
   readonly inspectorOpen: boolean;
@@ -921,9 +971,13 @@ function Topbar(props: TopbarProps) {
 
       <div class="topbar-context" aria-live="polite">
         <span class="topbar-view">{view().label}</span>
-        <span class={`topbar-status topbar-status-${props.hostStatus}`}>
+        <span
+          class={`topbar-status topbar-status-${props.hostStatus}${
+            props.connected ? '' : ' topbar-status-disconnected'
+          }`}
+        >
           <span class="status-dot" aria-hidden="true" />
-          {copy().label}
+          {props.connected ? copy().label : 'Host 连接中断，正在重连…'}
         </span>
       </div>
 
@@ -1048,12 +1102,18 @@ export function WorkbenchShell(props: AppProps = {}) {
         activeView={activeView()}
         views={views()}
         hostStatus={hostStatus()}
+        connected={props.eventConnected ?? true}
         layoutMode={layoutMode()}
         navigatorOpen={navigatorDrawerOpen()}
         inspectorOpen={inspectorDrawerOpen()}
         onNavigatorToggle={toggleNavigatorDrawer}
         onInspectorToggle={toggleInspectorDrawer}
       />
+      <Show when={props.eventConnected === false}>
+        <div class="host-disconnect-banner" role="status" data-testid="host-disconnect-banner">
+          与 Host 的连接中断，正在重连…
+        </div>
+      </Show>
 
       <div class="workbench-body">
         <Show when={layoutMode() !== 'mobile'}>
@@ -1071,6 +1131,8 @@ export function WorkbenchShell(props: AppProps = {}) {
             activeView={activeView()}
             views={views()}
             hostStatus={hostStatus()}
+            loading={props.loading}
+            eventConnected={props.eventConnected}
             overview={props.overview}
             graphProjection={props.graphProjection}
             sourceStudio={props.sourceStudio}
@@ -1095,14 +1157,18 @@ export function WorkbenchShell(props: AppProps = {}) {
             onGraphRouteChange={props.onGraphRouteChange}
             onNodeSelect={setSelectedNodeId}
             onViewChange={props.onViewChange}
+            onOpenSettings={props.onOpenSettings}
             selectedSourceDocumentId={selectedSourceDocumentId()}
             onSourceYjsStatusChange={props.onSourceYjsStatusChange}
             sceneAdoption={props.sceneAdoption}
             onRequestAdoption={props.onRequestAdoption}
+            sceneAdoptionError={props.sceneAdoptionError}
+            onRetryAdoption={props.onRetryAdoption}
             reviewState={props.reviewState}
             reviewGates={props.reviewGates}
             reviewHistory={props.reviewHistory}
             sessionProjectRole={props.sessionProjectRole}
+            reviewError={props.reviewError}
             onAddReviewComment={props.onAddReviewComment}
             onUpdateReviewComment={props.onUpdateReviewComment}
             onDecideReviewGate={props.onDecideReviewGate}

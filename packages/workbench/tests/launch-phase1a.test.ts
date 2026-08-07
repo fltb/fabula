@@ -29,8 +29,12 @@ import {
   ProjectWriteCoordinator,
 } from '@novalistically/node-host';
 import {
-  DEFAULT_WORKBENCH_OPERATION_LIMITS_V3,
-  DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
+  DEFAULT_WORKBENCH_AGENT_CONFIGURATION,
+  DEFAULT_WORKBENCH_OPERATION_LIMITS,
+  DEFAULT_WORKBENCH_REFERENCE_LIMITS,
+  DEFAULT_WORKBENCH_RENDER_POLICY,
+  type WorkbenchConfigurationV1,
+  type WorkbenchProjectConfigurationV1,
 } from '@novalistically/workbench-protocol';
 import { build } from 'esbuild';
 import { afterAll, describe, expect, it, vi } from 'vitest';
@@ -57,6 +61,47 @@ function newTempDir(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
   ownedDirs.push(dir);
   return dir;
+}
+
+// ─── Canonical V1 launch configuration helpers ──────────────────────────────
+
+function launchProject(
+  projectId: string,
+  displayName: string,
+  root: string,
+): WorkbenchProjectConfigurationV1 {
+  return {
+    projectId,
+    displayName,
+    root,
+    revisionMirror: { mode: 'disabled' },
+    providerProfile: 'default',
+    trustedPlugins: [],
+  };
+}
+
+function launchConfiguration(
+  projects: readonly WorkbenchProjectConfigurationV1[],
+  overrides: Partial<WorkbenchConfigurationV1> = {},
+): WorkbenchConfigurationV1 {
+  return {
+    version: 1,
+    projects,
+    defaultProjectId: projects[0]?.projectId ?? null,
+    providers: {},
+    network: {
+      mode: 'loopback',
+      port: 0,
+      allowedHosts: [],
+      allowedOrigins: [],
+      unixSocket: null,
+    },
+    referenceLimits: { ...DEFAULT_WORKBENCH_REFERENCE_LIMITS },
+    operationLimits: { ...DEFAULT_WORKBENCH_OPERATION_LIMITS },
+    agent: { ...DEFAULT_WORKBENCH_AGENT_CONFIGURATION },
+    renderPolicy: { ...DEFAULT_WORKBENCH_RENDER_POLICY },
+    ...overrides,
+  };
 }
 
 afterAll(() => {
@@ -548,22 +593,13 @@ describe('startWorkbench setup runtime', () => {
         );
       }),
     );
-    const configuration = {
-      version: 1 as const,
-      projects: [
-        { projectId: 'project-a', displayName: 'Project A', root: rootA },
-        { projectId: 'project-b', displayName: 'Project B', root: rootB },
+    const configuration = launchConfiguration(
+      [
+        launchProject('project-a', 'Project A', rootA),
+        launchProject('project-b', 'Project B', rootB),
       ],
-      defaultProjectId: 'project-a',
-      provider: null,
-      network: {
-        mode: 'loopback' as const,
-        port: 0,
-        allowedHosts: [],
-        allowedOrigins: [],
-        unixSocket: null,
-      },
-    };
+      { defaultProjectId: 'project-a' },
+    );
     await mkdir(join(hostHome, 'config'), { recursive: true });
     await writeFile(
       join(hostHome, 'config', 'workbench.yaml'),
@@ -673,25 +709,9 @@ describe('startWorkbench setup runtime', () => {
     const fixtureRoot = resolve(packageRoot, '..', '..', 'fixtures', 'workbench-authoring');
     const projectRoot = join(newTempDir('fabula-launch-admin-project-'), 'launch-project');
     await cp(fixtureRoot, projectRoot, { recursive: true });
-    const configuration = {
-      version: 1 as const,
-      projects: [
-        {
-          projectId: 'launch-project',
-          displayName: 'Launch Project',
-          root: projectRoot,
-        },
-      ],
-      defaultProjectId: 'launch-project',
-      provider: null,
-      network: {
-        mode: 'loopback' as const,
-        port: 0,
-        allowedHosts: [],
-        allowedOrigins: [],
-        unixSocket: null,
-      },
-    };
+    const configuration = launchConfiguration([
+      launchProject('launch-project', 'Launch Project', projectRoot),
+    ]);
     await mkdir(join(hostHome, 'config'), { recursive: true });
     await writeFile(
       join(hostHome, 'config', 'workbench.yaml'),
@@ -900,25 +920,9 @@ describe('startWorkbench setup runtime', () => {
     const fixtureRoot = resolve(packageRoot, '..', '..', 'fixtures', 'workbench-authoring');
     const projectRoot = join(newTempDir('fabula-launch-status-project-'), 'launch-project');
     await cp(fixtureRoot, projectRoot, { recursive: true });
-    const configuration = {
-      version: 1 as const,
-      projects: [
-        {
-          projectId: 'launch-project',
-          displayName: 'Launch Status Project',
-          root: projectRoot,
-        },
-      ],
-      defaultProjectId: 'launch-project',
-      provider: null,
-      network: {
-        mode: 'loopback' as const,
-        port: 0,
-        allowedHosts: [],
-        allowedOrigins: [],
-        unixSocket: null,
-      },
-    };
+    const configuration = launchConfiguration([
+      launchProject('launch-project', 'Launch Status Project', projectRoot),
+    ]);
     await mkdir(join(hostHome, 'config'), { recursive: true });
     await writeFile(
       join(hostHome, 'config', 'workbench.yaml'),
@@ -1020,25 +1024,9 @@ describe('startWorkbench setup runtime', () => {
     const fixtureRoot = resolve(packageRoot, '..', '..', 'fixtures', 'zhu-fu');
     const projectRoot = join(newTempDir('fabula-launch-projection-project-'), 'launch-project');
     await cp(fixtureRoot, projectRoot, { recursive: true });
-    const configuration = {
-      version: 1 as const,
-      projects: [
-        {
-          projectId: 'launch-project',
-          displayName: 'Launch Projection Project',
-          root: projectRoot,
-        },
-      ],
-      defaultProjectId: 'launch-project',
-      provider: null,
-      network: {
-        mode: 'loopback' as const,
-        port: 0,
-        allowedHosts: [],
-        allowedOrigins: [],
-        unixSocket: null,
-      },
-    };
+    const configuration = launchConfiguration([
+      launchProject('launch-project', 'Launch Projection Project', projectRoot),
+    ]);
     await mkdir(join(hostHome, 'config'), { recursive: true });
     await writeFile(
       join(hostHome, 'config', 'workbench.yaml'),
@@ -1191,25 +1179,9 @@ describe('startWorkbench setup runtime', () => {
     const fixtureRoot = resolve(packageRoot, '..', '..', 'fixtures', 'workbench-authoring');
     const projectRoot = join(newTempDir('fabula-launch-review-project-'), 'launch-project');
     await cp(fixtureRoot, projectRoot, { recursive: true });
-    const configuration = {
-      version: 1 as const,
-      projects: [
-        {
-          projectId: 'launch-project',
-          displayName: 'Launch Review Project',
-          root: projectRoot,
-        },
-      ],
-      defaultProjectId: 'launch-project',
-      provider: null,
-      network: {
-        mode: 'loopback' as const,
-        port: 0,
-        allowedHosts: [],
-        allowedOrigins: [],
-        unixSocket: null,
-      },
-    };
+    const configuration = launchConfiguration([
+      launchProject('launch-project', 'Launch Review Project', projectRoot),
+    ]);
     await mkdir(join(hostHome, 'config'), { recursive: true });
     await writeFile(
       join(hostHome, 'config', 'workbench.yaml'),
@@ -1350,25 +1322,9 @@ describe('startWorkbench setup runtime', () => {
         'project: launch-project',
       ),
     );
-    const configuration = {
-      version: 1 as const,
-      projects: [
-        {
-          projectId: 'launch-project',
-          displayName: 'Launch Device Render',
-          root: projectRoot,
-        },
-      ],
-      defaultProjectId: 'launch-project',
-      provider: null,
-      network: {
-        mode: 'loopback' as const,
-        port: 0,
-        allowedHosts: [],
-        allowedOrigins: [],
-        unixSocket: null,
-      },
-    };
+    const configuration = launchConfiguration([
+      launchProject('launch-project', 'Launch Device Render', projectRoot),
+    ]);
     await mkdir(join(hostHome, 'config'), { recursive: true });
     await writeFile(
       join(hostHome, 'config', 'workbench.yaml'),
@@ -1650,7 +1606,7 @@ describe('project write authority lease', () => {
     const rootA = await leaseProjectRoot('fabula-lease-profile-a-', 'profile-a');
     const rootB = await leaseProjectRoot('fabula-lease-profile-b-', 'profile-b');
     const configuration = {
-      version: 3 as const,
+      version: 1 as const,
       projects: [
         {
           projectId: 'profile-a',
@@ -1681,13 +1637,14 @@ describe('project write authority lease', () => {
         allowedOrigins: [],
         unixSocket: null,
       },
-      referenceLimits: DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
+      referenceLimits: DEFAULT_WORKBENCH_REFERENCE_LIMITS,
       operationLimits: {
         maxQueuedPerProject: 64,
         maxConcurrentRendersPerProject: 1 as const,
         maxConcurrentRendersPerHost: 2,
       },
       agent: { enabled: false, maxTurns: 16, maxToolCalls: 64 },
+      renderPolicy: DEFAULT_WORKBENCH_RENDER_POLICY,
     };
     await mkdir(join(hostHome, 'config'), { recursive: true });
     await writeFile(
@@ -1812,12 +1769,12 @@ describe('trusted plugin activation and discovery (plan 7)', () => {
     readonly required: boolean;
   };
 
-  function v3Configuration(
+  function configurationV1(
     root: string,
     trustedPlugins: readonly TestTrustedPlugin[],
   ): Parameters<typeof serializeConfigurationYaml>[0] {
     return {
-      version: 3,
+      version: 1,
       projects: [
         {
           projectId: 'launch-project',
@@ -1837,9 +1794,10 @@ describe('trusted plugin activation and discovery (plan 7)', () => {
         allowedOrigins: [],
         unixSocket: null,
       },
-      referenceLimits: DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
-      operationLimits: DEFAULT_WORKBENCH_OPERATION_LIMITS_V3,
+      referenceLimits: DEFAULT_WORKBENCH_REFERENCE_LIMITS,
+      operationLimits: DEFAULT_WORKBENCH_OPERATION_LIMITS,
       agent: { enabled: false, maxTurns: 16, maxToolCalls: 64 },
+      renderPolicy: DEFAULT_WORKBENCH_RENDER_POLICY,
     };
   }
 
@@ -1859,7 +1817,7 @@ describe('trusted plugin activation and discovery (plan 7)', () => {
     await mkdir(join(hostHome, 'config'), { recursive: true });
     await writeFile(
       join(hostHome, 'config', 'workbench.yaml'),
-      serializeConfigurationYaml(v3Configuration(root, trustedPlugins)),
+      serializeConfigurationYaml(configurationV1(root, trustedPlugins)),
       'utf8',
     );
     const handle = await startWorkbench({
@@ -2088,19 +2046,9 @@ describe('agent-chat launch capability gate', () => {
         'project: agent-project',
       ),
     );
-    const configuration = {
-      version: 1 as const,
-      projects: [{ projectId: 'agent-project', displayName: 'Agent Project', root: projectRoot }],
-      defaultProjectId: 'agent-project',
-      provider: null,
-      network: {
-        mode: 'loopback' as const,
-        port: 0,
-        allowedHosts: [],
-        allowedOrigins: [],
-        unixSocket: null,
-      },
-    };
+    const configuration = launchConfiguration([
+      launchProject('agent-project', 'Agent Project', projectRoot),
+    ]);
     await mkdir(join(hostHome, 'config'), { recursive: true });
     await writeFile(
       join(hostHome, 'config', 'workbench.yaml'),
@@ -2175,8 +2123,8 @@ describe('agent-chat launch capability gate', () => {
         'project: agent-project',
       ),
     );
-    const v3Configuration = {
-      version: 3 as const,
+    const configurationV1 = {
+      version: 1 as const,
       projects: [
         {
           projectId: 'agent-project',
@@ -2196,16 +2144,17 @@ describe('agent-chat launch capability gate', () => {
         allowedOrigins: [],
         unixSocket: null,
       },
-      referenceLimits: { ...DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2 },
-      operationLimits: { ...DEFAULT_WORKBENCH_OPERATION_LIMITS_V3 },
+      referenceLimits: { ...DEFAULT_WORKBENCH_REFERENCE_LIMITS },
+      operationLimits: { ...DEFAULT_WORKBENCH_OPERATION_LIMITS },
       agent: { enabled: true, maxTurns: 4, maxToolCalls: 8 },
+      renderPolicy: { ...DEFAULT_WORKBENCH_RENDER_POLICY },
     };
     await mkdir(join(hostHome, 'config'), { recursive: true });
-    // The V3 configuration is persisted directly: the launch's projectAccess
-    // catalog and the agent gate both read it.
+    // The canonical V1 configuration is persisted directly: the launch's
+    // projectAccess catalog and the agent gate both read it.
     await writeFile(
       join(hostHome, 'config', 'workbench.yaml'),
-      serializeConfigurationYaml(v3Configuration as never),
+      serializeConfigurationYaml(configurationV1),
       'utf8',
     );
 

@@ -5,6 +5,10 @@
 // Unlike the promotion-only smoke runner, this script persists every Pass 1
 // prose result (including a scene rejected by Pass 2) so direct source-fidelity
 // scoring can distinguish prose divergence from release-gate failures.
+//
+// Credentials (NOVALISTICALLY_AI_API_KEY / NOVALISTICALLY_AI_BASE_URL /
+// NOVALISTICALLY_AI_MODEL) must be exported in the shell: this script reads
+// process.env directly and intentionally does NOT load .env.
 // It never updates approved mock references.
 // ============================================================================
 
@@ -13,7 +17,6 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } f
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import 'dotenv/config';
 import { AiSdkProvider, renderNovel, sanitizeError } from '../packages/core/dist/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

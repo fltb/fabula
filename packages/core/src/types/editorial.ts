@@ -146,6 +146,18 @@ export interface EditorialRuntime {
    * the pipeline validator set, and observation hooks run around scenes.
    */
   pluginHooksManager?: PluginHooksManager;
+  /**
+   * Optional render sampling overrides. When absent, the render pipeline
+   * uses its built-in defaults (pass1 temperature 0.8 / maxTokens 10_000;
+   * pass2 temperature 0.3 / maxTokens 12_000 / seed 42).
+   */
+  renderPolicy?: {
+    readonly pass1Temperature?: number;
+    readonly pass1MaxTokens?: number;
+    readonly pass2Temperature?: number;
+    readonly pass2MaxTokens?: number;
+    readonly pass2Seed?: number;
+  };
 }
 
 export interface EditorialRenderRequestV1 {

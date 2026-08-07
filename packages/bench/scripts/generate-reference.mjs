@@ -3,6 +3,10 @@
 // Usage (credentials required):
 //   NOVALISTICALLY_AI_API_KEY=... NOVALISTICALLY_AI_MODEL=... npm run smoke:stage1:live
 //
+// Credentials must be exported in the shell: NOVALISTICALLY_AI_API_KEY,
+// NOVALISTICALLY_AI_BASE_URL, and NOVALISTICALLY_AI_MODEL are read directly
+// from process.env — this script intentionally does NOT load .env.
+//
 // Creates a temporary copy of the fixture without .nova/scenes/output so no
 // developer cache can satisfy the run.  Results are written to the ORIGINAL
 // fixture's .nova/smoke-candidates/{timestamp}/ directory.
@@ -23,7 +27,6 @@ import {
   FileProjectSourceLoader,
 } from '../../node-host/dist/index.js';
 import { buildLiveSmokeRecord, collectReferenceIssueIdentities } from '../dist/index.js';
-import 'dotenv/config';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(__dirname, '../../..');

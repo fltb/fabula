@@ -23,11 +23,15 @@ import {
   type ConfigOperationReceiptV1,
   type SetupFinishRequestV1,
   type SetupSaveCredentialRequestV1,
+  DEFAULT_WORKBENCH_AGENT_CONFIGURATION,
+  DEFAULT_WORKBENCH_NETWORK,
+  DEFAULT_WORKBENCH_OPERATION_LIMITS,
+  DEFAULT_WORKBENCH_REFERENCE_LIMITS,
+  DEFAULT_WORKBENCH_RENDER_POLICY,
   type SetupSaveProjectRequestV1,
   WORKBENCH_CONFIGURATION_VERSION,
   type WorkbenchAdminOverviewV1,
   type WorkbenchConfigurationV1,
-  type WorkbenchConfigurationV3,
   type WorkbenchNetworkReadViewV1,
   type WorkbenchProjectSafeViewV1,
   type WorkbenchProviderReadViewV1,
@@ -199,7 +203,7 @@ export function createSetupStatusBuilder(options: SetupStatusBuilderOptions): Se
     const active = await options.configuration.readActive();
     const configurationPresent = active !== null;
     const ownerCreated = (await options.auth.getAuthState()).ownerExists;
-    const effective: WorkbenchConfigurationV1 | WorkbenchConfigurationV3 | null =
+    const effective: WorkbenchConfigurationV1 | null =
       draft !== null && draft !== undefined ? draft.configuration : (active?.configuration ?? null);
 
     const projects: WorkbenchProjectSafeViewV1[] =
@@ -214,11 +218,7 @@ export function createSetupStatusBuilder(options: SetupStatusBuilderOptions): Se
           }));
 
     const providerConfiguration =
-      effective === null
-        ? null
-        : effective.version === 3
-          ? (effective.providers.default ?? null)
-          : effective.provider;
+      effective === null ? null : (effective.providers.default ?? null);
     const providerConfigured =
       providerConfiguration != null &&
       (await options.credentials.get(providerCredentialKey(DEFAULT_PROVIDER_PROFILE))) !== null;
@@ -324,21 +324,17 @@ interface SetupDraftState {
   networkApplied: boolean;
 }
 
-const DEFAULT_NETWORK: WorkbenchConfigurationV1['network'] = {
-  mode: 'loopback',
-  port: 8787,
-  allowedHosts: [],
-  allowedOrigins: [],
-  unixSocket: null,
-};
-
 const EMPTY_DRAFT: SetupDraftState = {
   configuration: {
     version: 1,
     projects: [],
     defaultProjectId: null,
-    provider: null,
-    network: DEFAULT_NETWORK,
+    providers: {},
+    network: { ...DEFAULT_WORKBENCH_NETWORK },
+    referenceLimits: { ...DEFAULT_WORKBENCH_REFERENCE_LIMITS },
+    operationLimits: { ...DEFAULT_WORKBENCH_OPERATION_LIMITS },
+    agent: { ...DEFAULT_WORKBENCH_AGENT_CONFIGURATION },
+    renderPolicy: { ...DEFAULT_WORKBENCH_RENDER_POLICY },
   },
   networkApplied: false,
 };
@@ -439,11 +435,19 @@ export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
       const displayName = typeof parsed.displayName === 'string' ? parsed.displayName : '';
       const root = typeof parsed.root === 'string' ? parsed.root : '';
       const candidate: WorkbenchConfigurationV1 = {
-        version: 1,
-        projects: [...(draft?.configuration.projects ?? []), { projectId, displayName, root }],
+        ...(draft?.configuration ?? EMPTY_DRAFT.configuration),
+        projects: [
+          ...(draft?.configuration.projects ?? []),
+          {
+            projectId,
+            displayName,
+            root,
+            revisionMirror: { mode: 'disabled' },
+            providerProfile: DEFAULT_PROVIDER_PROFILE,
+            trustedPlugins: [],
+          },
+        ],
         defaultProjectId: null,
-        provider: draft?.configuration.provider ?? null,
-        network: draft?.configuration.network ?? DEFAULT_NETWORK,
       };
       const result = await options.configuration.validateCandidate(candidate);
       if (!result.ok) {
@@ -492,7 +496,17 @@ export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
       }
       const candidate: WorkbenchConfigurationV1 = {
         ...base.configuration,
-        projects: [...base.configuration.projects, { projectId, displayName, root }],
+        projects: [
+          ...base.configuration.projects,
+          {
+            projectId,
+            displayName,
+            root,
+            revisionMirror: { mode: 'disabled' },
+            providerProfile: DEFAULT_PROVIDER_PROFILE,
+            trustedPlugins: [],
+          },
+        ],
         defaultProjectId: base.configuration.defaultProjectId ?? projectId,
       };
       const result = await options.configuration.validateCandidate(candidate);
@@ -542,10 +556,13 @@ export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
         ...base,
         configuration: {
           ...base.configuration,
-          provider: {
-            kind: 'ai-sdk',
-            baseUrl: baseUrl === '' ? null : baseUrl,
-            model: model === '' ? null : model,
+          providers: {
+            ...base.configuration.providers,
+            [DEFAULT_PROVIDER_PROFILE]: {
+              kind: 'pi',
+              baseUrl: baseUrl === '' ? null : baseUrl,
+              model: model === '' ? null : model,
+            },
           },
         },
       };

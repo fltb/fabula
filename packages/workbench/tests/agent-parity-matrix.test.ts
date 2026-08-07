@@ -46,8 +46,9 @@ import { MockProvider } from '@novalistically/core/testing';
 import type { WorkbenchAgentModelPort } from '@novalistically/node-host';
 import { createFileCoreRuntimeServices, FileProjectSourceLoader } from '@novalistically/node-host';
 import {
-  DEFAULT_WORKBENCH_OPERATION_LIMITS_V3,
-  DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
+  DEFAULT_WORKBENCH_OPERATION_LIMITS,
+  DEFAULT_WORKBENCH_REFERENCE_LIMITS,
+  DEFAULT_WORKBENCH_RENDER_POLICY,
   MCP_TOOL_CATALOG_V1,
 } from '@novalistically/workbench-protocol';
 import { build } from 'esbuild';
@@ -427,7 +428,7 @@ async function buildParityHarness(): Promise<ParityHarness> {
     projectId: PROJECT_ID,
     store: createProjectOperationStore(persistence.client),
     session,
-    limits: { ...DEFAULT_WORKBENCH_OPERATION_LIMITS_V3 },
+    limits: { ...DEFAULT_WORKBENCH_OPERATION_LIMITS },
     now,
   });
   await operations.start();
@@ -604,7 +605,7 @@ async function boot(options: LaunchSmokeBootOptions): Promise<LaunchSmokeHandle>
     novaYaml.replace(/^project: workbench-authoring$/m, 'project: agent-project'),
   );
   const configuration = {
-    version: 3 as const,
+    version: 1 as const,
     projects: [
       {
         projectId: 'agent-project',
@@ -624,9 +625,10 @@ async function boot(options: LaunchSmokeBootOptions): Promise<LaunchSmokeHandle>
       allowedOrigins: [],
       unixSocket: null,
     },
-    referenceLimits: { ...DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2 },
-    operationLimits: { ...DEFAULT_WORKBENCH_OPERATION_LIMITS_V3 },
+    referenceLimits: { ...DEFAULT_WORKBENCH_REFERENCE_LIMITS },
+    operationLimits: { ...DEFAULT_WORKBENCH_OPERATION_LIMITS },
     agent: { enabled: options.enabled, maxTurns: 4, maxToolCalls: 8 },
+    renderPolicy: { ...DEFAULT_WORKBENCH_RENDER_POLICY },
   };
   await mkdir(join(hostHome, 'config'), { recursive: true });
   await writeFile(
@@ -1143,7 +1145,7 @@ describe('Workbench Agent parity matrix (plan 9.6)', () => {
       projectId: PROJECT_ID,
       store: createProjectOperationStore(harness.persistence.client),
       session,
-      limits: { ...DEFAULT_WORKBENCH_OPERATION_LIMITS_V3 },
+      limits: { ...DEFAULT_WORKBENCH_OPERATION_LIMITS },
       now: () => FIXED_NOW,
     });
     await restarted.start();

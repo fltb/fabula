@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
-  type WorkbenchConfigurationInput,
+  DEFAULT_WORKBENCH_AGENT_CONFIGURATION,
+  DEFAULT_WORKBENCH_OPERATION_LIMITS,
+  DEFAULT_WORKBENCH_REFERENCE_LIMITS,
+  DEFAULT_WORKBENCH_RENDER_POLICY,
   type WorkbenchConfigurationV1,
-  type WorkbenchConfigurationV3,
+  type WorkbenchProjectConfigurationV1,
 } from '../src/contracts/configuration.js';
 import {
   createAdminApi,
@@ -15,12 +17,19 @@ import { createHostServer, type HostServer } from '../src/host/server.js';
 import type { RuntimeAdminPort } from '../src/host/workbench-runtime.js';
 
 const servers: HostServer[] = [];
-const project = { projectId: 'project-a', displayName: 'Project A', root: '/private/project-a' };
+const project: WorkbenchProjectConfigurationV1 = {
+  projectId: 'project-a',
+  displayName: 'Project A',
+  root: '/private/project-a',
+  revisionMirror: { mode: 'disabled' },
+  providerProfile: 'default',
+  trustedPlugins: [],
+};
 const configuration: WorkbenchConfigurationV1 = {
   version: 1,
   projects: [project],
   defaultProjectId: project.projectId,
-  provider: null,
+  providers: {},
   network: {
     mode: 'loopback',
     port: 8787,
@@ -28,6 +37,10 @@ const configuration: WorkbenchConfigurationV1 = {
     allowedOrigins: [],
     unixSocket: null,
   },
+  referenceLimits: { ...DEFAULT_WORKBENCH_REFERENCE_LIMITS },
+  operationLimits: { ...DEFAULT_WORKBENCH_OPERATION_LIMITS },
+  agent: { ...DEFAULT_WORKBENCH_AGENT_CONFIGURATION },
+  renderPolicy: { ...DEFAULT_WORKBENCH_RENDER_POLICY },
 };
 
 afterEach(async () => {
@@ -199,9 +212,9 @@ describe('admin owner membership routes', () => {
   });
 });
 
-describe('admin V3 configuration domains', () => {
-  const v3Configuration: WorkbenchConfigurationV3 = {
-    version: 3,
+describe('admin configuration domains', () => {
+  const v1Configuration: WorkbenchConfigurationV1 = {
+    version: 1,
     projects: [
       {
         projectId: 'project-a',
@@ -223,28 +236,29 @@ describe('admin V3 configuration domains', () => {
       allowedOrigins: [],
       unixSocket: null,
     },
-    referenceLimits: { ...DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2 },
+    referenceLimits: { ...DEFAULT_WORKBENCH_REFERENCE_LIMITS },
     operationLimits: {
       maxQueuedPerProject: 8,
       maxConcurrentRendersPerProject: 1,
       maxConcurrentRendersPerHost: 2,
     },
     agent: { enabled: false, maxTurns: 8, maxToolCalls: 24 },
+    renderPolicy: { ...DEFAULT_WORKBENCH_RENDER_POLICY },
   };
 
-  function createV3Harness(options: {
+  function createConfigHarness(options: {
     validate?: 'valid' | 'invalid';
     applyStatus?: 'applied' | 'restart-required' | 'stale';
     configuredProfiles?: readonly string[];
-    configuration?: WorkbenchConfigurationV3;
+    configuration?: WorkbenchConfigurationV1;
     /** Host-discovered plugin identities; wires the discovery port when provided. */
     discoveredPlugins?: readonly DiscoveredPluginAdminViewV1[];
   }) {
     const active = {
-      configuration: options.configuration ?? v3Configuration,
+      configuration: options.configuration ?? v1Configuration,
       revision: 'revision-a',
     };
-    const appliedCandidates: WorkbenchConfigurationInput[] = [];
+    const appliedCandidates: WorkbenchConfigurationV1[] = [];
     const credentials = {
       get: vi.fn(async (providerId: string) =>
         (options.configuredProfiles ?? []).includes(providerId.replace(/^ai-sdk:/, ''))
@@ -256,12 +270,12 @@ describe('admin V3 configuration domains', () => {
     };
     const configurationService = {
       readActive: vi.fn(async () => active),
-      validateCandidate: vi.fn(async (_candidate: WorkbenchConfigurationInput) =>
+      validateCandidate: vi.fn(async (_candidate: WorkbenchConfigurationV1) =>
         options.validate === 'invalid'
           ? { ok: false as const, diagnostics: [{ code: 'CONFIG_INVALID', message: 'rejected' }] }
           : { ok: true as const, revision: 'candidate-revision' },
       ),
-      apply: vi.fn(async (input: { candidate: WorkbenchConfigurationInput }) => {
+      apply: vi.fn(async (input: { candidate: WorkbenchConfigurationV1 }) => {
         appliedCandidates.push(input.candidate);
         const status = options.applyStatus ?? 'restart-required';
         return {
@@ -327,8 +341,8 @@ describe('admin V3 configuration domains', () => {
     return { server, configurationService, appliedCandidates, credentials, providerTest };
   }
 
-  it('reads masked V3 domains without leaking credentials', async () => {
-    const h = createV3Harness({ configuredProfiles: ['default'] });
+  it('reads masked configuration domains without leaking credentials', async () => {
+    const h = createConfigHarness({ configuredProfiles: ['default'] });
     const response = await h.server.app.request('/api/v1/admin/config/advanced', {
       headers: { host: '127.0.0.1' },
     });
@@ -364,8 +378,8 @@ describe('admin V3 configuration domains', () => {
     expect(JSON.stringify(body)).not.toContain('api.example.com/v1');
   });
 
-  it('previews a V3-domain patch without applying it', async () => {
-    const h = createV3Harness({});
+  it('previews a configuration-domain patch without applying it', async () => {
+    const h = createConfigHarness({});
     const response = await h.server.app.request('/api/v1/admin/config/preview', {
       method: 'POST',
       headers: { host: '127.0.0.1', 'content-type': 'application/json' },
@@ -395,7 +409,7 @@ describe('admin V3 configuration domains', () => {
   });
 
   it('returns typed diagnostics when a preview candidate is invalid', async () => {
-    const h = createV3Harness({ validate: 'invalid' });
+    const h = createConfigHarness({ validate: 'invalid' });
     const response = await h.server.app.request('/api/v1/admin/config/preview', {
       method: 'POST',
       headers: { host: '127.0.0.1', 'content-type': 'application/json' },
@@ -414,7 +428,7 @@ describe('admin V3 configuration domains', () => {
   });
 
   it('applies operation limits, agent, and per-project patches through the CAS', async () => {
-    const h = createV3Harness({});
+    const h = createConfigHarness({});
     const response = await h.server.app.request('/api/v1/admin/config/advanced', {
       method: 'PUT',
       headers: { host: '127.0.0.1', 'content-type': 'application/json' },
@@ -437,8 +451,8 @@ describe('admin V3 configuration domains', () => {
     const body = await response.json();
     expect(body.version).toBe(1);
     expect(body.receipt.status).toBe('restart-required');
-    const candidate = h.appliedCandidates[0] as WorkbenchConfigurationV3;
-    expect(candidate.version).toBe(3);
+    const candidate = h.appliedCandidates[0] as WorkbenchConfigurationV1;
+    expect(candidate.version).toBe(1);
     expect(candidate.operationLimits).toEqual({
       maxQueuedPerProject: 16,
       maxConcurrentRendersPerProject: 1,
@@ -450,7 +464,7 @@ describe('admin V3 configuration domains', () => {
   });
 
   it('rejects an advanced patch that names an unknown project', async () => {
-    const h = createV3Harness({});
+    const h = createConfigHarness({});
     const response = await h.server.app.request('/api/v1/admin/config/advanced', {
       method: 'PUT',
       headers: { host: '127.0.0.1', 'content-type': 'application/json' },
@@ -467,7 +481,7 @@ describe('admin V3 configuration domains', () => {
   });
 
   it('rejects a stale advanced apply with CONFIG_STALE', async () => {
-    const h = createV3Harness({ applyStatus: 'stale' });
+    const h = createConfigHarness({ applyStatus: 'stale' });
     const response = await h.server.app.request('/api/v1/admin/config/advanced', {
       method: 'PUT',
       headers: { host: '127.0.0.1', 'content-type': 'application/json' },
@@ -480,7 +494,7 @@ describe('admin V3 configuration domains', () => {
   });
 
   it('upserts a provider profile and returns a masked view', async () => {
-    const h = createV3Harness({});
+    const h = createConfigHarness({});
     const response = await h.server.app.request('/api/v1/admin/providers/fast', {
       method: 'PUT',
       headers: { host: '127.0.0.1', 'content-type': 'application/json' },
@@ -502,7 +516,7 @@ describe('admin V3 configuration domains', () => {
       lastValidation: 'unvalidated',
       lastValidatedAt: null,
     });
-    const candidate = h.appliedCandidates[0] as WorkbenchConfigurationV3;
+    const candidate = h.appliedCandidates[0] as WorkbenchConfigurationV1;
     expect(candidate.providers.fast).toEqual({
       kind: 'ai-sdk',
       baseUrl: 'https://fast.example.com/v1',
@@ -511,7 +525,7 @@ describe('admin V3 configuration domains', () => {
   });
 
   it('deletes an unreferenced provider profile and its credential', async () => {
-    const h = createV3Harness({ configuredProfiles: ['fast'] });
+    const h = createConfigHarness({ configuredProfiles: ['fast'] });
     const deleteUnreferenced = await h.server.app.request('/api/v1/admin/providers/other', {
       method: 'DELETE',
       headers: { host: '127.0.0.1' },
@@ -536,8 +550,8 @@ describe('admin V3 configuration domains', () => {
   });
 
   it('deletes an unreferenced profile after its binding moved', async () => {
-    const rebound: WorkbenchConfigurationV3 = {
-      ...v3Configuration,
+    const rebound: WorkbenchConfigurationV1 = {
+      ...v1Configuration,
       projects: [
         {
           projectId: 'project-a',
@@ -549,11 +563,11 @@ describe('admin V3 configuration domains', () => {
         },
       ],
       providers: {
-        ...v3Configuration.providers,
+        ...v1Configuration.providers,
         fast: { kind: 'ai-sdk', baseUrl: null, model: null },
       },
     };
-    const h = createV3Harness({ configuration: rebound, configuredProfiles: ['fast'] });
+    const h = createConfigHarness({ configuration: rebound, configuredProfiles: ['fast'] });
     const response = await h.server.app.request('/api/v1/admin/providers/default', {
       method: 'DELETE',
       headers: { host: '127.0.0.1' },
@@ -566,13 +580,13 @@ describe('admin V3 configuration domains', () => {
       removed: true,
       receipt: expect.objectContaining({ status: 'restart-required' }),
     });
-    const candidate = h.appliedCandidates[0] as WorkbenchConfigurationV3;
+    const candidate = h.appliedCandidates[0] as WorkbenchConfigurationV1;
     expect(candidate.providers.default).toBeUndefined();
     expect(h.credentials.remove).toHaveBeenCalledWith('ai-sdk:default');
   });
 
   it('stores a profile credential one-way and never echoes the key', async () => {
-    const h = createV3Harness({});
+    const h = createConfigHarness({});
     const response = await h.server.app.request('/api/v1/admin/providers/fast/credential', {
       method: 'POST',
       headers: { host: '127.0.0.1', 'content-type': 'application/json' },
@@ -590,7 +604,7 @@ describe('admin V3 configuration domains', () => {
   });
 
   it('clears and tests a provider profile credential without echoing it', async () => {
-    const h = createV3Harness({ configuredProfiles: ['default'] });
+    const h = createConfigHarness({ configuredProfiles: ['default'] });
     const clear = await h.server.app.request('/api/v1/admin/providers/default/credential', {
       method: 'DELETE',
       headers: { host: '127.0.0.1' },
@@ -634,7 +648,7 @@ describe('admin V3 configuration domains', () => {
     ];
 
     it('serves the Host-discovered plugin identities per project (no paths or code)', async () => {
-      const h = createV3Harness({ discoveredPlugins: discovered });
+      const h = createConfigHarness({ discoveredPlugins: discovered });
       const response = await h.server.app.request('/api/v1/admin/plugins/discovered/project-a', {
         headers: { host: '127.0.0.1' },
       });
@@ -646,7 +660,7 @@ describe('admin V3 configuration domains', () => {
     });
 
     it('returns PROJECT_NOT_FOUND when the discovery port is absent', async () => {
-      const h = createV3Harness({});
+      const h = createConfigHarness({});
       const response = await h.server.app.request('/api/v1/admin/plugins/discovered/project-a', {
         headers: { host: '127.0.0.1' },
       });
@@ -660,7 +674,7 @@ describe('admin V3 configuration domains', () => {
     });
 
     it('returns PROJECT_NOT_FOUND for an unregistered project', async () => {
-      const h = createV3Harness({ discoveredPlugins: discovered });
+      const h = createConfigHarness({ discoveredPlugins: discovered });
       const response = await h.server.app.request('/api/v1/admin/plugins/discovered/ghost', {
         headers: { host: '127.0.0.1' },
       });
@@ -671,7 +685,7 @@ describe('admin V3 configuration domains', () => {
     });
 
     it('applies trustedPlugins whose name/version/moduleHash exactly match a discovered plugin', async () => {
-      const h = createV3Harness({ discoveredPlugins: discovered });
+      const h = createConfigHarness({ discoveredPlugins: discovered });
       const response = await h.server.app.request('/api/v1/admin/config/advanced', {
         method: 'PUT',
         headers: { host: '127.0.0.1', 'content-type': 'application/json' },
@@ -689,7 +703,7 @@ describe('admin V3 configuration domains', () => {
       });
       expect(response.status).toBe(200);
       expect(h.configurationService.apply).toHaveBeenCalledTimes(1);
-      const candidate = h.appliedCandidates[0] as WorkbenchConfigurationV3;
+      const candidate = h.appliedCandidates[0] as WorkbenchConfigurationV1;
       expect(candidate.projects[0]?.trustedPlugins[0]).toEqual({
         name: 'arc',
         version: '1.0.0',
@@ -699,7 +713,7 @@ describe('admin V3 configuration domains', () => {
     });
 
     it('rejects a trustedPlugins apply whose entry is not Host-discovered', async () => {
-      const h = createV3Harness({ discoveredPlugins: discovered });
+      const h = createConfigHarness({ discoveredPlugins: discovered });
       const response = await h.server.app.request('/api/v1/admin/config/advanced', {
         method: 'PUT',
         headers: { host: '127.0.0.1', 'content-type': 'application/json' },
@@ -727,7 +741,7 @@ describe('admin V3 configuration domains', () => {
     });
 
     it('rejects a discovered-name entry whose version does not match', async () => {
-      const h = createV3Harness({ discoveredPlugins: discovered });
+      const h = createConfigHarness({ discoveredPlugins: discovered });
       const response = await h.server.app.request('/api/v1/admin/config/advanced', {
         method: 'PUT',
         headers: { host: '127.0.0.1', 'content-type': 'application/json' },
@@ -755,7 +769,7 @@ describe('admin V3 configuration domains', () => {
     });
 
     it('previews reject non-discovered entries without applying', async () => {
-      const h = createV3Harness({ discoveredPlugins: discovered });
+      const h = createConfigHarness({ discoveredPlugins: discovered });
       const response = await h.server.app.request('/api/v1/admin/config/preview', {
         method: 'POST',
         headers: { host: '127.0.0.1', 'content-type': 'application/json' },
@@ -785,7 +799,7 @@ describe('admin V3 configuration domains', () => {
     it('accepts a discovered plugin whose module is missing from disk only after it is removed', async () => {
       // A discovered entry with a null moduleHash can never match; clearing the
       // allowlist to an empty array is still allowed.
-      const h = createV3Harness({ discoveredPlugins: [{ ...discovered[0]!, moduleHash: null }] });
+      const h = createConfigHarness({ discoveredPlugins: [{ ...discovered[0]!, moduleHash: null }] });
       const rejected = await h.server.app.request('/api/v1/admin/config/advanced', {
         method: 'PUT',
         headers: { host: '127.0.0.1', 'content-type': 'application/json' },

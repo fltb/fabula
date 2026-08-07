@@ -43,72 +43,32 @@ export const PROJECT_ACCESS_ROLE_GRANTS = {
   Record<ProjectAccessRole, { readonly rank: number; readonly scopes: readonly string[] }>
 >;
 
-/** Canonical Host configuration additions introduced by the V2/V3 source contracts. */
+/** Canonical Workbench configuration contracts, re-exported from the protocol package. */
+import type {
+  WorkbenchConfigurationV1,
+  WorkbenchConfigurationVersion,
+} from '@novalistically/workbench-protocol';
 export type {
-  WorkbenchAgentConfigurationV3,
-  WorkbenchConfigurationInput,
-  WorkbenchConfigurationV2,
-  WorkbenchConfigurationV3,
-  WorkbenchOperationLimitsV3,
-  WorkbenchProjectConfigurationV2,
-  WorkbenchProjectConfigurationV3,
-  WorkbenchReferenceLimitsV2,
-  WorkbenchRevisionMirrorConfigurationV2,
-  WorkbenchTrustedPluginConfigurationV3,
+  WorkbenchAgentConfigurationV1,
+  WorkbenchConfigurationV1,
+  WorkbenchConfigurationVersion,
+  WorkbenchNetworkConfigurationV1,
+  WorkbenchOperationLimitsV1,
+  WorkbenchProjectConfigurationV1,
+  WorkbenchProviderConfigurationV1,
+  WorkbenchReferenceLimitsV1,
+  WorkbenchRenderPolicyV1,
+  WorkbenchRevisionMirrorConfigurationV1,
+  WorkbenchTrustedPluginConfigurationV1,
 } from '@novalistically/workbench-protocol';
 export {
-  DEFAULT_WORKBENCH_AGENT_CONFIGURATION_V3,
-  DEFAULT_WORKBENCH_OPERATION_LIMITS_V3,
-  DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
-  normalizeWorkbenchConfiguration,
-  WORKBENCH_CONFIGURATION_VERSION_V2,
-  WORKBENCH_CONFIGURATION_VERSION_V3,
+  DEFAULT_WORKBENCH_AGENT_CONFIGURATION,
+  DEFAULT_WORKBENCH_NETWORK,
+  DEFAULT_WORKBENCH_OPERATION_LIMITS,
+  DEFAULT_WORKBENCH_REFERENCE_LIMITS,
+  DEFAULT_WORKBENCH_RENDER_POLICY,
+  WORKBENCH_CONFIGURATION_VERSION,
 } from '@novalistically/workbench-protocol';
-
-/** Version of the Workbench configuration contract. */
-export const WORKBENCH_CONFIGURATION_VERSION = 1 as const;
-export type WorkbenchConfigurationVersion = typeof WORKBENCH_CONFIGURATION_VERSION;
-
-// ─── Host-only configuration source of truth ────────────────────────────────
-
-/** One registered project in the versioned configuration. Host-only: `root` is a filesystem path. */
-export interface WorkbenchProjectConfigurationV1 {
-  readonly projectId: string;
-  readonly displayName: string;
-  /** Absolute project root on the Host filesystem. Never crosses the browser boundary. */
-  readonly root: string;
-}
-
-/** Provider endpoint/model configuration. Never carries an API key. */
-export interface WorkbenchProviderConfigurationV1 {
-  readonly kind: 'ai-sdk';
-  readonly baseUrl: string | null;
-  readonly model: string | null;
-}
-
-/** HTTP listener policy of the Host. Host-only: `unixSocket` is a filesystem path. */
-export interface WorkbenchNetworkConfigurationV1 {
-  readonly mode: 'loopback' | 'lan' | 'unix';
-  readonly port: number;
-  readonly allowedHosts: readonly string[];
-  readonly allowedOrigins: readonly string[];
-  /** Absolute unix socket path when `mode` is `unix`; Host-only. */
-  readonly unixSocket: string | null;
-}
-
-/**
- * The validated, secret-free Host configuration — the exact wire shape from
- * the Workbench plan. Host-only: `projects[].root` and `network.unixSocket`
- * are filesystem paths and this DTO is never re-exported through the browser
- * contract barrel.
- */
-export interface WorkbenchConfigurationV1 {
-  readonly version: 1;
-  readonly projects: readonly WorkbenchProjectConfigurationV1[];
-  readonly defaultProjectId: string | null;
-  readonly provider: WorkbenchProviderConfigurationV1 | null;
-  readonly network: WorkbenchNetworkConfigurationV1;
-}
 
 /** Origin of a configuration change, recorded in receipts and audit. */
 export type ConfigChangeOriginV1 = 'setup' | 'dashboard' | 'mcp' | 'filesystem' | 'dotenv-import';

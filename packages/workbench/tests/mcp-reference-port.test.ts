@@ -3,7 +3,7 @@ import { promises as fs } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import {
-  DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
+  DEFAULT_WORKBENCH_REFERENCE_LIMITS,
   type McpReferencePort,
   REFERENCE_MCP_LIMITS_V1,
 } from '@novalistically/workbench-protocol';
@@ -24,7 +24,7 @@ async function fixture(): Promise<{
   const jobsRoot = await fs.mkdtemp(path.join(tmpdir(), 'workbench-reference-jobs-'));
   roots.push(projectRoot, jobsRoot);
   const referenceLimits = {
-    ...DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
+    ...DEFAULT_WORKBENCH_REFERENCE_LIMITS,
     maxFileBytes: 1024,
     maxBytesPerProject: 4096,
     maxItemsPerProject: 8,
@@ -156,7 +156,7 @@ describe('Workbench Host reference MCP port', () => {
       projectId: 'project-a',
       projectRoot,
       jobsRoot,
-      referenceLimits: DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
+      referenceLimits: DEFAULT_WORKBENCH_REFERENCE_LIMITS,
     });
     await importBytes(
       port,
@@ -185,7 +185,7 @@ describe('Workbench Host reference MCP port', () => {
       projectRoot,
       jobsRoot,
       referenceLimits: {
-        ...DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
+        ...DEFAULT_WORKBENCH_REFERENCE_LIMITS,
         maxFileBytes: 1024,
         maxBytesPerProject: 4096,
         maxItemsPerProject: 8,
@@ -304,7 +304,7 @@ describe('Workbench Host reference MCP port', () => {
       projectRoot,
       jobsRoot,
       referenceLimits: {
-        ...DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
+        ...DEFAULT_WORKBENCH_REFERENCE_LIMITS,
         maxFileBytes: 1024,
         maxBytesPerProject: 4096,
         maxItemsPerProject: 8,
@@ -341,7 +341,7 @@ describe('Workbench Host reference MCP port', () => {
       projectId: 'project-a',
       projectRoot,
       jobsRoot,
-      referenceLimits: { ...DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2, enabled: false },
+      referenceLimits: { ...DEFAULT_WORKBENCH_REFERENCE_LIMITS, enabled: false },
     });
     await expect(port.jobGet({ version: 1, jobId: 'job' })).rejects.toThrow(/disabled/);
     await expect(

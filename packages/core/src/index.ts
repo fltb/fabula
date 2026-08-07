@@ -21,6 +21,13 @@ export {
 export { compareFact, resolveTemporalContext } from './entity/index.js';
 export { NovalisticallyError, sanitizeError } from './errors.js';
 
+// ── Sampling configuration ───────────────────────────────────────────────────
+
+/** Single Pass 2 sampling config — the ONE source of truth for provider
+ * requests and `samplingConfigHash`. Exported from the root so cross-package
+ * drift tests can pin workbench-protocol's render policy to it (Stage 1.10). */
+export { PASS2_SAMPLING_CONFIG } from './pipeline/index.ts';
+
 // ── Source / domain ──────────────────────────────────────────────────────────
 
 export type {

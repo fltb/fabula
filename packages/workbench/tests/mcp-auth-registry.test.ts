@@ -18,7 +18,14 @@ import type {
   RenderNovelResult,
 } from '@novalistically/core/editorial';
 import { buildSourceSnapshot, computeSourceDocumentHash } from '@novalistically/core/source';
-import { MCP_TOOL_CATALOG_V1, type McpReferencePort } from '@novalistically/workbench-protocol';
+import {
+  DEFAULT_WORKBENCH_AGENT_CONFIGURATION,
+  DEFAULT_WORKBENCH_OPERATION_LIMITS,
+  DEFAULT_WORKBENCH_REFERENCE_LIMITS,
+  DEFAULT_WORKBENCH_RENDER_POLICY,
+  MCP_TOOL_CATALOG_V1,
+  type McpReferencePort,
+} from '@novalistically/workbench-protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   AuthoringStateV1,
@@ -482,6 +489,45 @@ const FAKE_CONFIG_REQUEST = {
       allowedOrigins: [],
       unixSocket: null,
     },
+  },
+};
+
+/**
+ * The MCP admin wire envelope keeps its legacy shape — 3-field projects, a
+ * single `provider` key, network only — and the Host normalizes it to the
+ * canonical `WorkbenchConfigurationV1` (full projects, `providers` map,
+ * render policy and quota defaults) before the request reaches the admin
+ * port. This is the exact request the port must observe for
+ * {@link FAKE_CONFIG_REQUEST}.
+ */
+const EXPECTED_CANONICAL_CONFIG_REQUEST = {
+  version: 1,
+  expectedRevision: 'rev-1',
+  configuration: {
+    version: 1,
+    projects: [
+      {
+        projectId: 'p1',
+        displayName: 'Project One',
+        root: '/srv/p1',
+        revisionMirror: { mode: 'disabled' },
+        providerProfile: 'default',
+        trustedPlugins: [],
+      },
+    ],
+    defaultProjectId: 'p1',
+    providers: { default: { kind: 'ai-sdk', baseUrl: null, model: null } },
+    network: {
+      mode: 'loopback',
+      port: 8787,
+      allowedHosts: [],
+      allowedOrigins: [],
+      unixSocket: null,
+    },
+    referenceLimits: { ...DEFAULT_WORKBENCH_REFERENCE_LIMITS },
+    operationLimits: { ...DEFAULT_WORKBENCH_OPERATION_LIMITS },
+    agent: { ...DEFAULT_WORKBENCH_AGENT_CONFIGURATION },
+    renderPolicy: { ...DEFAULT_WORKBENCH_RENDER_POLICY },
   },
 };
 
@@ -2710,7 +2756,7 @@ describe('createProjectSessionMcpRegistry', () => {
     expect(apply.data).toMatchObject({ status: 'restart-required' });
 
     expect(seen).toHaveLength(2);
-    expect(seen[0]).toEqual({ surface: 'preview', input: FAKE_CONFIG_REQUEST });
+    expect(seen[0]).toEqual({ surface: 'preview', input: EXPECTED_CANONICAL_CONFIG_REQUEST });
     expect(seen[1]).toMatchObject({ surface: 'apply' });
   });
   it('advertises provider null in the admin config schema and accepts that valid envelope', async () => {

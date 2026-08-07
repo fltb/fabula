@@ -3,13 +3,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
+  DEFAULT_WORKBENCH_AGENT_CONFIGURATION,
+  DEFAULT_WORKBENCH_OPERATION_LIMITS,
+  DEFAULT_WORKBENCH_REFERENCE_LIMITS,
+  DEFAULT_WORKBENCH_RENDER_POLICY,
   type WorkbenchConfigurationV1,
-  type WorkbenchConfigurationV3,
 } from '../src/contracts/configuration.js';
 import {
   ConfigurationFileStore,
-  normalizeWorkbenchConfiguration,
   serializeConfigurationYaml,
 } from '../src/host/configuration-file-store.js';
 import {
@@ -34,26 +35,6 @@ function baseConfiguration(
 ): WorkbenchConfigurationV1 {
   return {
     version: 1,
-    projects: [{ projectId: 'demo', displayName: 'Demo', root }],
-    defaultProjectId: 'demo',
-    provider: null,
-    network: {
-      mode: 'loopback',
-      port: 8787,
-      allowedHosts: [],
-      allowedOrigins: [],
-      unixSocket: null,
-    },
-    ...overrides,
-  };
-}
-
-function baseConfigurationV3(
-  root: string,
-  overrides: Partial<WorkbenchConfigurationV3> = {},
-): WorkbenchConfigurationV3 {
-  return {
-    version: 3,
     projects: [
       {
         projectId: 'demo',
@@ -73,13 +54,10 @@ function baseConfigurationV3(
       allowedOrigins: [],
       unixSocket: null,
     },
-    referenceLimits: { ...DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2 },
-    operationLimits: {
-      maxQueuedPerProject: 8,
-      maxConcurrentRendersPerProject: 1,
-      maxConcurrentRendersPerHost: 2,
-    },
-    agent: { enabled: false, maxTurns: 8, maxToolCalls: 24 },
+    referenceLimits: { ...DEFAULT_WORKBENCH_REFERENCE_LIMITS },
+    operationLimits: { ...DEFAULT_WORKBENCH_OPERATION_LIMITS },
+    agent: { ...DEFAULT_WORKBENCH_AGENT_CONFIGURATION },
+    renderPolicy: { ...DEFAULT_WORKBENCH_RENDER_POLICY },
     ...overrides,
   };
 }
@@ -105,7 +83,14 @@ describe('computeChangedFields / requiresRestart', () => {
     const next = baseConfiguration(root, {
       projects: [
         ...baseConfiguration(root).projects,
-        { projectId: 'second', displayName: 'Second', root: '/tmp/y' },
+        {
+          projectId: 'second',
+          displayName: 'Second',
+          root: '/tmp/y',
+          revisionMirror: { mode: 'disabled' },
+          providerProfile: 'default',
+          trustedPlugins: [],
+        },
       ],
       network: { mode: 'lan', port: 8787, allowedHosts: [], allowedOrigins: [], unixSocket: null },
     });
@@ -115,21 +100,23 @@ describe('computeChangedFields / requiresRestart', () => {
     expect(requiresRestart(computeChangedFields(current, baseConfiguration(root)))).toBe(false);
   });
 
-  it('normalizes legacy provider edits to the default profile path', () => {
+  it('reports provider profile edits on the default profile path', () => {
     const root = '/tmp/x';
     const current = baseConfiguration(root);
     const next = baseConfiguration(root, {
-      provider: { kind: 'ai-sdk', baseUrl: 'https://api.example.com', model: 'm' },
+      providers: {
+        default: { kind: 'ai-sdk', baseUrl: 'https://api.example.com', model: 'm' },
+      },
     });
     const fields = computeChangedFields(current, next);
     expect(fields).toEqual(['providers.default']);
     expect(requiresRestart(fields)).toBe(true);
   });
 
-  it('reports every V3 domain change with stable paths', () => {
+  it('reports every configuration domain change with stable paths', () => {
     const root = '/tmp/x';
-    const current = baseConfigurationV3(root);
-    const next = baseConfigurationV3(root, {
+    const current = baseConfiguration(root);
+    const next = baseConfiguration(root, {
       providers: {
         default: { kind: 'ai-sdk', baseUrl: 'https://api.example.com', model: 'm-1' },
       },
@@ -168,7 +155,7 @@ describe('computeChangedFields / requiresRestart', () => {
 
   it('ignores an unchanged trusted plugin allowlist', () => {
     const root = '/tmp/x';
-    const current = baseConfigurationV3(root, {
+    const current = baseConfiguration(root, {
       projects: [
         {
           projectId: 'demo',
@@ -183,7 +170,7 @@ describe('computeChangedFields / requiresRestart', () => {
     expect(computeChangedFields(current, current)).toEqual([]);
   });
 
-  it('requires restart for every V3 domain field', () => {
+  it('requires restart for every configuration domain field', () => {
     expect(requiresRestart(['providers.default.baseUrl'])).toBe(true);
     expect(requiresRestart(['projects.demo.providerProfile'])).toBe(true);
     expect(requiresRestart(['projects.demo.trustedPlugins'])).toBe(true);
@@ -210,11 +197,11 @@ describe('ConfigurationChangeService apply', () => {
     ]);
     expect(receipt.diagnostics).toEqual([]);
     expect(await service.readActive()).toEqual({
-      configuration: normalizeWorkbenchConfiguration(candidate),
+      configuration: candidate,
       revision: receipt.activeRevision,
     });
     const active = await service.readActive();
-    expect(active?.configuration.version).toBe(3);
+    expect(active?.configuration.version).toBe(1);
     expect(active?.configuration.projects[0]?.revisionMirror).toEqual({ mode: 'disabled' });
     expect(active?.configuration.referenceLimits.enabled).toBe(true);
   });
@@ -262,7 +249,7 @@ describe('ConfigurationChangeService apply', () => {
     });
     const winning = baseConfiguration(await projectRoot(), { defaultProjectId: null });
     const losing = baseConfiguration(await projectRoot(), {
-      provider: { kind: 'ai-sdk', baseUrl: null, model: null },
+      providers: { default: { kind: 'ai-sdk', baseUrl: null, model: null } },
     });
 
     // Deterministically pause the first apply inside its validation step, then
@@ -333,8 +320,22 @@ describe('ConfigurationChangeService apply', () => {
     await service.apply({
       candidate: baseConfiguration(await projectRoot(), {
         projects: [
-          { projectId: 'demo', displayName: 'Demo', root: await projectRoot() },
-          { projectId: 'other', displayName: 'Other', root: await projectRoot('other') },
+          {
+            projectId: 'demo',
+            displayName: 'Demo',
+            root: await projectRoot(),
+            revisionMirror: { mode: 'disabled' },
+            providerProfile: 'default',
+            trustedPlugins: [],
+          },
+          {
+            projectId: 'other',
+            displayName: 'Other',
+            root: await projectRoot('other'),
+            revisionMirror: { mode: 'disabled' },
+            providerProfile: 'default',
+            trustedPlugins: [],
+          },
         ],
         defaultProjectId: 'demo',
       }),
@@ -390,7 +391,9 @@ describe('ConfigurationChangeService apply', () => {
     });
     const receipt = await service.apply({
       candidate: baseConfiguration(root, {
-        provider: { kind: 'ai-sdk', baseUrl: 'https://api.example.com', model: 'm' },
+        providers: {
+          default: { kind: 'ai-sdk', baseUrl: 'https://api.example.com', model: 'm' },
+        },
       }),
       expectedRevision: first.activeRevision,
       origin: 'dashboard',
@@ -399,10 +402,10 @@ describe('ConfigurationChangeService apply', () => {
     expect(receipt.changedFields).toEqual(['providers.default']);
   });
 
-  it('applies a V3 configuration with all new domains under the revision CAS', async () => {
+  it('applies a full configuration with all domains under the revision CAS', async () => {
     const { service } = await harness();
     const root = await projectRoot();
-    const candidate = baseConfigurationV3(root, {
+    const candidate = baseConfiguration(root, {
       providers: {
         default: { kind: 'ai-sdk', baseUrl: 'https://api.example.com', model: 'm-1' },
       },
@@ -435,7 +438,7 @@ describe('ConfigurationChangeService apply', () => {
       'agent',
     ]);
     const active = await service.readActive();
-    expect(active?.configuration.version).toBe(3);
+    expect(active?.configuration.version).toBe(1);
     expect(active?.configuration.providers.default).toEqual({
       kind: 'ai-sdk',
       baseUrl: 'https://api.example.com',
@@ -450,16 +453,16 @@ describe('ConfigurationChangeService apply', () => {
     expect(active?.configuration.agent).toEqual({ enabled: true, maxTurns: 16, maxToolCalls: 48 });
   });
 
-  it('rejects a stale V3-domain apply and keeps the file untouched', async () => {
+  it('rejects a stale apply and keeps the file untouched', async () => {
     const { service } = await harness();
     const root = await projectRoot();
     const first = await service.apply({
-      candidate: baseConfigurationV3(root),
+      candidate: baseConfiguration(root),
       expectedRevision: null,
       origin: 'setup',
     });
     const receipt = await service.apply({
-      candidate: baseConfigurationV3(root, {
+      candidate: baseConfiguration(root, {
         agent: { enabled: true, maxTurns: 8, maxToolCalls: 24 },
       }),
       expectedRevision: 'stale-revision',
@@ -471,17 +474,17 @@ describe('ConfigurationChangeService apply', () => {
     expect(first.activeRevision).toBe((await service.readActive())?.revision);
   });
 
-  it('reports restart-required for an agent-only change on a V3 configuration', async () => {
+  it('reports restart-required for an agent-only change on a configuration', async () => {
     const { service } = await harness();
     const root = await projectRoot();
     const first = await service.apply({
-      candidate: baseConfigurationV3(root),
+      candidate: baseConfiguration(root),
       expectedRevision: null,
       origin: 'setup',
     });
     const receipt = await service.apply({
-      candidate: baseConfigurationV3(root, {
-        agent: { enabled: true, maxTurns: 8, maxToolCalls: 24 },
+      candidate: baseConfiguration(root, {
+        agent: { ...DEFAULT_WORKBENCH_AGENT_CONFIGURATION, enabled: true },
       }),
       expectedRevision: first.activeRevision,
       origin: 'dashboard',
@@ -490,16 +493,16 @@ describe('ConfigurationChangeService apply', () => {
     expect(receipt.changedFields).toEqual(['agent.enabled']);
   });
 
-  it('reports operation limit and profile binding changes on a V3 configuration', async () => {
+  it('reports operation limit and profile binding changes on a configuration', async () => {
     const { service } = await harness();
     const root = await projectRoot();
     const first = await service.apply({
-      candidate: baseConfigurationV3(root),
+      candidate: baseConfiguration(root),
       expectedRevision: null,
       origin: 'setup',
     });
     const receipt = await service.apply({
-      candidate: baseConfigurationV3(root, {
+      candidate: baseConfiguration(root, {
         projects: [
           {
             projectId: 'demo',
@@ -530,7 +533,7 @@ describe('ConfigurationChangeService apply', () => {
     const { service } = await harness();
     const root = await projectRoot();
     await service.apply({
-      candidate: baseConfigurationV3(root),
+      candidate: baseConfiguration(root),
       expectedRevision: null,
       origin: 'setup',
     });
@@ -544,7 +547,7 @@ describe('ConfigurationChangeService apply', () => {
     ];
     for (const entry of cases) {
       const receipt = await service.apply({
-        candidate: baseConfigurationV3(root, {
+        candidate: baseConfiguration(root, {
           projects: [
             {
               projectId: 'demo',
@@ -577,7 +580,14 @@ describe('ConfigurationChangeService watcher path', () => {
     const edited = baseConfiguration(root, {
       projects: [
         ...baseConfiguration(root).projects,
-        { projectId: 'second', displayName: 'Second', root: await projectRoot('second') },
+        {
+          projectId: 'second',
+          displayName: 'Second',
+          root: await projectRoot('second'),
+          revisionMirror: { mode: 'disabled' },
+          providerProfile: 'default',
+          trustedPlugins: [],
+        },
       ],
     });
     await writeFile(store.filePath, serializeConfigurationYaml(edited), 'utf8');
@@ -606,8 +616,8 @@ describe('ConfigurationChangeService watcher path', () => {
     expect(receiptDefault?.status).toBe('invalid');
     expect(receiptDefault?.diagnostics.map((d) => d.code)).toContain('CONFIG_INVALID');
 
-    // A hand-edited document missing required V3 fields is rejected and preserved.
-    const missingFields = 'version: 3\nprojects: []\n';
+    // A hand-edited document missing required V1 fields is rejected and preserved.
+    const missingFields = 'version: 1\nprojects: []\n';
     await writeFile(store.filePath, missingFields, 'utf8');
     const receiptMissing = await service.observeExternalChange();
     expect(receiptMissing).not.toBeNull();

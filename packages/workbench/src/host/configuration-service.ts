@@ -24,14 +24,12 @@ import type {
   ConfigChangeOriginV1,
   ConfigOperationDiagnosticV1,
   ConfigOperationReceiptV1,
-  WorkbenchConfigurationInput,
-  WorkbenchConfigurationV3,
-  WorkbenchTrustedPluginConfigurationV3,
+  WorkbenchConfigurationV1,
+  WorkbenchTrustedPluginConfigurationV1,
 } from '../contracts/configuration.js';
 import {
   type ConfigurationFileStore,
   configurationRevision,
-  normalizeWorkbenchConfiguration,
   parseConfigurationYaml,
   validateConfigurationShape,
   validateConfigurationTopology,
@@ -69,7 +67,7 @@ export interface ConfigurationServiceOptions {
 }
 
 export interface ActiveConfiguration {
-  readonly configuration: WorkbenchConfigurationV3;
+  readonly configuration: WorkbenchConfigurationV1;
   readonly revision: string;
 }
 
@@ -81,7 +79,7 @@ export type ConfigurationCandidateResult =
     };
 
 export interface ConfigurationApplyInput {
-  readonly candidate: WorkbenchConfigurationInput;
+  readonly candidate: WorkbenchConfigurationV1;
   readonly expectedRevision: string | null;
   readonly origin: ConfigChangeOriginV1;
   /** Authenticated actor id when the change has one (dashboard/MCP/setup owner). */
@@ -96,8 +94,8 @@ function arraysEqual(a: readonly string[], b: readonly string[]): boolean {
 
 /** Stable allowlist equality: entries compare positionally by identity fields. */
 function trustedPluginsEqual(
-  a: readonly WorkbenchTrustedPluginConfigurationV3[],
-  b: readonly WorkbenchTrustedPluginConfigurationV3[],
+  a: readonly WorkbenchTrustedPluginConfigurationV1[],
+  b: readonly WorkbenchTrustedPluginConfigurationV1[],
 ): boolean {
   return (
     a.length === b.length &&
@@ -115,15 +113,15 @@ function trustedPluginsEqual(
 }
 
 /**
- * Stable ordered changed-field paths between two configurations. Legacy V1/V2
- * inputs are normalized to the canonical V3 shape first, so a legacy `provider`
- * change reports `providers.default` and every V3 domain (provider profiles,
- * project profile binding, trusted plugin allowlists, operation limits and
- * agent settings) is compared with the same semantics as the persisted file.
+ * Stable ordered changed-field paths between two configurations. Both sides
+ * are the canonical V1 shape, so every domain (provider profiles, project
+ * profile binding, trusted plugin allowlists, operation limits, agent
+ * settings and render policy) is compared with the same semantics as the
+ * persisted file.
  */
 export function computeChangedFields(
-  previous: WorkbenchConfigurationInput | null,
-  next: WorkbenchConfigurationInput,
+  previous: WorkbenchConfigurationV1 | null,
+  next: WorkbenchConfigurationV1,
 ): readonly string[] {
   if (previous === null) {
     return [
@@ -136,8 +134,8 @@ export function computeChangedFields(
       'agent',
     ];
   }
-  const before = normalizeWorkbenchConfiguration(previous);
-  const after = normalizeWorkbenchConfiguration(next);
+  const before = previous;
+  const after = next;
   const changed: string[] = [];
   const previousIds = new Set(before.projects.map((project) => project.projectId));
   const nextIds = new Set(after.projects.map((project) => project.projectId));
@@ -211,24 +209,37 @@ export function computeChangedFields(
   if (before.agent.enabled !== after.agent.enabled) changed.push('agent.enabled');
   if (before.agent.maxTurns !== after.agent.maxTurns) changed.push('agent.maxTurns');
   if (before.agent.maxToolCalls !== after.agent.maxToolCalls) changed.push('agent.maxToolCalls');
+  if (before.renderPolicy.pass1.temperature !== after.renderPolicy.pass1.temperature) {
+    changed.push('renderPolicy.pass1.temperature');
+  }
+  if (before.renderPolicy.pass1.maxTokens !== after.renderPolicy.pass1.maxTokens) {
+    changed.push('renderPolicy.pass1.maxTokens');
+  }
+  if (before.renderPolicy.pass2.temperature !== after.renderPolicy.pass2.temperature) {
+    changed.push('renderPolicy.pass2.temperature');
+  }
+  if (before.renderPolicy.pass2.maxTokens !== after.renderPolicy.pass2.maxTokens) {
+    changed.push('renderPolicy.pass2.maxTokens');
+  }
+  if (before.renderPolicy.pass2.seed !== after.renderPolicy.pass2.seed) {
+    changed.push('renderPolicy.pass2.seed');
+  }
   return changed;
 }
 
 /**
  * The running Host captures listener policy, provider profiles, project
  * roots, per-project provider bindings, trusted plugin allowlists, operation
- * limits and agent settings at startup. Any change to those fields is
- * persisted but requires a controlled restart; continuing with a partial live
- * rebuild would split Browser, Yjs, MCP, Agent and controlled-Git state
- * across generations.
+ * limits, agent settings and render policy at startup. Any change to those
+ * fields is persisted but requires a controlled restart; continuing with a
+ * partial live rebuild would split Browser, Yjs, MCP, Agent and
+ * controlled-Git state across generations.
  */
 export function requiresRestart(changedFields: readonly string[]): boolean {
   return changedFields.some(
     (field) =>
       field === NETWORK_PREFIX ||
       field.startsWith(`${NETWORK_PREFIX}.`) ||
-      field === 'provider' ||
-      field.startsWith('provider.') ||
       field === 'providers' ||
       field.startsWith('providers.') ||
       field === 'projects' ||
@@ -237,7 +248,9 @@ export function requiresRestart(changedFields: readonly string[]): boolean {
       field === 'operationLimits' ||
       field.startsWith('operationLimits.') ||
       field === 'agent' ||
-      field.startsWith('agent.'),
+      field.startsWith('agent.') ||
+      field === 'renderPolicy' ||
+      field.startsWith('renderPolicy.'),
   );
 }
 
@@ -293,7 +306,7 @@ export class ConfigurationChangeService {
    * wizard's per-step validation and by admin project validation.
    */
   async validateCandidate(
-    candidate: WorkbenchConfigurationInput,
+    candidate: WorkbenchConfigurationV1,
   ): Promise<ConfigurationCandidateResult> {
     const shaped = validateConfigurationShape(candidate);
     if (!shaped.ok) return { ok: false, diagnostics: shaped.diagnostics };
@@ -419,11 +432,11 @@ export class ConfigurationChangeService {
       );
     }
 
-    const normalizedCandidate = normalizeWorkbenchConfiguration(input.candidate);
-    const changedFields = computeChangedFields(current?.configuration ?? null, normalizedCandidate);
+    const candidate = input.candidate;
+    const changedFields = computeChangedFields(current?.configuration ?? null, candidate);
     const status = requiresRestart(changedFields) ? 'restart-required' : 'applied';
-    const writtenRevision = await this.#store.write(normalizedCandidate);
-    this.#lastActive = { configuration: normalizedCandidate, revision: writtenRevision };
+    const writtenRevision = await this.#store.write(candidate);
+    this.#lastActive = { configuration: candidate, revision: writtenRevision };
     return this.#receipt(
       status,
       writtenRevision,
@@ -479,7 +492,7 @@ export class ConfigurationChangeService {
         undefined,
       );
     }
-    const candidate = normalizeWorkbenchConfiguration(parsed.configuration);
+    const candidate = parsed.configuration;
     const candidateRevision = configurationRevision(candidate);
     const validated = await this.validateCandidate(candidate);
     if (!validated.ok) {

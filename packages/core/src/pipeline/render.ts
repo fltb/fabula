@@ -100,9 +100,11 @@ function isJsonObject(value: JsonValue): value is { readonly [key: string]: Json
 import { analyzeValidationErrors, decideRepairStrategy } from './reverse-validate.ts';
 
 /**
- * Single Pass 2 sampling configuration — the ONE source of truth for both
- * the provider request and `samplingConfigHash`. Never duplicate these
- * values inline in requests.
+ * Default Pass 2 sampling configuration — the source of defaults for both
+ * the provider request and `samplingConfigHash`. Per-pipeline overrides
+ * (RenderPipelineOptions pass2Temperature/pass2MaxTokens/pass2Seed) replace
+ * these values at construction; `samplingConfigHash` always covers the
+ * effective values.
  */
 export const PASS2_SAMPLING_CONFIG = {
   temperature: 0.3,
@@ -259,6 +261,16 @@ export interface RenderPipelineOptions {
   signal?: AbortSignal;
   concurrency?: number; // default 5
   maxTokens?: number; // default 10000
+  /** Pass 1 sampling temperature override (default 0.8). */
+  pass1Temperature?: number;
+  /** Pass 1 max tokens override (default 10000; legacy maxTokens also honored). */
+  pass1MaxTokens?: number;
+  /** Pass 2 sampling temperature override (default 0.3). */
+  pass2Temperature?: number;
+  /** Pass 2 max tokens override (default 12000). */
+  pass2MaxTokens?: number;
+  /** Pass 2 seed override (default 42). */
+  pass2Seed?: number;
   skipCache?: boolean; // force re-render
   referenceExample?: string; // optional "good" prose example for Pass 1
   aggregator?: ResultAggregator; // optional, for post-render validation
@@ -298,7 +310,11 @@ export interface RenderPipelineOptions {
 export class RenderPipeline {
   private readonly pool: ConcurrencyPool;
   private readonly skipCache: boolean;
-  private readonly maxTokens: number;
+  private readonly pass1Temperature: number;
+  private readonly pass1MaxTokens: number;
+  private readonly pass2Temperature: number;
+  private readonly pass2MaxTokens: number;
+  private readonly pass2Seed: number;
   private readonly model: string;
   private provider: LLMProvider | undefined;
   private readonly providerFactory?: ProviderFactory;
@@ -342,7 +358,11 @@ export class RenderPipeline {
     this.model = opts.model;
     this.renderCache = opts.runtimeServices.renderCache;
     this.skipCache = opts.skipCache ?? false;
-    this.maxTokens = opts.maxTokens ?? 10_000;
+    this.pass1Temperature = opts.pass1Temperature ?? 0.8;
+    this.pass1MaxTokens = opts.pass1MaxTokens ?? opts.maxTokens ?? 10_000;
+    this.pass2Temperature = opts.pass2Temperature ?? PASS2_SAMPLING_CONFIG.temperature;
+    this.pass2MaxTokens = opts.pass2MaxTokens ?? PASS2_SAMPLING_CONFIG.maxTokens;
+    this.pass2Seed = opts.pass2Seed ?? PASS2_SAMPLING_CONFIG.seed;
     this.referenceExample = opts.referenceExample;
     this.aggregator = opts.aggregator;
     this.entities = opts.entities;
@@ -420,7 +440,18 @@ export class RenderPipeline {
         sha256Canonical(Object.keys(analysisContentSchema.shape).sort()),
       model: this.model,
       provider: this.providerIdentity(),
-      samplingConfigHash: sha256Canonical(PASS2_SAMPLING_CONFIG),
+      samplingConfigHash: sha256Canonical({
+        pass1: {
+          temperature: this.pass1Temperature,
+          maxTokens: this.pass1MaxTokens,
+        },
+        pass2: {
+          temperature: this.pass2Temperature,
+          maxTokens: this.pass2MaxTokens,
+          seed: this.pass2Seed,
+        },
+        responseFormat: PASS2_SAMPLING_CONFIG.responseFormat,
+      }),
       validatorPolicy: this.validatorPolicyId,
       referencePolicy: PASS2_REFERENCE_POLICY_VERSION,
     };
@@ -829,8 +860,8 @@ export class RenderPipeline {
           const pass1Request: CompletionRequest = {
             messages: proseMessages,
             model: this.model,
-            temperature: 0.8,
-            maxTokens: this.maxTokens,
+            temperature: this.pass1Temperature,
+            maxTokens: this.pass1MaxTokens,
             taskType: 'pass1',
             signal: effectiveSignal,
           };
@@ -877,8 +908,8 @@ export class RenderPipeline {
           const pass1Hash = this.computeRequestHash({
             messages: proseMessages,
             model: this.model,
-            temperature: 0.8,
-            maxTokens: this.maxTokens,
+            temperature: this.pass1Temperature,
+            maxTokens: this.pass1MaxTokens,
             taskType: 'pass1',
           });
           requestRecords.push({
@@ -1003,9 +1034,9 @@ export class RenderPipeline {
           const pass2Request: CompletionRequest = {
             messages: lastAnalysisMessages,
             model: this.model,
-            temperature: PASS2_SAMPLING_CONFIG.temperature,
-            maxTokens: PASS2_SAMPLING_CONFIG.maxTokens,
-            seed: PASS2_SAMPLING_CONFIG.seed,
+            temperature: this.pass2Temperature,
+            maxTokens: this.pass2MaxTokens,
+            seed: this.pass2Seed,
             taskType: 'pass2',
             responseFormat: { ...PASS2_SAMPLING_CONFIG.responseFormat },
             signal: effectiveSignal,
@@ -1027,7 +1058,7 @@ export class RenderPipeline {
             outcome: 'success',
             requestHash: pass2Hash,
             model: this.model,
-            seed: 42,
+            seed: this.pass2Seed,
           });
 
           if (analysisRaw) {
@@ -1082,9 +1113,9 @@ export class RenderPipeline {
               const verifyRequest: CompletionRequest = {
                 messages: lastAnalysisMessages,
                 model: this.model,
-                temperature: PASS2_SAMPLING_CONFIG.temperature,
-                maxTokens: PASS2_SAMPLING_CONFIG.maxTokens,
-                seed: PASS2_SAMPLING_CONFIG.seed,
+                temperature: this.pass2Temperature,
+                maxTokens: this.pass2MaxTokens,
+                seed: this.pass2Seed,
                 taskType: 'pass2',
                 responseFormat: { ...PASS2_SAMPLING_CONFIG.responseFormat },
                 signal: effectiveSignal,
@@ -1097,7 +1128,7 @@ export class RenderPipeline {
                 outcome: 'success',
                 requestHash: verifyHash,
                 model: this.model,
-                seed: 42,
+                seed: this.pass2Seed,
               });
               const analysis2Raw = result2b.content;
               if (analysis2Raw) {
@@ -1125,7 +1156,7 @@ export class RenderPipeline {
                 failureReason: sanitizeError('Double-run non-fatal error'),
                 requestHash: verifyHash,
                 model: this.model,
-                seed: 42,
+                seed: this.pass2Seed,
               });
             }
           }
@@ -1158,9 +1189,9 @@ export class RenderPipeline {
         const failPass2Hash = this.computeRequestHash({
           messages: lastAnalysisMessages ?? [],
           model: this.model,
-          temperature: PASS2_SAMPLING_CONFIG.temperature,
-          maxTokens: PASS2_SAMPLING_CONFIG.maxTokens,
-          seed: PASS2_SAMPLING_CONFIG.seed,
+          temperature: this.pass2Temperature,
+          maxTokens: this.pass2MaxTokens,
+          seed: this.pass2Seed,
           taskType: 'pass2',
           responseFormat: { ...PASS2_SAMPLING_CONFIG.responseFormat },
         });
@@ -1171,7 +1202,7 @@ export class RenderPipeline {
           failureReason: sanitizeError(err),
           requestHash: failPass2Hash,
           model: this.model,
-          seed: 42,
+          seed: this.pass2Seed,
         });
         this.logger?.error(sanitizeError(err), { eventId, attempts, phase: 'pass2' });
       }

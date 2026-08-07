@@ -10,7 +10,7 @@ import type {
   ProjectAuthorityTokenV1,
   ProjectWriteCoordinator,
 } from '@novalistically/node-host';
-import type { WorkbenchRevisionMirrorConfigurationV2 } from '@novalistically/workbench-protocol';
+import type { WorkbenchRevisionMirrorConfigurationV1 } from '@novalistically/workbench-protocol';
 import type { SourceRevisionReceipt } from '../../contracts/persistence.js';
 import {
   createProjectOperationStore,
@@ -60,7 +60,7 @@ export interface CreateProjectAuthoringRuntimeOptions {
   readonly session: ProjectSession;
   readonly capabilities: AgentCapabilityService;
   readonly persistence: PersistenceWorkerClient;
-  readonly revisionMirror?: WorkbenchRevisionMirrorConfigurationV2;
+  readonly revisionMirror?: WorkbenchRevisionMirrorConfigurationV1;
   readonly yjsCore: YjsWorkingDocumentCore;
   readonly events: AuthoringEventPublisher;
   /**

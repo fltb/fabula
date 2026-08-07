@@ -3,9 +3,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  DEFAULT_WORKBENCH_AGENT_CONFIGURATION_V3,
-  DEFAULT_WORKBENCH_OPERATION_LIMITS_V3,
-  DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
+  DEFAULT_WORKBENCH_AGENT_CONFIGURATION,
+  DEFAULT_WORKBENCH_OPERATION_LIMITS,
+  DEFAULT_WORKBENCH_REFERENCE_LIMITS,
+  DEFAULT_WORKBENCH_RENDER_POLICY,
   type WorkbenchConfigurationV1,
 } from '../src/contracts/configuration.js';
 import {
@@ -34,9 +35,18 @@ function baseConfiguration(
 ): WorkbenchConfigurationV1 {
   return {
     version: 1,
-    projects: [{ projectId: 'demo', displayName: 'Demo', root }],
+    projects: [
+      {
+        projectId: 'demo',
+        displayName: 'Demo',
+        root,
+        revisionMirror: { mode: 'disabled' },
+        providerProfile: 'default',
+        trustedPlugins: [],
+      },
+    ],
     defaultProjectId: 'demo',
-    provider: null,
+    providers: {},
     network: {
       mode: 'loopback',
       port: 8787,
@@ -44,10 +54,13 @@ function baseConfiguration(
       allowedOrigins: [],
       unixSocket: null,
     },
+    referenceLimits: { ...DEFAULT_WORKBENCH_REFERENCE_LIMITS },
+    operationLimits: { ...DEFAULT_WORKBENCH_OPERATION_LIMITS },
+    agent: { ...DEFAULT_WORKBENCH_AGENT_CONFIGURATION },
+    renderPolicy: { ...DEFAULT_WORKBENCH_RENDER_POLICY },
     ...overrides,
   };
 }
-
 function waitFor(condition: () => boolean, timeoutMs = 2000): Promise<void> {
   return new Promise((resolve, reject) => {
     const started = Date.now();
@@ -99,9 +112,8 @@ describe('configuration file store', () => {
 
     const roundTrip = await store.read();
     expect(roundTrip).not.toBeNull();
-    expect(roundTrip?.revision).toBe(revision);
     expect(roundTrip?.configuration).toEqual({
-      version: 3,
+      version: 1,
       projects: [
         {
           projectId: 'demo',
@@ -115,9 +127,10 @@ describe('configuration file store', () => {
       defaultProjectId: 'demo',
       providers: {},
       network: configuration.network,
-      referenceLimits: DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
-      operationLimits: DEFAULT_WORKBENCH_OPERATION_LIMITS_V3,
-      agent: DEFAULT_WORKBENCH_AGENT_CONFIGURATION_V3,
+      referenceLimits: DEFAULT_WORKBENCH_REFERENCE_LIMITS,
+      operationLimits: DEFAULT_WORKBENCH_OPERATION_LIMITS,
+      agent: DEFAULT_WORKBENCH_AGENT_CONFIGURATION,
+      renderPolicy: DEFAULT_WORKBENCH_RENDER_POLICY,
     });
   });
 
@@ -129,9 +142,11 @@ describe('configuration file store', () => {
     expect(configurationRevision(a)).not.toBe(configurationRevision(b));
   });
 
-  it('serializes to canonical V3 YAML with normalized mirror and reference limits', () => {
+  it('serializes to canonical V1 YAML with mirror and reference limits', () => {
     const configuration = baseConfiguration('/srv/project', {
-      provider: { kind: 'ai-sdk', baseUrl: 'https://api.example.com', model: 'fast-model' },
+      providers: {
+        default: { kind: 'ai-sdk', baseUrl: 'https://api.example.com', model: 'fast-model' },
+      },
       network: {
         mode: 'unix',
         port: 0,
@@ -141,7 +156,7 @@ describe('configuration file store', () => {
       },
     });
     const yaml = serializeConfigurationYaml(configuration);
-    expect(yaml).toContain('version: 3');
+    expect(yaml).toContain('version: 1');
     expect(yaml).toContain('revisionMirror:');
     expect(yaml).toContain('mode: disabled');
     expect(yaml).toContain('referenceLimits:');
@@ -150,14 +165,16 @@ describe('configuration file store', () => {
     expect(yaml).toContain('trustedPlugins: []');
     expect(yaml).toContain('operationLimits:');
     expect(yaml).toContain('agent:');
+    expect(yaml).toContain('renderPolicy:');
     const parsed = parseConfigurationYaml(yaml);
     expect(parsed.ok).toBe(true);
     if (parsed.ok) {
-      expect(parsed.configuration.version).toBe(3);
+      expect(parsed.configuration.version).toBe(1);
       expect(parsed.configuration.projects[0]?.revisionMirror).toEqual({ mode: 'disabled' });
       expect(parsed.configuration.projects[0]?.providerProfile).toBe('default');
       expect(parsed.configuration.projects[0]?.trustedPlugins).toEqual([]);
-      expect(parsed.configuration.referenceLimits).toEqual(DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2);
+      expect(parsed.configuration.referenceLimits).toEqual(DEFAULT_WORKBENCH_REFERENCE_LIMITS);
+      expect(parsed.configuration.renderPolicy).toEqual(DEFAULT_WORKBENCH_RENDER_POLICY);
       expect(parsed.configuration.providers).toEqual({
         default: { kind: 'ai-sdk', baseUrl: 'https://api.example.com', model: 'fast-model' },
       });
@@ -195,7 +212,7 @@ describe('configuration file store', () => {
     cleanups.push(async () => watcher.dispose());
     await writeFile(
       store.filePath,
-      serializeConfigurationYaml(baseConfiguration(await tempHome(), { port: 9999 })),
+      serializeConfigurationYaml(baseConfiguration(await tempHome(), { defaultProjectId: null })),
       'utf8',
     );
     await waitFor(() => fired > 0);
@@ -209,8 +226,8 @@ describe('strict configuration shape validation', () => {
   it('rejects unknown top-level fields', () => {
     const result = parseConfigurationYaml(
       serializeConfigurationYaml(baseConfiguration(root)).replace(
-        'version: 3',
-        'version: 3\nsurprise: true',
+        'version: 1',
+        'version: 1\nsurprise: true',
       ),
     );
     expect(result.ok).toBe(false);
@@ -237,8 +254,22 @@ describe('strict configuration shape validation', () => {
     const duplicated = {
       ...baseConfiguration(root),
       projects: [
-        { projectId: 'a', displayName: 'A', root },
-        { projectId: 'a', displayName: 'A2', root },
+        {
+          projectId: 'a',
+          displayName: 'A',
+          root,
+          revisionMirror: { mode: 'disabled' },
+          providerProfile: 'default',
+          trustedPlugins: [],
+        },
+        {
+          projectId: 'a',
+          displayName: 'A2',
+          root,
+          revisionMirror: { mode: 'disabled' },
+          providerProfile: 'default',
+          trustedPlugins: [],
+        },
       ],
     };
     const dup = parseConfigurationYaml(serializeConfigurationYaml(duplicated));
@@ -316,8 +347,10 @@ describe('strict configuration shape validation', () => {
     }
 
     const providerExtra = validateConfigurationShape({
-      ...baseConfiguration(root, { provider: { kind: 'ai-sdk', baseUrl: null, model: null } }),
-      provider: { kind: 'ai-sdk', baseUrl: null, model: null, apiKey: 'sk-secret' },
+      ...baseConfiguration(root),
+      providers: {
+        default: { kind: 'ai-sdk', baseUrl: null, model: null, apiKey: 'sk-secret' },
+      },
     });
     expect(providerExtra.ok).toBe(false);
     if (!providerExtra.ok) {

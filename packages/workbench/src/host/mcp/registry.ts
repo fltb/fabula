@@ -107,9 +107,14 @@ import {
 import {
   type ConfigChangeRequestV1,
   type ConfigOperationReceiptV1,
+  DEFAULT_WORKBENCH_AGENT_CONFIGURATION,
+  DEFAULT_WORKBENCH_OPERATION_LIMITS,
+  DEFAULT_WORKBENCH_REFERENCE_LIMITS,
+  DEFAULT_WORKBENCH_RENDER_POLICY,
   PROJECT_ACCESS_ROLES,
   type ProjectAccessRole,
   type WorkbenchConfigurationV1,
+  type WorkbenchProviderConfigurationV1,
 } from '../../contracts/configuration.js';
 import {
   WORKBENCH_GRAPH_VIEW_VERSION,
@@ -2228,7 +2233,14 @@ function parseConfiguration(
     if (!displayName.ok) return { ok: false, result: displayName.result };
     const root = requiredString(record, 'root');
     if (!root.ok) return { ok: false, result: root.result };
-    projects.push({ projectId: projectId.value, displayName: displayName.value, root: root.value });
+    projects.push({
+      projectId: projectId.value,
+      displayName: displayName.value,
+      root: root.value,
+      revisionMirror: { mode: 'disabled' },
+      providerProfile: 'default',
+      trustedPlugins: [],
+    });
   }
   const defaultProjectId = value.defaultProjectId;
   if (typeof defaultProjectId !== 'string' && defaultProjectId !== null) {
@@ -2238,7 +2250,7 @@ function parseConfiguration(
     };
   }
   const provider = value.provider;
-  let parsedProvider: WorkbenchConfigurationV1['provider'] = null;
+  let parsedProvider: WorkbenchProviderConfigurationV1 | null = null;
   if (provider !== null) {
     if (typeof provider !== 'object' || provider === null || Array.isArray(provider)) {
       return {
@@ -2299,7 +2311,7 @@ function parseConfiguration(
       version: CONFIG_CONTRACT_VERSION,
       projects,
       defaultProjectId,
-      provider: parsedProvider,
+      providers: parsedProvider === null ? {} : { default: parsedProvider },
       network: {
         mode,
         port: networkRecord.port,
@@ -2307,6 +2319,10 @@ function parseConfiguration(
         allowedOrigins: allowedOrigins.value,
         unixSocket: unixSocket.value,
       },
+      referenceLimits: { ...DEFAULT_WORKBENCH_REFERENCE_LIMITS },
+      operationLimits: { ...DEFAULT_WORKBENCH_OPERATION_LIMITS },
+      agent: { ...DEFAULT_WORKBENCH_AGENT_CONFIGURATION },
+      renderPolicy: { ...DEFAULT_WORKBENCH_RENDER_POLICY },
     },
   };
 }

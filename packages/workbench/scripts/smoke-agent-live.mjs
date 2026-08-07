@@ -34,7 +34,10 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
-import { DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2 } from '@novalistically/workbench-protocol';
+import {
+  DEFAULT_WORKBENCH_REFERENCE_LIMITS,
+  DEFAULT_WORKBENCH_RENDER_POLICY,
+} from '@novalistically/workbench-protocol';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(scriptDir, '..'); // packages/workbench
@@ -143,7 +146,7 @@ writeFileSync(
 );
 
 const configuration = {
-  version: 3,
+  version: 1,
   projects: [
     {
       projectId: 'agent-project',
@@ -157,13 +160,14 @@ const configuration = {
   defaultProjectId: 'agent-project',
   providers: {},
   network: { mode: 'loopback', port: 0, allowedHosts: [], allowedOrigins: [], unixSocket: null },
-  referenceLimits: DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
+  referenceLimits: DEFAULT_WORKBENCH_REFERENCE_LIMITS,
   operationLimits: {
     maxQueuedPerProject: 64,
     maxConcurrentRendersPerProject: 1,
     maxConcurrentRendersPerHost: 2,
   },
   agent: { enabled: true, maxTurns: 48, maxToolCalls: 128 },
+  renderPolicy: DEFAULT_WORKBENCH_RENDER_POLICY,
 };
 mkdirSync(join(hostHome, 'config'), { recursive: true });
 writeFileSync(

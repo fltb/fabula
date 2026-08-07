@@ -39,7 +39,7 @@ import {
   type ReferenceChunkV1,
   type ReferenceItemV1,
   type ReferenceJobV1,
-  type WorkbenchReferenceLimitsV2,
+  type WorkbenchReferenceLimitsV1,
 } from '@novalistically/workbench-protocol';
 
 const HASH_RE = /^[0-9a-f]{64}$/;
@@ -94,7 +94,7 @@ export interface WorkbenchReferencePortOptions {
   readonly projectRoot: string;
   /** Host-owned durable state root. It must not be the project source root. */
   readonly jobsRoot: string;
-  readonly referenceLimits: WorkbenchReferenceLimitsV2;
+  readonly referenceLimits: WorkbenchReferenceLimitsV1;
   readonly store?: FileProjectReferenceStoreContract;
 }
 
@@ -174,9 +174,9 @@ function absoluteRoot(value: unknown, label: string): string {
   return path.resolve(value);
 }
 
-function validateLimits(limits: WorkbenchReferenceLimitsV2): void {
+function validateLimits(limits: WorkbenchReferenceLimitsV1): void {
   if (typeof limits !== 'object' || limits === null || typeof limits.enabled !== 'boolean') {
-    throw new TypeError('referenceLimits must be a valid WorkbenchReferenceLimitsV2');
+    throw new TypeError('referenceLimits must be a valid WorkbenchReferenceLimitsV1');
   }
   for (const key of [
     'maxFileBytes',

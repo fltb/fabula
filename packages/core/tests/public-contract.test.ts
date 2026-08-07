@@ -17,6 +17,7 @@ describe('Core public runtime contract', () => {
       'DeterministicReferenceExtractor',
       'LLMError',
       'NovalisticallyError',
+      'PASS2_SAMPLING_CONFIG',
       'PluginExtensionSchemaRegistrar',
       'PluginHooksManager',
       'PluginLoader',

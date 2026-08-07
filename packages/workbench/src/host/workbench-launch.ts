@@ -49,11 +49,11 @@ import {
   type WorkbenchAgentModelPort,
 } from '@novalistically/node-host';
 import {
-  DEFAULT_WORKBENCH_OPERATION_LIMITS_V3,
-  DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
-  normalizeWorkbenchConfiguration,
-  type WorkbenchConfigurationInput,
-  type WorkbenchProjectConfigurationV3,
+  DEFAULT_WORKBENCH_AGENT_CONFIGURATION,
+  DEFAULT_WORKBENCH_NETWORK,
+  DEFAULT_WORKBENCH_OPERATION_LIMITS,
+  DEFAULT_WORKBENCH_REFERENCE_LIMITS,
+  DEFAULT_WORKBENCH_RENDER_POLICY,
 } from '@novalistically/workbench-protocol';
 import {
   AUTHORING_CONTRACT_VERSION,
@@ -226,7 +226,8 @@ export interface WorkbenchLaunchConfig extends HostServerOptions {
   /**
    * Built-in Agent parity gate (plan 9.6). The deterministic parity matrix
    * test toggles this; it is NEVER hardcoded true in production. The
-   * `agent-chat` capability is exposed only when V3 `agent.enabled` is true
+   * `agent-chat` capability is exposed only when the canonical
+   * `agent.enabled` is true
    * AND the project provider's model adapter reports tool-call support AND
    * this flag is true. Defaults to false, so the Agent surface stays fully
    * hidden until the parity matrix passes.
@@ -246,7 +247,7 @@ export interface WorkbenchLaunchConfig extends HostServerOptions {
  * itself in Phase 1A.
  */
 export interface WorkbenchConfigurationSeam {
-  load(): Promise<(WorkbenchConfigurationV1 | WorkbenchConfigurationInput) | null>;
+  load(): Promise<WorkbenchConfigurationV1 | null>;
 }
 
 export interface WorkbenchLaunchHandle {
@@ -424,7 +425,7 @@ async function resolveAgentReady(
 
 /**
  * Project intent flag `nova.yaml.plugins.enabled` (plan 7.1). Plugins are
- * only ever activated when the project explicitly enables them AND the V3
+ * only ever activated when the project explicitly enables them AND the
  * trustedPlugins allowlist matches the discovered identity exactly;
  * `enabled` is the gate, trust matching is the filter. A missing, unparsed
  * or non-boolean flag reads as disabled (fail closed).
@@ -845,16 +846,19 @@ export async function startWorkbench(
       },
     });
     const storedConfiguration = await configurationService.readActive().catch(() => null);
-    const activeConfigurationInput = configuration ?? storedConfiguration?.configuration ?? null;
-    const activeConfiguration =
-      activeConfigurationInput === null
-        ? null
-        : normalizeWorkbenchConfiguration(activeConfigurationInput as WorkbenchConfigurationInput);
+    const activeConfiguration = configuration ?? storedConfiguration?.configuration ?? null;
+
+    // renderPolicy threading lands with Stage 1.9 core wiring: the sampling
+    // policy is available here as `activeConfiguration?.renderPolicy ??
+    // DEFAULT_WORKBENCH_RENDER_POLICY`, but the per-session core render
+    // runtime (createProjectCoreRuntime) is built in @novalistically/core
+    // and does not accept it yet.
 
     // Built-in Agent parity gate (plan 9.6): the deterministic parity matrix
     // test toggles `agentReady`; production never hardcodes it true. The
-    // `agent-chat` capability is derived only when V3 agent.enabled is true
-    // AND the tool-calling model port reports support AND the parity flag.
+    // `agent-chat` capability is derived only when the canonical
+    // agent.enabled is true AND the tool-calling model port reports support
+    // AND the parity flag.
     const agentReadyValue = await resolveAgentReady(config.agentReady);
     const agentChatEnabled =
       activeConfiguration?.agent.enabled === true && agentReadyValue === true;
@@ -863,13 +867,17 @@ export async function startWorkbench(
     // the credential store and passed as an explicit AI SDK option; the
     // factory never consults process environment keys. One factory instance
     // serves the whole Host; runtime providers are built per project session
-    // from that project's V3 `providerProfile`, so no two sessions share one
-    // runtime provider instance. Mock mode (`WORKBENCH_PROVIDER=mock`, no
-    // injected override) builds a fresh deterministic mock PER PROJECT with
-    // that project's `reference/` fixtures, so Pass-2 analysis is resolved
-    // per event instead of the old bare shared MockProvider (whose default
-    // echo is non-JSON and blocked every release).
+    // from that project's canonical `providerProfile`, so no two sessions
+    // share one runtime provider instance. Mock mode
+    // (`WORKBENCH_PROVIDER=mock`, no injected override) builds a fresh
+    // deterministic mock PER PROJECT with that project's `reference/`
+    // fixtures, so Pass-2 analysis is resolved per event instead of the old
+    // bare shared MockProvider (whose default echo is non-JSON and blocked
+    // every release).
     const credentialStore = createProviderCredentialStore();
+    // Stage 2 swaps the constructor by `kind` ('pi' vs legacy 'ai-sdk');
+    // both currently build through the same openai-compatible AiSdkProvider
+    // path (the factory ignores `kind`), so 'pi' falls through unchanged.
     const provider =
       config.providerFactory ??
       new HostProviderFactory({
@@ -882,7 +890,11 @@ export async function startWorkbench(
                 createDeterministicMockProvider({ referenceDirs: mockReferenceDirs(projectRoot) })
             : undefined,
       });
-    const configuredProjects: readonly WorkbenchProjectConfigurationV3[] =
+    // Env prefill (WORKBENCH_PROJECT_ROOT/PROJECT_ID/DISPLAY_NAME) only
+    // applies when activeConfiguration === null (unconfigured); once
+    // workbench.yaml exists, env prefill is fully ignored:
+    // `activeConfiguration?.projects` short-circuits the fallback below.
+    const configuredProjects: readonly WorkbenchProjectConfigurationV1[] =
       activeConfiguration?.projects ??
       (config.projectRoot === undefined
         ? []
@@ -1010,11 +1022,12 @@ export async function startWorkbench(
     // completion and release-gate hooks below.
     const publicationServices = new Map<string, ProjectPublicationService>();
     // Per-project built-in Agent run service (plan 9.4): created only when
-    // the `agent-chat` gate passes (V3 agent.enabled + model tool-call
-    // support + parity flag); absent projects have no Agent route at all.
+    // the `agent-chat` gate passes (canonical agent.enabled + model
+    // tool-call support + parity flag); absent projects have no Agent route
+    // at all.
     const agentRunServices = new Map<string, WorkbenchAgentRunService>();
     const operationLimits =
-      activeConfiguration?.operationLimits ?? DEFAULT_WORKBENCH_OPERATION_LIMITS_V3;
+      activeConfiguration?.operationLimits ?? DEFAULT_WORKBENCH_OPERATION_LIMITS;
     const renderConcurrencyLimiter = createRenderConcurrencyLimiter(
       operationLimits.maxConcurrentRendersPerHost,
     );
@@ -1046,7 +1059,7 @@ export async function startWorkbench(
       const referenceLimits =
         current?.configuration.referenceLimits ??
         activeConfiguration?.referenceLimits ??
-        DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2;
+        DEFAULT_WORKBENCH_REFERENCE_LIMITS;
       if (!referenceLimits.enabled) return undefined;
       return createWorkbenchReferencePort({
         projectId,
@@ -1097,12 +1110,11 @@ export async function startWorkbench(
         const coordinator = coordinatorFor(project);
         const authorityToken = await coordinator.acquireWorkbenchAuthority(instanceNonce);
         authorityTokens.set(project.projectId, authorityToken);
-        // Per-project provider: V3 `providerProfile` selects the profile; the
-        // factory builds a fresh instance per session. Legacy projects
-        // normalize to the default profile. A construction failure (missing
-        // profile or credential) degrades to the unavailable provider so the
-        // project still opens read-only and renders fail with the typed
-        // provider error.
+        // Per-project provider: the project's canonical `providerProfile`
+        // selects the profile; the factory builds a fresh instance per
+        // session. A construction failure (missing profile or credential)
+        // degrades to the unavailable provider so the project still opens
+        // read-only and renders fail with the typed provider error.
         const profileId =
           configuredProjects.find((entry) => entry.projectId === project.projectId)
             ?.providerProfile ?? 'default';
@@ -1112,7 +1124,7 @@ export async function startWorkbench(
         const source = new FileProjectSourceLoader().load(project.root);
         // Trusted-plugin activation (plan 7.1-7.2): only when the project
         // intent flag `nova.yaml.plugins.enabled` is true do we attempt
-        // activation, and only exact V3 trustedPlugins name/version/moduleHash
+        // activation, and only exact trustedPlugins name/version/moduleHash
         // matches load. A required identity mismatch keeps the project open
         // but records a blocking diagnostic: render/status report it and the
         // admin surface can fix the allowlist without a failed open.
@@ -1469,10 +1481,10 @@ export async function startWorkbench(
     // scene canvas, graph/route) plus the review MCP tools and status
     // projection (review-hub, plan Step 5) and the publication service + MCP
     // tools + browser publication routes (publication, plan Step 6.6).
-    // agent-chat is derived only when the full gate passes (V3 agent.enabled
-    // + tool-call-ready model + parity flag, plan 9.6); the browser surface
-    // is only constructed when projects are configured, so the list is never
-    // empty here.
+    // agent-chat is derived only when the full gate passes (canonical
+    // agent.enabled + tool-call-ready model + parity flag, plan 9.6); the
+    // browser surface is only constructed when projects are configured, so
+    // the list is never empty here.
     const launchFeatures: readonly WorkbenchProjectFeatureV1[] = [
       'project-home',
       'source-studio',
@@ -2034,10 +2046,10 @@ function deviceSafeView(device: McpDeviceVerifierReadState): WorkbenchDeviceSafe
 }
 
 /**
- * Build the version-1 configuration candidate over the given project list,
- * mirroring the owner dashboard's explicit field construction: only the
- * fields the V1 shape accepts are carried over, never extras like
- * `referenceLimits` or `revisionMirror`.
+ * Build the canonical version-1 configuration candidate over the given
+ * project list, mirroring the owner dashboard's explicit field construction:
+ * every V1 domain is carried over from the active configuration or filled
+ * from its canonical default when absent.
  */
 function v1Candidate(
   projects: readonly WorkbenchProjectConfigurationV1[],
@@ -2048,14 +2060,14 @@ function v1Candidate(
     version: 1,
     projects,
     defaultProjectId,
-    provider: active?.configuration.providers.default ?? null,
-    network: active?.configuration.network ?? {
-      mode: 'loopback',
-      port: 8787,
-      allowedHosts: [],
-      allowedOrigins: [],
-      unixSocket: null,
-    },
+    providers: active?.configuration.providers ?? {},
+    network: active?.configuration.network ?? { ...DEFAULT_WORKBENCH_NETWORK },
+    referenceLimits:
+      active?.configuration.referenceLimits ?? { ...DEFAULT_WORKBENCH_REFERENCE_LIMITS },
+    operationLimits:
+      active?.configuration.operationLimits ?? { ...DEFAULT_WORKBENCH_OPERATION_LIMITS },
+    agent: active?.configuration.agent ?? { ...DEFAULT_WORKBENCH_AGENT_CONFIGURATION },
+    renderPolicy: active?.configuration.renderPolicy ?? { ...DEFAULT_WORKBENCH_RENDER_POLICY },
   };
 }
 
@@ -2074,11 +2086,7 @@ export function createLaunchAdminPort(options: LaunchAdminPortOptions): McpAdmin
   /** The project list currently registered in the active configuration. */
   async function configuredProjects(): Promise<readonly WorkbenchProjectConfigurationV1[]> {
     const active = await configuration.readActive();
-    return (active?.configuration.projects ?? []).map((project) => ({
-      projectId: project.projectId,
-      displayName: project.displayName,
-      root: project.root,
-    }));
+    return active?.configuration.projects ?? [];
   }
 
   /** Safe project view (no root path) for a configured project, or null. */
@@ -2144,7 +2152,14 @@ export function createLaunchAdminPort(options: LaunchAdminPortOptions): McpAdmin
       const candidate = v1Candidate(
         [
           ...(await configuredProjects()),
-          { projectId: input.projectId, displayName: input.displayName, root: input.root },
+          {
+            projectId: input.projectId,
+            displayName: input.displayName,
+            root: input.root,
+            revisionMirror: { mode: 'disabled' },
+            providerProfile: 'default',
+            trustedPlugins: [],
+          },
         ],
         active,
       );
@@ -2169,7 +2184,14 @@ export function createLaunchAdminPort(options: LaunchAdminPortOptions): McpAdmin
           ? projects
           : [
               ...projects,
-              { projectId: input.projectId, displayName: input.displayName, root: input.root },
+              {
+                projectId: input.projectId,
+                displayName: input.displayName,
+                root: input.root,
+                revisionMirror: { mode: 'disabled' },
+                providerProfile: 'default',
+                trustedPlugins: [],
+              },
             ],
         active,
       );
@@ -2194,7 +2216,14 @@ export function createLaunchAdminPort(options: LaunchAdminPortOptions): McpAdmin
       const candidate = v1Candidate(
         projects.map((project) =>
           project.projectId === input.projectId
-            ? { projectId: input.projectId, displayName: input.displayName, root: input.root }
+            ? {
+                projectId: input.projectId,
+                displayName: input.displayName,
+                root: input.root,
+                revisionMirror: { mode: 'disabled' },
+                providerProfile: 'default',
+                trustedPlugins: [],
+              }
             : project,
         ),
         active,
@@ -2241,11 +2270,7 @@ export function createLaunchAdminPort(options: LaunchAdminPortOptions): McpAdmin
           (project) => project.projectId === input.projectId,
         );
         if (projectToRestore !== undefined) {
-          await runtime.open({
-            projectId: projectToRestore.projectId,
-            displayName: projectToRestore.displayName,
-            root: projectToRestore.root,
-          });
+          await runtime.open(projectToRestore);
         }
       };
       let receipt: ConfigOperationReceiptV1;
@@ -2309,11 +2334,7 @@ export function createLaunchAdminPort(options: LaunchAdminPortOptions): McpAdmin
           ...adminFailure('PROJECT_NOT_FOUND', `Project "${input.projectId}" is not registered.`),
         };
       }
-      await runtime.open({
-        projectId: project.projectId,
-        displayName: project.displayName,
-        root: project.root,
-      });
+      await runtime.open(project);
       return { version: 1, open: true, project: await projectView(input.projectId) };
     },
     projectClose: async (input) => {
@@ -2359,11 +2380,7 @@ export function createLaunchAdminPort(options: LaunchAdminPortOptions): McpAdmin
         };
       }
       if (!runtime.isOpen(input.projectId)) {
-        await runtime.open({
-          projectId: project.projectId,
-          displayName: project.displayName,
-          root: project.root,
-        });
+        await runtime.open(project);
       }
       return { version: 1, project: await projectView(input.projectId) };
     },

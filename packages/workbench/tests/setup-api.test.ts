@@ -4,7 +4,10 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   BROWSER_SETUP_STATUS_PATH,
-  DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
+  DEFAULT_WORKBENCH_AGENT_CONFIGURATION,
+  DEFAULT_WORKBENCH_OPERATION_LIMITS,
+  DEFAULT_WORKBENCH_REFERENCE_LIMITS,
+  DEFAULT_WORKBENCH_RENDER_POLICY,
   type WorkbenchConfigurationV1,
 } from '../src/contracts/configuration.js';
 import { createAuthPersistence, LocalAuthService } from '../src/host/auth/index.js';
@@ -41,9 +44,18 @@ afterEach(async () => {
 function baseConfiguration(root: string): WorkbenchConfigurationV1 {
   return {
     version: 1,
-    projects: [{ projectId: 'demo', displayName: 'Demo', root }],
+    projects: [
+      {
+        projectId: 'demo',
+        displayName: 'Demo',
+        root,
+        revisionMirror: { mode: 'disabled' },
+        providerProfile: 'default',
+        trustedPlugins: [],
+      },
+    ],
     defaultProjectId: 'demo',
-    provider: null,
+    providers: {},
     network: {
       mode: 'loopback',
       port: 8787,
@@ -51,6 +63,10 @@ function baseConfiguration(root: string): WorkbenchConfigurationV1 {
       allowedOrigins: [],
       unixSocket: null,
     },
+    referenceLimits: { ...DEFAULT_WORKBENCH_REFERENCE_LIMITS },
+    operationLimits: { ...DEFAULT_WORKBENCH_OPERATION_LIMITS },
+    agent: { ...DEFAULT_WORKBENCH_AGENT_CONFIGURATION },
+    renderPolicy: { ...DEFAULT_WORKBENCH_RENDER_POLICY },
   };
 }
 
@@ -287,15 +303,15 @@ describe('setup wizard flow', () => {
     expect(active).not.toBeNull();
     expect(active?.configuration.projects[0]?.projectId).toBe('demo');
     expect(active?.configuration.providers.default).toEqual({
-      kind: 'ai-sdk',
+      kind: 'pi',
       baseUrl: 'https://api.example.com',
       model: 'model-x',
     });
-    expect(active?.configuration.version).toBe(3);
+    expect(active?.configuration.version).toBe(1);
     expect(active?.configuration.projects[0]?.revisionMirror).toEqual({ mode: 'disabled' });
     expect(active?.configuration.projects[0]?.providerProfile).toBe('default');
     expect(active?.configuration.projects[0]?.trustedPlugins).toEqual([]);
-    expect(active?.configuration.referenceLimits).toEqual(DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2);
+    expect(active?.configuration.referenceLimits).toEqual(DEFAULT_WORKBENCH_REFERENCE_LIMITS);
 
     // A later finish is refused: the Host is configured now.
     const again = await jsonRequest(server, 'POST', BROWSER_SETUP_FINISH_PATH, {

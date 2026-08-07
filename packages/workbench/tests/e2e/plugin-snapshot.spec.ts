@@ -110,13 +110,13 @@ interface TrustedPluginEntry {
   readonly required: boolean;
 }
 
-/** Serialize the exact V3 `workbench.yaml` shape (mirror of the harness). */
+/** Serialize the exact V1 `workbench.yaml` shape (mirror of the harness). */
 function serializeConfigYaml(
   project: { readonly projectId: string; readonly displayName: string; readonly root: string },
   trustedPlugins: readonly TrustedPluginEntry[],
 ): string {
   const scalar = (value: string): string => JSON.stringify(value);
-  const lines: string[] = ['version: 3', 'projects:'];
+  const lines: string[] = ['version: 1', 'projects:'];
   lines.push(`  - projectId: ${scalar(project.projectId)}`);
   lines.push(`    displayName: ${scalar(project.displayName)}`);
   lines.push(`    root: ${scalar(project.root)}`);
@@ -154,10 +154,18 @@ function serializeConfigYaml(
   lines.push('  enabled: false');
   lines.push('  maxTurns: 16');
   lines.push('  maxToolCalls: 64');
+  lines.push('renderPolicy:');
+  lines.push('  pass1:');
+  lines.push('    temperature: 0.8');
+  lines.push('    maxTokens: 10000');
+  lines.push('  pass2:');
+  lines.push('    temperature: 0.3');
+  lines.push('    maxTokens: 12000');
+  lines.push('    seed: 42');
   return `${lines.join('\n')}\n`;
 }
 
-/** Fixed V3 defaults, mirrored from the harness serializer. */
+/** Fixed V1 defaults, mirrored from the harness serializer. */
 const REFERENCE_LIMITS: Readonly<Record<string, number | boolean>> = {
   enabled: true,
   maxFileBytes: 104_857_600,
@@ -187,11 +195,10 @@ interface PluginScenarioOptions {
   /** Append an `extensions` block for the plugin to E5 in the fixture copy. */
   readonly addExtension?: boolean;
 }
-
 /**
  * Boot the composed Host over a fixture copy carrying a plugins/ dir, a
- * plugin-enabled nova.yaml and a V3 trustedPlugins allowlist, then return a
- * connected MCP client. The fixture writes its own V3 config into ITS temp
+ * plugin-enabled nova.yaml and a V1 trustedPlugins allowlist, then return a
+ * connected MCP client. The fixture writes its own V1 config into ITS temp
  * home, so the trusted allowlist is injected by overriding `WORKBENCH_HOME` /
  * `WORKBENCH_DATABASE_PATH` to a spec-owned home whose `config/workbench.yaml`
  * carries the allowlist. The spec owns cleanup of that home.

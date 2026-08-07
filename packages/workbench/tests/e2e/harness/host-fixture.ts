@@ -239,11 +239,10 @@ class ControlFrameParser {
   }
 }
 
-// ─── V3 config file (only for multi-project launches) ───────────────────────
+// ─── V1 config file (only for multi-project launches) ───────────────────────
 
-/** Fixed V3 defaults, mirrored from `DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2`. */
+/** Fixed V1 defaults, mirrored from `DEFAULT_WORKBENCH_REFERENCE_LIMITS`. */
 const REFERENCE_LIMITS: Readonly<Record<string, number | boolean>> = {
-  enabled: true,
   maxFileBytes: 104_857_600,
   maxBytesPerProject: 5_368_709_120,
   maxItemsPerProject: 10_000,
@@ -259,15 +258,15 @@ const REFERENCE_LIMITS: Readonly<Record<string, number | boolean>> = {
 /** YAML double-quoted scalar; JSON string syntax is valid YAML 1.2. */
 const yamlScalar = (value: string): string => JSON.stringify(value);
 
-/** Serialize the exact V3 `workbench.yaml` shape the Host file store parses. */
-function serializeV3ConfigYaml(
+/** Serialize the exact V1 `workbench.yaml` shape the Host file store parses. */
+function serializeConfigYaml(
   projects: readonly {
     readonly projectId: string;
     readonly displayName: string;
     readonly root: string;
   }[],
 ): string {
-  const lines: string[] = ['version: 3', 'projects:'];
+  const lines: string[] = ['version: 1', 'projects:'];
   for (const project of projects) {
     lines.push(`  - projectId: ${yamlScalar(project.projectId)}`);
     lines.push(`    displayName: ${yamlScalar(project.displayName)}`);
@@ -297,6 +296,14 @@ function serializeV3ConfigYaml(
   lines.push('  enabled: false');
   lines.push('  maxTurns: 16');
   lines.push('  maxToolCalls: 64');
+  lines.push('renderPolicy:');
+  lines.push('  pass1:');
+  lines.push('    temperature: 0.8');
+  lines.push('    maxTokens: 10000');
+  lines.push('  pass2:');
+  lines.push('    temperature: 0.3');
+  lines.push('    maxTokens: 12000');
+  lines.push('    seed: 42');
   return `${lines.join('\n')}\n`;
 }
 
@@ -463,8 +470,7 @@ export async function startHostFixture(options: HostFixtureOptions = {}): Promis
   // WORKBENCH_PROJECT_ROOT when the file is missing, so keeping both
   // consistent is harmless. `skipConfigFile` opts out for boot-failure tests.
   if (!(options.skipConfigFile ?? false)) {
-    mkdirSync(join(home, 'config'), { recursive: true });
-    const configYaml = serializeV3ConfigYaml(
+    const configYaml = serializeConfigYaml(
       copied.map((project) => ({
         projectId: project.projectId,
         displayName: project.displayName,
@@ -473,7 +479,6 @@ export async function startHostFixture(options: HostFixtureOptions = {}): Promis
     );
     await writeFile(join(home, 'config', 'workbench.yaml'), configYaml, 'utf8');
   }
-
   // Hermetic child env: deterministic E2E never touches a real provider, so
   // drop any caller-supplied AI credential/endpoint before spawning. The
   // live smoke command (`smoke:workbench-agent:live`) is the only key consumer.

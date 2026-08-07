@@ -1780,6 +1780,15 @@ function buildPipeline(
     maxRounds: request.maxRounds,
     validatorPolicyId: plan.planSummary.validationIdentity,
     pluginHooksManager: runtime.pluginHooksManager,
+    ...(runtime.renderPolicy
+      ? {
+          pass1Temperature: runtime.renderPolicy.pass1Temperature,
+          pass1MaxTokens: runtime.renderPolicy.pass1MaxTokens,
+          pass2Temperature: runtime.renderPolicy.pass2Temperature,
+          pass2MaxTokens: runtime.renderPolicy.pass2MaxTokens,
+          pass2Seed: runtime.renderPolicy.pass2Seed,
+        }
+      : {}),
   };
   return new RenderPipeline(options);
 }

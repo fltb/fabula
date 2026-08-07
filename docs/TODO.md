@@ -1,5 +1,7 @@
 # TODO.md - 系统的整体计划
 
+> **当前计划 (2026-08-07)**: Workbench 产品收敛执行计划已批准，见 [`docs/todos/workbench-product-convergence-2026-08-07.md`](./todos/workbench-product-convergence-2026-08-07.md)。本页是阶段 1–3 的历史规划记录，不再作为当前工作指引；当前事实以 [`docs/current-state.md`](./current-state.md) 为准。
+
 > **前身**: `docs/archive/TODO-stage-1-1.5.md` (1420 lines, stage 1 + 1.5 complete)
 > **阶段 2 部分验收**: `docs/audits/stage-2-corpus-audit-2026-07-24.md`
 > **基准项目（历史快照）**: `fixtures/dream-of-red-chamber/` — 12 events, 40 characters, 8 locations, 5 rules（旧快照数字，不代表当前夹具；现状见下方「基准项目现状」校正）

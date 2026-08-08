@@ -9,7 +9,7 @@
 | 门禁 | 结果 |
 |---|---|
 | `npm run typecheck`（Node 26 / fnm 26.5.0，收敛会话记录） | core / node-host / cli / workbench-protocol / workbench 五包 `tsc -b` 通过；**bench 包不 clean（源码核验）**：b90d472 遗留的 closed-loop orphan 仍在——`packages/bench/src/closed-loop-runner.ts` 导入从未提交的 `./closed-loop.js`（按 NodeNext 解析即 TS2307），且该文件未从 `index.ts` 导出（孤儿文件，无调用方）；`dist/closed-loop.d.ts` 是陈旧构建产物 |
-| Node 24 环境（本会话 v24.1.0） | argon2 相关 workbench 测试（`auth-password` / `auth-service` / `setup-api` / `launch` / `parity`）失败：`crypto.argon2` 是 Node 26 API，本环境不可用（`packages/workbench/src/host/auth/password.ts` 从 `node:crypto` 导入 `argon2`）。**Node 24 下不宣称全绿** |
+| Node 26 环境（2026-08-08 全量验证，fnm v26.7.0） | **全仓库测试全绿**：workbench host 736/736、client 168/168、core+node-host+protocol+cli 2922/2922（合计 3,826）。argon2 测试（`auth-password` / `auth-service` / `setup-api` / `launch` / `parity`）在 Node 26 全部通过。`npm start` 冒烟：listener 与 workbench 均启动，`/health` `/api/v1/setup/status` `/role` `/scene-map` 端点响应正确（未认证正确返回 SESSION_NOT_FOUND）。**bench 包 typecheck 仍不 clean**（b90d472 closed-loop 孤儿，见上行） |
 | 2026-08-06 基线（收敛前，供参考） | `npm test` 根 3,197 + Host 716 + Client 156、`typecheck:dead-code`、`typecheck:e2e`、`build`、`bundle-check`、`check:public-api`（六包全部登记）、`test:e2e` 23/23、`lint` 0 errors / 0 warnings——均为收敛前记录，收敛后未全量重跑 |
 
 ## 2026-08-08 产品收敛记录（Stage 1–9 全部交付）
@@ -28,7 +28,7 @@
 - **Scene Map + Scene Inspector（Stage 9.2，用户核心诉求）**：`/scene-map`（章节分组 + per-scene summary + hash 链 + 跨章条带）、`/scenes/:eventId`（diff + 实体 + graph 边 + 边界 hashes + discourse）、`/scenes/:eventId/render`（复用 `nova_render` registry 路径）；9.2.5 **上下文指纹**——已采纳 scene 的 `scenes/<id>.md` frontmatter `context.sceneHash` 对比 execution sceneHash → `adopted_current`/`adopted_stale`（上下文变化必标 stale、绝不静默覆盖手改散文）；`SceneMap.tsx` + `SceneInspector.tsx`（内联 diff/实体/hash/render 按钮 + Adopt）；8 个路由测试。
 - **错误恢复/空态分离/断连（Stage 9.3）**：review/publication/references/scene-adoption 均区分 error-state（带 Retry）与 empty-state；AgentChat run 失败内联 chip + 重试；Host 事件流断开 → 红点 + 「与 Host 的连接中断，正在重连…」banner；加载期 skeleton。
 - **Onboarding 首访引导（Stage 9.4）**：localStorage 门控 4 步 mini tour（Agent Chat 入口 / Source Studio / Review Hub / Publication）；欢迎卡 icon+描述升级；Agent 未启用 banner（配置提示 + settings 钩子）。
-- **Stage 9 交付门禁（9.6）**：`npm run build` 全绿（core/node-host/bench/workbench-protocol/cli/workbench host+client）；5 包 `tsc -b` 干净；client 168/168、core 2761/2761、protocol 6/6、scene-map 8/8、references 6/6。**Node 24 环境边界**：`npm start` 启动与 argon2 相关测试需 Node 26.5.0（`crypto.argon2` 是 Node 26 API）——Node 24 下启动/部分 host 测试不可用，不宣称全绿。
+- **Stage 9 交付门禁（9.6）**：`npm run build` 全绿（core/node-host/bench/workbench-protocol/cli/workbench host+client）；5 包 `tsc -b` 干净；Node 26 下全仓库 3,826 测试全绿（host 736 / client 168 / core+node-host+protocol+cli 2922）；`npm start` 冒烟启动 + 端点探测通过。**bench 包 typecheck 例外**（b90d472 closed-loop 孤儿，见门禁表）。
 
 
 ## 包与依赖边界

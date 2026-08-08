@@ -157,9 +157,9 @@ function SceneInspectorBody(props: {
   const canRender = () => canMutate(rank(), props.onRenderScene !== undefined);
   const renderStatusLabel = () => {
     const status = detail().renderStatus;
-    if (status === 'adopted_stale') return 'adopted · stale';
-    if (status === 'adopted_current') return 'adopted · current';
-    return 'unadopted';
+    if (status === 'adopted_stale') return '已过期（内容变了）';
+    if (status === 'adopted_current') return '已收下';
+    return '未收下';
   };
   const adoptionCandidate = () =>
     props.adoption !== null && props.adoption !== undefined &&
@@ -246,7 +246,7 @@ function SceneInspectorBody(props: {
                 if (candidate !== null) props.onRequestAdoption?.(candidate);
               }}
             >
-              Adopt into manifest
+              收下这版
             </button>
           </Show>
         </div>
@@ -426,45 +426,48 @@ function SceneInspectorBody(props: {
         </Show>
       </section>
 
-      <section class="scene-inspector-card" aria-label="CompiledSceneContract hashes">
-        <div class="scene-inspector-card-head">
-          <h4>CompiledSceneContract</h4>
-        </div>
-        <dl class="scene-hash-list">
-          <div>
-            <dt>stateBefore</dt>
-            <dd title={detail().hashes.stateBeforeHash}>{shortHash(detail().hashes.stateBeforeHash)}</dd>
+      <details class="scene-technical-details" open={false}>
+        <summary>技术详情</summary>
+        <section class="scene-inspector-card" aria-label="CompiledSceneContract hashes">
+          <div class="scene-inspector-card-head">
+            <h4>CompiledSceneContract</h4>
           </div>
-          <div>
-            <dt>stateAfter</dt>
-            <dd title={detail().hashes.stateAfterHash}>{shortHash(detail().hashes.stateAfterHash)}</dd>
-          </div>
-          <div>
-            <dt>worldHash</dt>
-            <dd title={detail().hashes.worldStateHash}>{shortHash(detail().hashes.worldStateHash)}</dd>
-          </div>
-          <div>
-            <dt>knowledgeHash</dt>
-            <dd title={detail().hashes.knowledgeStateHash}>
-              {shortHash(detail().hashes.knowledgeStateHash)}
-            </dd>
-          </div>
-          <div>
-            <dt>narratorProfile</dt>
-            <dd title={detail().hashes.narratorProfileHash}>
-              {shortHash(detail().hashes.narratorProfileHash)}
-            </dd>
-          </div>
-          <div>
-            <dt>discourseHash</dt>
-            <dd title={detail().hashes.discourseHash}>{shortHash(detail().hashes.discourseHash)}</dd>
-          </div>
-          <div>
-            <dt>source</dt>
-            <dd title={detail().hashes.sourceHash}>{shortHash(detail().hashes.sourceHash)}</dd>
-          </div>
-        </dl>
-      </section>
+          <dl class="scene-hash-list">
+            <div>
+              <dt>stateBefore</dt>
+              <dd title={detail().hashes.stateBeforeHash}>{shortHash(detail().hashes.stateBeforeHash)}</dd>
+            </div>
+            <div>
+              <dt>stateAfter</dt>
+              <dd title={detail().hashes.stateAfterHash}>{shortHash(detail().hashes.stateAfterHash)}</dd>
+            </div>
+            <div>
+              <dt>worldHash</dt>
+              <dd title={detail().hashes.worldStateHash}>{shortHash(detail().hashes.worldStateHash)}</dd>
+            </div>
+            <div>
+              <dt>knowledgeHash</dt>
+              <dd title={detail().hashes.knowledgeStateHash}>
+                {shortHash(detail().hashes.knowledgeStateHash)}
+              </dd>
+            </div>
+            <div>
+              <dt>narratorProfile</dt>
+              <dd title={detail().hashes.narratorProfileHash}>
+                {shortHash(detail().hashes.narratorProfileHash)}
+              </dd>
+            </div>
+            <div>
+              <dt>discourseHash</dt>
+              <dd title={detail().hashes.discourseHash}>{shortHash(detail().hashes.discourseHash)}</dd>
+            </div>
+            <div>
+              <dt>source</dt>
+              <dd title={detail().hashes.sourceHash}>{shortHash(detail().hashes.sourceHash)}</dd>
+            </div>
+          </dl>
+        </section>
+      </details>
     </>
   );
 }

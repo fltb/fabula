@@ -2820,6 +2820,70 @@ h3 {
 .scene-render-state[data-tone="blocked"] { color: var(--wb-danger); }
 .scene-render-state[data-tone="blocked"] .scene-render-dot { background: var(--wb-danger); }
 
+/* ── Scene card editor (plan Step 5) ─────────────────────────────── */
+
+.scene-edit-toggle {
+  margin-top: var(--wb-space-2);
+  font-size: 0.6875rem;
+  padding: 0.125rem 0.5rem;
+}
+
+.scene-edit-form {
+  margin-top: var(--wb-space-2);
+  border: 0.0625rem solid var(--wb-border);
+  border-radius: var(--wb-radius-sm);
+  background: var(--wb-surface-muted);
+  padding: var(--wb-space-3);
+}
+
+.scene-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--wb-space-3);
+}
+
+.scene-edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wb-space-1);
+  font-size: 0.75rem;
+  color: var(--wb-ink-soft);
+}
+
+.scene-edit-field-wide {
+  grid-column: 1 / -1;
+}
+
+.scene-edit-field input,
+.scene-edit-field select,
+.scene-edit-field textarea {
+  width: 100%;
+  font: inherit;
+  color: var(--wb-ink);
+  background: var(--wb-surface);
+  border: 0.0625rem solid var(--wb-border);
+  border-radius: var(--wb-radius-sm);
+  padding: 0.375rem 0.5rem;
+}
+
+.scene-edit-actions {
+  display: flex;
+  gap: var(--wb-space-2);
+  margin-top: var(--wb-space-3);
+}
+
+.scene-edit-note {
+  margin-top: var(--wb-space-2);
+  font-size: 0.75rem;
+  color: var(--wb-success);
+}
+
+.scene-edit-error {
+  margin-top: var(--wb-space-2);
+  font-size: 0.75rem;
+  color: var(--wb-danger);
+}
+
 /* ── Cross-chapter strips ─────────────────────────────────────── */
 
 .scene-strips {
@@ -3204,6 +3268,35 @@ h3 {
   font-weight: 700;
 }
 
+/* Technical-details fold for the Scene Inspector / Scene Map (author mode). */
+.scene-technical-details {
+  margin-top: var(--wb-space-3);
+  border: 0.0625rem solid var(--wb-border);
+  border-radius: var(--wb-radius-sm);
+  background: var(--wb-surface-muted);
+}
+
+.scene-technical-details summary {
+  cursor: pointer;
+  padding: var(--wb-space-2) var(--wb-space-3);
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--wb-muted);
+  user-select: none;
+}
+
+.scene-technical-details > .card,
+.scene-technical-details > details {
+  margin: 0 var(--wb-space-3) var(--wb-space-3);
+  background: var(--wb-surface);
+}
+
+.scene-technical-details .hash-chip {
+  font-size: 0.75rem;
+}
+
 .scene-entity-name {
   color: var(--wb-muted);
 }
@@ -3321,3 +3414,152 @@ h3 {
 }
 
 .scene-chip-discourse { color: var(--wb-focus); }
+
+/* ── Settings view (author LLM panel) ─────────────────────────── */
+
+.settings-view {
+  display: grid;
+  gap: var(--wb-space-5);
+  max-width: 44rem;
+}
+
+.settings-view .card {
+  align-content: start;
+}
+
+.settings-copy {
+  margin: 0;
+  color: var(--wb-ink-soft);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.settings-status {
+  display: flex;
+  align-items: center;
+  gap: var(--wb-space-2);
+  font-size: 0.8125rem;
+}
+
+.settings-status-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--wb-muted);
+}
+
+.settings-status-dot.is-configured {
+  background: var(--wb-ok, #2e9e5b);
+}
+
+.settings-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: var(--wb-space-2);
+}
+
+.settings-preset {
+  padding: var(--wb-space-2) var(--wb-space-3);
+  border: 0.0625rem solid var(--wb-border);
+  border-radius: var(--wb-radius-sm, 0.375rem);
+  background: var(--wb-surface);
+  color: var(--wb-ink);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.settings-preset:hover:not(:disabled) {
+  border-color: var(--wb-accent);
+  background: var(--wb-accent-wash);
+}
+
+.settings-preset.is-active {
+  border-color: var(--wb-accent-deep);
+  background: var(--wb-accent-wash);
+  box-shadow: inset 0 0 0 0.0625rem var(--wb-accent-deep);
+}
+
+.settings-field {
+  display: grid;
+  gap: var(--wb-space-1);
+  color: var(--wb-ink-soft);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.settings-field input[type='text'],
+.settings-field input[type='password'],
+.settings-field input[type='number'] {
+  padding: var(--wb-space-2) var(--wb-space-3);
+  color: var(--wb-ink);
+  background: var(--wb-surface);
+  border: 0.0625rem solid var(--wb-border);
+  border-radius: var(--wb-radius-sm, 0.375rem);
+}
+
+.settings-field input:focus-visible {
+  outline: 0.1875rem solid var(--wb-focus);
+  outline-offset: 0.125rem;
+}
+
+.settings-field-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--wb-space-2);
+}
+
+.settings-actions {
+  display: flex;
+  gap: var(--wb-space-2);
+}
+
+.settings-advanced summary {
+  cursor: pointer;
+  color: var(--wb-ink-soft);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.settings-advanced-body {
+  display: grid;
+  gap: var(--wb-space-3);
+  margin-top: var(--wb-space-3);
+}
+
+.settings-headers {
+  display: grid;
+  gap: var(--wb-space-2);
+}
+
+.settings-headers-label {
+  color: var(--wb-ink-soft);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.settings-header-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: var(--wb-space-2);
+}
+
+.settings-header-row input {
+  padding: var(--wb-space-2) var(--wb-space-3);
+  color: var(--wb-ink);
+  background: var(--wb-surface);
+  border: 0.0625rem solid var(--wb-border);
+  border-radius: var(--wb-radius-sm, 0.375rem);
+}
+
+.settings-notice {
+  margin: 0;
+  color: var(--wb-ok, #2e9e5b);
+  font-size: 0.8125rem;
+}
+
+.settings-error {
+  margin: 0;
+  color: var(--wb-danger);
+  font-size: 0.8125rem;
+}

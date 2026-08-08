@@ -14,8 +14,10 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Handler } from 'hono';
+import YAML from 'yaml';
 import {
   type AdminNetworkUpdateRequestV1,
   BROWSER_SETUP_BASE_PATH,
@@ -147,6 +149,8 @@ export interface SetupStatusBuilderOptions {
   readonly credentials: ProviderCredentialStore;
   readonly auth: LocalAuthService;
   readonly listenerMode: () => HostListenerMode;
+  /** Host-managed base directory; all project roots derive from it. */
+  readonly hostHome: string;
   readonly runtime?: RuntimeAdminPort | null;
   readonly now?: () => string;
 }
@@ -183,11 +187,13 @@ function deriveSetupPhase(input: {
     if (!input.draftActive) return 'owner-pending';
     if (input.projects.length === 0) return 'project-pending';
     if (!input.providerConfigured) return 'provider-pending';
+    // A complete draft still awaits the finish apply (the wizard no longer
+    // has a separate network step; the default loopback policy is applied
+    // by finish).
     return 'network-pending';
   }
   if (input.projects.length === 0) return 'project-pending';
   if (!input.providerConfigured) return 'provider-pending';
-  if (input.draftActive && !input.networkApplied) return 'network-pending';
   return 'ready';
 }
 
@@ -226,7 +232,7 @@ export function createSetupStatusBuilder(options: SetupStatusBuilderOptions): Se
       providerConfiguration == null
         ? null
         : {
-            kind: 'ai-sdk',
+            kind: 'pi',
             configured: providerConfigured,
             endpoint: maskEndpoint(providerConfiguration.baseUrl),
             model: maskModel(providerConfiguration.model),
@@ -264,6 +270,7 @@ export function createSetupStatusBuilder(options: SetupStatusBuilderOptions): Se
       provider,
       network: networkView,
       generatedAt: now(),
+      hostHome: options.hostHome,
     };
   }
 
@@ -346,6 +353,28 @@ function isLoopback(mode: HostListenerMode): boolean {
 }
 
 /**
+ * Best-effort managed project skeleton: `nova.yaml` (minimal compile-able
+ * fields) plus an empty `definitions/` directory under the Host-managed
+ * root. Callers ignore failures — the registration already succeeded and a
+ * skeleton write must never fail the wizard response; the author fills the
+ * project from the workbench afterwards.
+ */
+async function writeProjectSkeleton(
+  hostHome: string,
+  projectId: string,
+  displayName: string,
+): Promise<void> {
+  const root = join(hostHome, 'projects', projectId);
+  await mkdir(root, { recursive: true });
+  await mkdir(join(root, 'definitions'), { recursive: true });
+  await writeFile(
+    join(root, 'nova.yaml'),
+    YAML.stringify({ project: projectId, title: displayName, defaultModel: 'mock' }),
+    'utf8',
+  );
+}
+
+/**
  * Create the pre-start setup surface. `register` mounts every route through
  * the listener's setup seam; all gating (unconfigured + loopback) happens per
  * request, so an already-configured or LAN-exposed Host never serves setup
@@ -388,19 +417,24 @@ export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
       if (denied !== null) return denied;
       const body = await bodyObject(c.req.raw);
       const parsed = parseRequest(body, ['password', 'displayName'], 'owner');
-      if (parsed === null || typeof parsed.password !== 'string' || parsed.password.length < 12) {
+      if (parsed === null || (parsed.password !== undefined && typeof parsed.password !== 'string')) {
         return setupError(
           'SETUP_INVALID_INPUT',
-          'owner requires a password of at least 12 characters and no unknown fields.',
+          'owner requires a password (optional; at least 12 characters when set) and no unknown fields.',
           400,
         );
       }
-      if (parsed.displayName !== undefined && typeof parsed.displayName !== 'string') {
-        return setupError('SETUP_INVALID_INPUT', 'displayName must be a string.', 400);
+      const password = typeof parsed.password === 'string' ? parsed.password : '';
+      if (password.length > 0 && password.length < 12) {
+        return setupError(
+          'SETUP_INVALID_INPUT',
+          'owner password must be at least 12 characters when set.',
+          400,
+        );
       }
       try {
         const result = await options.auth.bootstrapOwner({
-          password: parsed.password,
+          password,
           displayName: typeof parsed.displayName === 'string' ? parsed.displayName : 'Owner',
         });
         return json({
@@ -423,17 +457,16 @@ export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
       const denied = await guardMutation();
       if (denied !== null) return denied;
       const body = await bodyObject(c.req.raw);
-      const parsed = parseRequest(body, ['projectId', 'displayName', 'root'], 'projects/validate');
+      const parsed = parseRequest(body, ['projectId', 'displayName'], 'projects/validate');
       if (parsed === null) {
         return setupError(
           'UNKNOWN_FIELD',
-          'projects/validate accepts only projectId, displayName, root.',
+          'projects/validate accepts only projectId, displayName.',
           400,
         );
       }
       const projectId = typeof parsed.projectId === 'string' ? parsed.projectId : '';
       const displayName = typeof parsed.displayName === 'string' ? parsed.displayName : '';
-      const root = typeof parsed.root === 'string' ? parsed.root : '';
       const candidate: WorkbenchConfigurationV1 = {
         ...(draft?.configuration ?? EMPTY_DRAFT.configuration),
         projects: [
@@ -441,7 +474,6 @@ export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
           {
             projectId,
             displayName,
-            root,
             revisionMirror: { mode: 'disabled' },
             providerProfile: DEFAULT_PROVIDER_PROFILE,
             trustedPlugins: [],
@@ -475,17 +507,16 @@ export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
       const denied = await guardMutation();
       if (denied !== null) return denied;
       const body = await bodyObject(c.req.raw);
-      const parsed = parseRequest(body, ['projectId', 'displayName', 'root'], 'projects');
+      const parsed = parseRequest(body, ['projectId', 'displayName'], 'projects');
       if (parsed === null) {
         return setupError(
           'UNKNOWN_FIELD',
-          'projects accepts only projectId, displayName, root.',
+          'projects accepts only projectId, displayName.',
           400,
         );
       }
       const projectId = typeof parsed.projectId === 'string' ? parsed.projectId : '';
       const displayName = typeof parsed.displayName === 'string' ? parsed.displayName : '';
-      const root = typeof parsed.root === 'string' ? parsed.root : '';
       const base = draft ?? structuredClone(EMPTY_DRAFT);
       if (base.configuration.projects.some((project) => project.projectId === projectId)) {
         return setupError(
@@ -501,7 +532,6 @@ export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
           {
             projectId,
             displayName,
-            root,
             revisionMirror: { mode: 'disabled' },
             providerProfile: DEFAULT_PROVIDER_PROFILE,
             trustedPlugins: [],
@@ -523,6 +553,9 @@ export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
         );
       }
       draft = { ...base, configuration: candidate };
+      // Skeleton write is best-effort: the draft registration already
+      // succeeded, so a filesystem failure must not fail the API response.
+      await writeProjectSkeleton(options.hostHome, projectId, displayName).catch(() => {});
       return json({
         version: WORKBENCH_CONFIGURATION_VERSION,
         projectId,
@@ -538,10 +571,10 @@ export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
       if (denied !== null) return denied;
       const body = await bodyObject(c.req.raw);
       const parsed = parseRequest(body, ['kind', 'baseUrl', 'model'], 'providers/validate');
-      if (parsed === null || parsed.kind !== 'ai-sdk') {
+      if (parsed === null || parsed.kind !== 'pi') {
         return setupError(
           'CONFIG_INVALID',
-          'providers/validate accepts only kind "ai-sdk", baseUrl, model.',
+          'providers/validate accepts only kind "pi", baseUrl, model.',
           400,
         );
       }
@@ -568,7 +601,7 @@ export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
       };
       return json({
         version: WORKBENCH_CONFIGURATION_VERSION,
-        kind: 'ai-sdk',
+        kind: 'pi',
         validation: 'valid',
       });
     };
@@ -662,7 +695,9 @@ export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
         parsed.expectedRevision === null || typeof parsed.expectedRevision === 'string'
           ? parsed.expectedRevision
           : undefined;
-      if (draft === null || !draft.networkApplied) {
+      // The wizard no longer has a network step: the default loopback policy
+      // is applied as-is, so `networkApplied` is not required here.
+      if (draft === null) {
         return setupError(
           'SETUP_INVALID_INPUT',
           'The setup draft is incomplete; complete every step before finishing.',

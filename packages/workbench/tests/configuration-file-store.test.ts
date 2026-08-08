@@ -39,7 +39,6 @@ function baseConfiguration(
       {
         projectId: 'demo',
         displayName: 'Demo',
-        root,
         revisionMirror: { mode: 'disabled' },
         providerProfile: 'default',
         trustedPlugins: [],
@@ -118,7 +117,6 @@ describe('configuration file store', () => {
         {
           projectId: 'demo',
           displayName: 'Demo',
-          root: configuration.projects[0]?.root,
           revisionMirror: { mode: 'disabled' },
           providerProfile: 'default',
           trustedPlugins: [],
@@ -145,7 +143,7 @@ describe('configuration file store', () => {
   it('serializes to canonical V1 YAML with mirror and reference limits', () => {
     const configuration = baseConfiguration('/srv/project', {
       providers: {
-        default: { kind: 'ai-sdk', baseUrl: 'https://api.example.com', model: 'fast-model' },
+        default: { kind: 'pi', baseUrl: 'https://api.example.com', model: 'fast-model' },
       },
       network: {
         mode: 'unix',
@@ -176,8 +174,64 @@ describe('configuration file store', () => {
       expect(parsed.configuration.referenceLimits).toEqual(DEFAULT_WORKBENCH_REFERENCE_LIMITS);
       expect(parsed.configuration.renderPolicy).toEqual(DEFAULT_WORKBENCH_RENDER_POLICY);
       expect(parsed.configuration.providers).toEqual({
-        default: { kind: 'ai-sdk', baseUrl: 'https://api.example.com', model: 'fast-model' },
+        default: { kind: 'pi', baseUrl: 'https://api.example.com', model: 'fast-model' },
       });
+    }
+  });
+
+  it('round-trips optional provider advanced fields through parse/serialize', () => {
+    const root = '/tmp/irrelevant-root';
+    const configuration = baseConfiguration(root, {
+      providers: {
+        default: {
+          kind: 'pi',
+          baseUrl: 'https://api.example.com/v1',
+          model: 'fast-model',
+          reasoning: true,
+          contextWindow: 32000,
+          maxTokens: 8000,
+          headers: { 'x-custom': 'v' },
+        },
+      },
+    });
+    const parsed = parseConfigurationYaml(serializeConfigurationYaml(configuration));
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) {
+      expect(parsed.configuration.providers).toEqual({
+        default: {
+          kind: 'pi',
+          baseUrl: 'https://api.example.com/v1',
+          model: 'fast-model',
+          reasoning: true,
+          contextWindow: 32000,
+          maxTokens: 8000,
+          headers: { 'x-custom': 'v' },
+        },
+      });
+    }
+  });
+
+  it('rejects malformed provider advanced fields', () => {
+    const root = '/tmp/irrelevant-root';
+    const bad = validateConfigurationShape({
+      ...baseConfiguration(root),
+      providers: {
+        default: {
+          kind: 'pi',
+          baseUrl: 'https://api.example.com/v1',
+          model: 'fast-model',
+          reasoning: 'yes',
+          contextWindow: -4,
+          maxTokens: 2.5,
+          headers: { 'x-custom': 7 },
+        },
+      },
+    });
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) {
+      expect(bad.diagnostics.map((d) => d.code)).toEqual(
+        expect.arrayContaining(['CONFIG_INVALID', 'CONFIG_INVALID', 'CONFIG_INVALID', 'CONFIG_INVALID']),
+      );
     }
   });
 
@@ -250,14 +304,13 @@ describe('strict configuration shape validation', () => {
     }
   });
 
-  it('rejects duplicate project ids and relative roots', () => {
+  it('rejects duplicate project ids and accepts a root-free v1 project entry', () => {
     const duplicated = {
       ...baseConfiguration(root),
       projects: [
         {
           projectId: 'a',
           displayName: 'A',
-          root,
           revisionMirror: { mode: 'disabled' },
           providerProfile: 'default',
           trustedPlugins: [],
@@ -265,7 +318,6 @@ describe('strict configuration shape validation', () => {
         {
           projectId: 'a',
           displayName: 'A2',
-          root,
           revisionMirror: { mode: 'disabled' },
           providerProfile: 'default',
           trustedPlugins: [],
@@ -276,13 +328,9 @@ describe('strict configuration shape validation', () => {
     expect(dup.ok).toBe(false);
     if (!dup.ok) expect(dup.diagnostics.map((d) => d.code)).toContain('PROJECT_DUPLICATE_ID');
 
-    const relative = parseConfigurationYaml(
-      serializeConfigurationYaml(baseConfiguration('relative/path')),
-    );
-    expect(relative.ok).toBe(false);
-    if (!relative.ok) {
-      expect(relative.diagnostics.map((d) => d.code)).toContain('PROJECT_INVALID_ROOT');
-    }
+    // Project roots are Host-derived now; a v1 entry without `root` parses.
+    const noRoot = parseConfigurationYaml(serializeConfigurationYaml(baseConfiguration(root)));
+    expect(noRoot.ok).toBe(true);
   });
 
   it('rejects malformed listener policies', () => {
@@ -349,7 +397,7 @@ describe('strict configuration shape validation', () => {
     const providerExtra = validateConfigurationShape({
       ...baseConfiguration(root),
       providers: {
-        default: { kind: 'ai-sdk', baseUrl: null, model: null, apiKey: 'sk-secret' },
+        default: { kind: 'pi', baseUrl: null, model: null, apiKey: 'sk-secret' },
       },
     });
     expect(providerExtra.ok).toBe(false);

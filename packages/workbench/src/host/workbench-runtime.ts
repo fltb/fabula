@@ -12,6 +12,17 @@ import type { WorkbenchProjectConfigurationV1 } from '../contracts/configuration
 import type { ProjectSession, ProjectSessionRegistry } from './project-session.js';
 import { createProjectSessionRegistry } from './project-session.js';
 
+/**
+ * Project configuration as the launch composes it: the protocol entry plus
+ * the Host-derived managed root (`$WORKBENCH_HOME/projects/<projectId>`).
+ * `root` is optional because admin-added projects are opened straight from
+ * the raw active configuration; consumers derive it from the project id
+ * when absent.
+ */
+export type ManagedProjectConfigurationV1 = WorkbenchProjectConfigurationV1 & {
+  readonly root?: string;
+};
+
 /** Narrow consumer port used by the owner admin surface. */
 export interface RuntimeAdminPort {
   isOpen(projectId: string): boolean;
@@ -29,7 +40,7 @@ export interface WorkbenchRuntimeOptions {
   readonly registry?: ProjectSessionRegistry;
   /** Constructs the complete session bundle for one registered project. */
   readonly createSession: (
-    project: WorkbenchProjectConfigurationV1,
+    project: ManagedProjectConfigurationV1,
   ) => ProjectSession | Promise<ProjectSession>;
   /** Optional close hook (e.g. authoring/Yjs teardown); runs before registry removal. */
   readonly closeSession?: (session: ProjectSession) => void | Promise<void>;
@@ -74,7 +85,7 @@ export class WorkbenchRuntimeUnknownProjectError extends Error {
 export class WorkbenchRuntime implements RuntimeAdminPort {
   readonly #registry: ProjectSessionRegistry;
   readonly #createSession: (
-    project: WorkbenchProjectConfigurationV1,
+    project: ManagedProjectConfigurationV1,
   ) => ProjectSession | Promise<ProjectSession>;
   readonly #closeSession: ((session: ProjectSession) => void | Promise<void>) | undefined;
   /** Per-project open deduplication; a full bundle must never be constructed twice. */
@@ -110,7 +121,7 @@ export class WorkbenchRuntime implements RuntimeAdminPort {
   }
 
   /** Open (or return the existing) complete session bundle for one registered project. */
-  open(project: WorkbenchProjectConfigurationV1): Promise<ProjectSession> {
+  open(project: ManagedProjectConfigurationV1): Promise<ProjectSession> {
     const existing = this.#registry.get(project.projectId);
     if (existing !== null) return Promise.resolve(existing);
     const pending = this.#opening.get(project.projectId);
@@ -168,7 +179,7 @@ export class WorkbenchRuntime implements RuntimeAdminPort {
    * busy. Throws when a configured project cannot be opened.
    */
   async sync(
-    projects: readonly WorkbenchProjectConfigurationV1[],
+    projects: readonly ManagedProjectConfigurationV1[],
   ): Promise<WorkbenchRuntimeSyncResult> {
     const configured = new Set(projects.map((project) => project.projectId));
     const opened: string[] = [];

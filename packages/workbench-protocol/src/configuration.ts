@@ -15,7 +15,6 @@ export type WorkbenchConfigurationVersion = typeof WORKBENCH_CONFIGURATION_VERSI
 export interface WorkbenchProjectConfigurationV1 {
   readonly projectId: string;
   readonly displayName: string;
-  readonly root: string;
   readonly revisionMirror: WorkbenchRevisionMirrorConfigurationV1;
   readonly providerProfile: string;
   readonly trustedPlugins: readonly WorkbenchTrustedPluginConfigurationV1[];
@@ -52,15 +51,19 @@ export interface WorkbenchAgentConfigurationV1 {
 }
 
 /**
- * Provider profile bound to a project. `'ai-sdk'` is retained for
- * backward compatibility with existing workbench.yaml files; production
- * construction branches on `kind` and treats `'ai-sdk'` as `'pi'` with a
- * one-time warning. Unknown kinds are rejected at validation time.
+ * Provider profile bound to a project. `'pi'` is the only supported kind;
+ * the runtime always constructs a `PiOpenAICompatibleProvider`. Unknown
+ * kinds are rejected at validation time.
  */
 export interface WorkbenchProviderConfigurationV1 {
-  readonly kind: 'ai-sdk' | 'pi';
+  readonly kind: 'pi';
   readonly baseUrl: string | null;
   readonly model: string | null;
+  /** Optional pi-ai advanced tuning; only present keys are persisted. */
+  readonly reasoning?: boolean;
+  readonly contextWindow?: number;
+  readonly maxTokens?: number;
+  readonly headers?: Readonly<Record<string, string>>;
 }
 
 export interface WorkbenchNetworkConfigurationV1 {
@@ -89,7 +92,11 @@ export interface WorkbenchReferenceLimitsV1 {
 /** Rendering sampling policy applied to every render through the Host. */
 export interface WorkbenchRenderPolicyV1 {
   readonly pass1: { readonly temperature: number; readonly maxTokens: number };
-  readonly pass2: { readonly temperature: number; readonly maxTokens: number; readonly seed: number };
+  readonly pass2: {
+    readonly temperature: number;
+    readonly maxTokens: number;
+    readonly seed: number;
+  };
 }
 
 export interface WorkbenchConfigurationV1 {

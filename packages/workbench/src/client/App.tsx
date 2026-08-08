@@ -37,6 +37,7 @@ import type {
   SourceStudioStateV1,
   WorkbenchGraphNodeV1,
   WorkbenchGraphProjectionV1,
+  WorkbenchProjectFeatureV1,
   WorkbenchRouteSelectorV1,
 } from '../contracts/index.js';
 import { AgentChat } from './AgentChat';
@@ -53,6 +54,7 @@ import { SceneMap } from './SceneMap';
 import { ReviewHub } from './ReviewHub';
 import { SceneCanvas } from './scene-canvas';
 import { SourceStudio, type SourceStudioYjsStatus } from './source-studio';
+import { SettingsView } from './SettingsView';
 import { describeCoordinate, describeOrigin } from './graph-view-model';
 
 /**
@@ -71,6 +73,7 @@ const WORKBENCH_VIEW_CATALOG = [
   { id: 'scene-canvas', label: 'Scene Canvas', glyph: '◇' },
   { id: 'publication', label: 'Publication', glyph: '◫' },
   { id: 'references', label: 'References', glyph: '▤' },
+  { id: 'settings', label: '设置', glyph: '⚙' },
 ] as const;
 
 export type WorkbenchViewId = (typeof WORKBENCH_VIEW_CATALOG)[number]['id'];
@@ -644,6 +647,13 @@ export function Workspace(props: WorkspaceProps) {
           onReadContent={props.onReadReferenceContent}
         />
       </Show>
+      <Show when={props.hostStatus === 'ready' && props.activeView === 'settings'}>
+        <SettingsView
+          projectId={props.overview?.projectId ?? null}
+          sessionRole={props.sessionProjectRole ?? null}
+          sessionId={props.sourceSessionId ?? null}
+        />
+      </Show>
       <Show when={props.hostStatus === 'ready' && props.activeView === 'scene-map'}>
         <SceneMap
           projectId={props.overview?.projectId ?? null}
@@ -660,6 +670,7 @@ export function Workspace(props: WorkspaceProps) {
           onRenderScene={props.onRenderScene}
           onRequestAdoption={props.onRequestAdoption}
           onRefresh={props.onRefreshSceneMap}
+          sourceSessionId={props.sourceSessionId ?? null}
         />
       </Show>
       <Show

@@ -162,13 +162,21 @@ export class LocalAuthService {
 
   /** First-run owner bootstrap. Once an owner exists this throws `OwnerAlreadyExistsError`. */
   async bootstrapOwner(input: {
-    password: string;
+    password?: string;
     displayName?: string;
   }): Promise<BootstrapResult> {
     const { ownerExists } = await this.getAuthState();
     if (ownerExists) throw new OwnerAlreadyExistsError();
     const now = new Date(this.#now()).toISOString();
-    const passwordHash = await hashPassword(input.password, this.#parameters);
+    // An empty password creates a passwordless owner: a dummy, unverifiable
+    // hash keeps the "owner exists" invariant while interactive login stays
+    // impossible. Browser sessions for passwordless owners come from the
+    // setup bootstrap session (loopback device trust); LAN login requires a
+    // real password set through the owner dashboard.
+    const passwordHash =
+      input.password === undefined || input.password.length === 0
+        ? DUMMY_PASSWORD_HASH
+        : await hashPassword(input.password, this.#parameters);
     const user = await this.#persistence.bootstrapOwner({
       userId: this.#newId(),
       displayName: input.displayName ?? 'Owner',

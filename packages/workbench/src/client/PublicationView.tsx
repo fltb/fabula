@@ -157,53 +157,53 @@ function PublicationCard(props: {
       </div>
       <dl class="publication-meta">
         <div>
-          <dt>File</dt>
+          <dt>文件</dt>
           <dd>
             <code>{record().relativeOutputPath}</code>
           </dd>
         </div>
         <div>
-          <dt>Novel hash</dt>
+          <dt>成书哈希</dt>
           <dd>
             <code title={record().novelHash}>{shortHash(record().novelHash)}</code>
           </dd>
         </div>
         <div>
-          <dt>Source hash</dt>
+          <dt>源哈希</dt>
           <dd>
             <code title={record().sourceHash}>{shortHash(record().sourceHash)}</code>
           </dd>
         </div>
         <div>
-          <dt>Scope hash</dt>
+          <dt>范围哈希</dt>
           <dd>
             <code title={record().scopeHash}>{shortHash(record().scopeHash)}</code>
           </dd>
         </div>
         <div>
-          <dt>Scenes</dt>
+          <dt>场景数</dt>
           <dd>{record().sceneCount}</dd>
         </div>
         <div>
-          <dt>Words</dt>
+          <dt>字数</dt>
           <dd>{record().wordCount}</dd>
         </div>
         <div>
-          <dt>Bytes</dt>
+          <dt>字节</dt>
           <dd>{record().byteLength}</dd>
         </div>
         <div>
-          <dt>Revisions</dt>
+          <dt>修订数</dt>
           <dd>{record().revisionIds.length}</dd>
         </div>
         <div>
-          <dt>Updated</dt>
+          <dt>更新时间</dt>
           <dd>{record().updatedAt}</dd>
         </div>
       </dl>
       <Show when={record().staleReasons.length > 0}>
-        <section class="publication-stale" aria-label="Stale reasons">
-          <h4>Stale reasons</h4>
+        <section class="publication-stale" aria-label="过期原因">
+          <h4>过期原因</h4>
           <ul>
             <For each={record().staleReasons}>
               {(reason) => (
@@ -306,8 +306,8 @@ export function PublicationView(props: PublicationViewProps) {
     <section class="publication-view" aria-labelledby="publication-heading">
       <header class="publication-header">
         <div>
-          <p class="region-kicker">Assembled novel</p>
-          <h2 id="publication-heading">Publication</h2>
+          <p class="region-kicker">成书输出</p>
+          <h2 id="publication-heading">发布产物</h2>
         </div>
         <Show when={props.onRefresh !== undefined}>
           <button
@@ -316,7 +316,7 @@ export function PublicationView(props: PublicationViewProps) {
             data-testid="publication-refresh"
             onClick={() => void props.onRefresh?.()}
           >
-            Refresh
+            刷新
           </button>
         </Show>
       </header>
@@ -336,7 +336,7 @@ export function PublicationView(props: PublicationViewProps) {
           role="status"
           data-testid="publication-publish-success"
         >
-          Publication request accepted — the artifact is queued for assembly.
+          发布请求已接受 — 正在排队装配成书文件。
         </p>
       </Show>
 
@@ -347,13 +347,13 @@ export function PublicationView(props: PublicationViewProps) {
             when={props.publicationsError !== null && props.publicationsError !== undefined}
             fallback={
               <section class="screen-empty" aria-live="polite">
-                <h3>No publication projection</h3>
-                <p>Open an authenticated project in the Host to load its publication records.</p>
+                <h3>暂无发布数据</h3>
+                <p>打开已认证的项目以加载其发布记录。</p>
               </section>
             }
           >
             <section class="screen-empty" aria-live="polite" data-testid="publication-load-error">
-              <h3>Publication catalog could not be loaded</h3>
+              <h3>发布目录加载失败</h3>
               <p>{props.publicationsError}</p>
               <Show when={props.onRefresh !== undefined}>
                 <button
@@ -362,7 +362,7 @@ export function PublicationView(props: PublicationViewProps) {
                   data-testid="publication-load-retry"
                   onClick={() => void props.onRefresh?.()}
                 >
-                  Retry
+                  重试
                 </button>
               </Show>
             </section>
@@ -373,7 +373,7 @@ export function PublicationView(props: PublicationViewProps) {
           <section class="publication-list-section" aria-labelledby="publication-list-heading">
             <div class="publication-section-heading">
               <h3 id="publication-list-heading">
-                Publications{' '}
+                发布记录{' '}
                 <span class="publication-count" data-testid="publication-count">
                   {catalog().publications.length}
                 </span>
@@ -388,7 +388,7 @@ export function PublicationView(props: PublicationViewProps) {
                       data-testid="publication-publish-open"
                       onClick={() => setPublishOpen(true)}
                     >
-                      Publish
+                      发布
                     </button>
                   }
                 >
@@ -400,22 +400,22 @@ export function PublicationView(props: PublicationViewProps) {
                     }}
                   >
                     <input
-                      aria-label="Branch name"
-                      placeholder="Branch name (optional)"
+                      aria-label="分支名"
+                      placeholder="分支名（可选）"
                       value={branchName()}
                       onInput={(event) => setBranchName(event.currentTarget.value)}
                       data-testid="publication-branch-name"
                     />
                     <input
-                      aria-label="Relative output path"
-                      placeholder="Relative output path (e.g. output/novel.md)"
+                      aria-label="相对输出路径"
+                      placeholder="相对输出路径（如 output/novel.md）"
                       value={relativePath()}
                       onInput={(event) => setRelativePath(event.currentTarget.value)}
                       data-testid="publication-relative-path"
                     />
                     <input
-                      aria-label="Title"
-                      placeholder="Title (optional)"
+                      aria-label="标题"
+                      placeholder="标题（可选）"
                       value={title()}
                       onInput={(event) => setTitle(event.currentTarget.value)}
                       data-testid="publication-title"
@@ -425,10 +425,10 @@ export function PublicationView(props: PublicationViewProps) {
                       type="submit"
                       data-testid="publication-publish-save"
                     >
-                      Publish
+                      发布
                     </button>
                     <button class="btn btn-ghost" type="button" onClick={() => setPublishOpen(false)}>
-                      Cancel
+                      取消
                     </button>
                   </form>
                 </Show>
@@ -438,11 +438,11 @@ export function PublicationView(props: PublicationViewProps) {
               when={catalog().publications.length > 0}
               fallback={
                 <p class="screen-note">
-                  No publications yet. Publish the accepted novel to produce an artifact.
+                  还没有发布产物。发布已接受的章节以生成成书文件。
                 </p>
               }
             >
-              <ul class="publication-list" aria-label="Publications">
+              <ul class="publication-list" aria-label="发布记录">
                 <For each={catalog().publications}>
                   {(record) => (
                     <PublicationCard

@@ -20,7 +20,6 @@ const servers: HostServer[] = [];
 const project: WorkbenchProjectConfigurationV1 = {
   projectId: 'project-a',
   displayName: 'Project A',
-  root: '/private/project-a',
   revisionMirror: { mode: 'disabled' },
   providerProfile: 'default',
   trustedPlugins: [],
@@ -219,7 +218,6 @@ describe('admin configuration domains', () => {
       {
         projectId: 'project-a',
         displayName: 'Project A',
-        root: '/private/project-a',
         revisionMirror: { mode: 'disabled' },
         providerProfile: 'default',
         trustedPlugins: [{ name: 'arc', version: '1.0.0', moduleHash: 'abc123', required: true }],
@@ -227,7 +225,7 @@ describe('admin configuration domains', () => {
     ],
     defaultProjectId: 'project-a',
     providers: {
-      default: { kind: 'ai-sdk', baseUrl: 'https://api.example.com/v1', model: 'deepseek-chat' },
+      default: { kind: 'pi', baseUrl: 'https://api.example.com/v1', model: 'deepseek-chat' },
     },
     network: {
       mode: 'loopback',
@@ -352,7 +350,7 @@ describe('admin configuration domains', () => {
     expect(body.providers).toEqual([
       {
         profileId: 'default',
-        kind: 'ai-sdk',
+        kind: 'pi',
         configured: true,
         endpoint: 'https://api.example.com/***',
         model: 'de****t',
@@ -500,7 +498,7 @@ describe('admin configuration domains', () => {
       headers: { host: '127.0.0.1', 'content-type': 'application/json' },
       body: JSON.stringify({
         version: 1,
-        kind: 'ai-sdk',
+        kind: 'pi',
         baseUrl: 'https://fast.example.com/v1',
         model: 'fast-model',
       }),
@@ -509,7 +507,7 @@ describe('admin configuration domains', () => {
     const body = await response.json();
     expect(body.profile).toEqual({
       profileId: 'fast',
-      kind: 'ai-sdk',
+      kind: 'pi',
       configured: false,
       endpoint: 'https://fast.example.com/***',
       model: 'fa****l',
@@ -518,7 +516,7 @@ describe('admin configuration domains', () => {
     });
     const candidate = h.appliedCandidates[0] as WorkbenchConfigurationV1;
     expect(candidate.providers.fast).toEqual({
-      kind: 'ai-sdk',
+      kind: 'pi',
       baseUrl: 'https://fast.example.com/v1',
       model: 'fast-model',
     });
@@ -556,7 +554,6 @@ describe('admin configuration domains', () => {
         {
           projectId: 'project-a',
           displayName: 'Project A',
-          root: '/private/project-a',
           revisionMirror: { mode: 'disabled' },
           providerProfile: 'fast',
           trustedPlugins: [{ name: 'arc', version: '1.0.0', moduleHash: 'abc123', required: true }],
@@ -564,7 +561,7 @@ describe('admin configuration domains', () => {
       ],
       providers: {
         ...v1Configuration.providers,
-        fast: { kind: 'ai-sdk', baseUrl: null, model: null },
+        fast: { kind: 'pi', baseUrl: null, model: null },
       },
     };
     const h = createConfigHarness({ configuration: rebound, configuredProfiles: ['fast'] });

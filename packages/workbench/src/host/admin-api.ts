@@ -316,7 +316,7 @@ function inviteSafeView(invite: {
 /** Masked provider profile read view; credentials never exist in this DTO. */
 export interface WorkbenchProviderProfileReadViewV1 {
   readonly profileId: string;
-  readonly kind: 'ai-sdk' | 'pi';
+  readonly kind: 'pi';
   /** True when the Host credential store holds a key for `ai-sdk:<profileId>`. */
   readonly configured: boolean;
   /** Masked endpoint, or null when unset. */
@@ -402,9 +402,13 @@ export interface AdminAdvancedConfigRequestV1 {
 /** Provider profile endpoint/model upsert from the dashboard. Never carries an API key. */
 export interface AdminProviderProfileUpdateRequestV1 {
   readonly version: WorkbenchConfigurationVersion;
-  readonly kind: 'ai-sdk';
+  readonly kind: 'pi';
   readonly baseUrl: string | null;
   readonly model: string | null;
+  readonly reasoning?: boolean;
+  readonly contextWindow?: number;
+  readonly maxTokens?: number;
+  readonly headers?: Readonly<Record<string, string>>;
 }
 
 /** One-way provider profile credential write; the secret never leaves the Host. */
@@ -682,16 +686,15 @@ function projectValidateHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
     const owner = await api.requireOwner(c);
     if (owner instanceof Response) return owner;
     const body = await c.req.raw.json().catch(() => null);
-    const parsed = parseRequest(body, ['projectId', 'displayName', 'root']);
+    const parsed = parseRequest(body, ['projectId', 'displayName']);
     if (parsed === null) {
       return adminError(
         'UNKNOWN_FIELD',
-        'projects/validate accepts only projectId, displayName, root.',
+        'projects/validate accepts only projectId, displayName.',
       );
     }
     const projectId = typeof parsed.projectId === 'string' ? parsed.projectId : '';
     const displayName = typeof parsed.displayName === 'string' ? parsed.displayName : '';
-    const root = typeof parsed.root === 'string' ? parsed.root : '';
     const config = await api.options.configuration.readActive();
     const base = config === null ? null : config.configuration;
     const candidate: WorkbenchConfigurationV1 =
@@ -702,7 +705,6 @@ function projectValidateHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
               {
                 projectId,
                 displayName,
-                root,
                 revisionMirror: { mode: 'disabled' } as const,
                 providerProfile: 'default',
                 trustedPlugins: [],
@@ -729,7 +731,6 @@ function projectValidateHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
               {
                 projectId,
                 displayName,
-                root,
                 revisionMirror: { mode: 'disabled' } as const,
                 providerProfile: 'default',
                 trustedPlugins: [],
@@ -803,13 +804,12 @@ function projectCreateHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
     const owner = await api.requireOwner(c);
     if (owner instanceof Response) return owner;
     const body = await c.req.raw.json().catch(() => null);
-    const parsed = parseRequest(body, ['projectId', 'displayName', 'root']);
+    const parsed = parseRequest(body, ['projectId', 'displayName']);
     if (parsed === null) {
-      return adminError('UNKNOWN_FIELD', 'projects accepts only projectId, displayName, root.');
+      return adminError('UNKNOWN_FIELD', 'projects accepts only projectId, displayName.');
     }
     const projectId = typeof parsed.projectId === 'string' ? parsed.projectId : '';
     const displayName = typeof parsed.displayName === 'string' ? parsed.displayName : '';
-    const root = typeof parsed.root === 'string' ? parsed.root : '';
     return applyProjectChange(
       api,
       (current) => {
@@ -821,7 +821,6 @@ function projectCreateHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
             {
               projectId,
               displayName,
-              root,
               revisionMirror: { mode: 'disabled' },
               providerProfile: 'default',
               trustedPlugins: [],
@@ -845,18 +844,17 @@ function projectUpdateHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
       return adminError('PROJECT_NOT_FOUND', 'A project id is required.');
     }
     const body = await c.req.raw.json().catch(() => null);
-    const parsed = parseRequest(body, ['projectId', 'displayName', 'root']);
+    const parsed = parseRequest(body, ['projectId', 'displayName']);
     if (parsed === null || parsed.projectId !== projectId) {
       return adminError('PROJECT_NOT_FOUND', `Project "${projectId}" is not registered.`);
     }
     const displayName = typeof parsed.displayName === 'string' ? parsed.displayName : '';
-    const root = typeof parsed.root === 'string' ? parsed.root : '';
     return applyProjectChange(
       api,
       (current) => ({
         ...current,
         projects: current.projects.map((project) =>
-          project.projectId === projectId ? { ...project, displayName, root } : project,
+          project.projectId === projectId ? { ...project, displayName } : project,
         ),
       }),
       projectId,
@@ -1013,10 +1011,10 @@ function providerUpdateHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
     if (owner instanceof Response) return owner;
     const body = await c.req.raw.json().catch(() => null);
     const parsed = parseRequest(body, ['kind', 'baseUrl', 'model']);
-    if (parsed === null || parsed.kind !== 'ai-sdk') {
+    if (parsed === null || parsed.kind !== 'pi') {
       return adminError(
         'UNKNOWN_FIELD',
-        'providers/ai-sdk accepts only kind "ai-sdk", baseUrl, model.',
+        'providers/ai-sdk accepts only kind "pi", baseUrl, model.',
       );
     }
     const baseUrl =
@@ -1030,7 +1028,7 @@ function providerUpdateHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
         ...normalized,
         providers: {
           ...normalized.providers,
-          default: { kind: 'ai-sdk' as const, baseUrl, model },
+          default: { kind: 'pi' as const, baseUrl, model },
         },
       },
       expectedRevision: loaded.active.revision,
@@ -1301,16 +1299,45 @@ function providerProfileUpsertHandler(api: AdminApiImpl): Handler<HostListenerEn
       return adminError('CONFIG_INVALID', 'A valid provider profile id is required.');
     }
     const body = await c.req.raw.json().catch(() => null);
-    const parsed = parseRequest(body, ['kind', 'baseUrl', 'model']);
-    if (parsed === null || parsed.kind !== 'ai-sdk') {
+    const parsed = parseRequest(body, [
+      'kind',
+      'baseUrl',
+      'model',
+      'reasoning',
+      'contextWindow',
+      'maxTokens',
+      'headers',
+    ]);
+    if (parsed === null || parsed.kind !== 'pi') {
       return adminError(
         'UNKNOWN_FIELD',
-        'provider profiles accept only kind "ai-sdk", baseUrl, model.',
+        'provider profiles accept only kind "pi", baseUrl, model, and optional advanced fields.',
       );
     }
     const baseUrl =
       parsed.baseUrl === null || typeof parsed.baseUrl === 'string' ? parsed.baseUrl : null;
     const model = parsed.model === null || typeof parsed.model === 'string' ? parsed.model : null;
+    const reasoning = typeof parsed.reasoning === 'boolean' ? parsed.reasoning : undefined;
+    const contextWindow =
+      typeof parsed.contextWindow === 'number' ? parsed.contextWindow : undefined;
+    const maxTokens = typeof parsed.maxTokens === 'number' ? parsed.maxTokens : undefined;
+    const headers =
+      parsed.headers !== undefined &&
+      isRecord(parsed.headers) &&
+      Object.values(parsed.headers).every((value) => typeof value === 'string')
+        ? (parsed.headers as Readonly<Record<string, string>>)
+        : undefined;
+    if (
+      (parsed.reasoning !== undefined && reasoning === undefined) ||
+      (parsed.contextWindow !== undefined && contextWindow === undefined) ||
+      (parsed.maxTokens !== undefined && maxTokens === undefined) ||
+      (parsed.headers !== undefined && headers === undefined)
+    ) {
+      return adminError(
+        'UNKNOWN_FIELD',
+        'provider advanced fields must be a boolean reasoning, positive integers contextWindow/maxTokens, and a string-to-string headers mapping.',
+      );
+    }
     const loaded = await api.requireConfiguration();
     if (!loaded.ok) return loaded.response;
     const normalized = loaded.active.configuration;
@@ -1319,7 +1346,15 @@ function providerProfileUpsertHandler(api: AdminApiImpl): Handler<HostListenerEn
         ...normalized,
         providers: {
           ...normalized.providers,
-          [profileId]: { kind: 'ai-sdk' as const, baseUrl, model },
+          [profileId]: {
+            kind: 'pi' as const,
+            baseUrl,
+            model,
+            ...(reasoning === undefined ? {} : { reasoning }),
+            ...(contextWindow === undefined ? {} : { contextWindow }),
+            ...(maxTokens === undefined ? {} : { maxTokens }),
+            ...(headers === undefined ? {} : { headers: { ...headers } }),
+          },
         },
       },
       expectedRevision: loaded.active.revision,
@@ -1337,7 +1372,7 @@ function providerProfileUpsertHandler(api: AdminApiImpl): Handler<HostListenerEn
       );
     }
     const profile = await providerProfileView(api, profileId, {
-      kind: 'ai-sdk',
+      kind: 'pi',
       baseUrl,
       model,
     });

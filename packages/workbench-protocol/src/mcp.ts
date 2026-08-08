@@ -395,9 +395,8 @@ const adminProjectProperty = objectProperty(
   {
     projectId: adminProjectId,
     displayName: { type: 'string', minLength: 1, maxLength: 4096 },
-    root: { type: 'string', minLength: 1, maxLength: 4096 },
   },
-  ['projectId', 'displayName', 'root'],
+  ['projectId', 'displayName'],
 );
 const adminConfigurationProperty = objectProperty(
   {
@@ -407,7 +406,7 @@ const adminConfigurationProperty = objectProperty(
     provider: {
       ...objectProperty(
         {
-          kind: { type: 'string', const: 'ai-sdk' },
+          kind: { type: 'string', const: 'pi' },
           baseUrl: { type: ['string', 'null'], maxLength: 4096 },
           model: { type: ['string', 'null'], maxLength: 4096 },
         },
@@ -1230,9 +1229,8 @@ function inputFor(name: string): McpJsonSchemaV1 {
         version: adminVersion,
         projectId: adminProjectId,
         displayName: { type: 'string', minLength: 1, maxLength: 4096 },
-        root: { type: 'string', minLength: 1, maxLength: 4096 },
       },
-      ['version', 'projectId', 'displayName', 'root'],
+      ['version', 'projectId', 'displayName'],
     );
   }
   if (

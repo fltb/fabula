@@ -18,15 +18,13 @@ import {
 import type { Message } from '@earendil-works/pi-ai';
 import {
   createPiProviderStack,
-  PI_DEFAULT_BASE_URL,
-  PI_DEFAULT_MODEL,
   type PiProviderStack,
 } from './pi-provider.js';
 
 export interface PiOpenAICompatibleProviderOptions {
-  readonly baseURL?: string;
+  readonly baseURL?: string | null;
   readonly apiKey?: string;
-  readonly model?: string;
+  readonly model?: string | null;
   /** Task-type routing. Unconfigured task types fall back to `routing.default`, then `model`. */
   readonly routing?: {
     readonly default?: string;
@@ -34,6 +32,11 @@ export interface PiOpenAICompatibleProviderOptions {
     readonly pass2?: string;
     readonly summary?: string;
   };
+  /** Optional pi-ai advanced tuning passed to the underlying stack. */
+  readonly reasoning?: boolean;
+  readonly contextWindow?: number;
+  readonly maxTokens?: number;
+  readonly headers?: Readonly<Record<string, string>>;
 }
 
 export class PiOpenAICompatibleProvider implements LLMProvider {
@@ -44,9 +47,13 @@ export class PiOpenAICompatibleProvider implements LLMProvider {
   constructor(options: PiOpenAICompatibleProviderOptions = {}) {
     this.#options = options;
     this.#stack = createPiProviderStack({
-      baseURL: options.baseURL ?? PI_DEFAULT_BASE_URL,
+      baseURL: options.baseURL ?? null,
       apiKey: options.apiKey,
-      modelId: options.model ?? options.routing?.default ?? PI_DEFAULT_MODEL,
+      modelId: options.model ?? options.routing?.default ?? null,
+      ...(options.reasoning === undefined ? {} : { reasoning: options.reasoning }),
+      ...(options.contextWindow === undefined ? {} : { contextWindow: options.contextWindow }),
+      ...(options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens }),
+      ...(options.headers === undefined ? {} : { headers: { ...options.headers } }),
     });
   }
 
@@ -101,10 +108,10 @@ export class PiOpenAICompatibleProvider implements LLMProvider {
 
   #modelIdFor(taskType?: TaskType): string {
     const routing = this.#options.routing;
-    if (!routing || !taskType) return this.#options.model ?? PI_DEFAULT_MODEL;
+    if (!routing || !taskType) return this.#options.model ?? '';
     if (taskType === 'pass1' && routing.pass1) return routing.pass1;
     if (taskType === 'pass2' && routing.pass2) return routing.pass2;
     if (taskType === 'summary' && routing.summary) return routing.summary;
-    return routing.default ?? this.#options.model ?? PI_DEFAULT_MODEL;
+    return routing.default ?? this.#options.model ?? '';
   }
 }

@@ -22,7 +22,7 @@ describe('SceneCanvas adoption disclosure', () => {
 
     expect(screen.getByText('Generated prose is not authoring source yet')).toBeInTheDocument();
     expect(screen.getByText(/will enter the authoring manifest/i)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Adopt into authoring manifest' }));
+    await user.click(screen.getByRole('button', { name: '收下这版' }));
     expect(request).toHaveBeenCalledWith(candidate);
   });
 
@@ -30,7 +30,7 @@ describe('SceneCanvas adoption disclosure', () => {
     render(() => <SceneCanvas adoption={null} />);
     expect(screen.getByText('No released scene revision')).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'Adopt into authoring manifest' }),
+      screen.queryByRole('button', { name: '收下这版' }),
     ).not.toBeInTheDocument();
   });
 });

@@ -24,7 +24,7 @@ const overview: WorkbenchAdminOverviewV1 = {
     projects: [],
     defaultProjectId: null,
     provider: {
-      kind: 'ai-sdk',
+      kind: 'pi',
       configured: false,
       endpoint: 'https://********/v1',
       model: 'de****h',
@@ -41,6 +41,7 @@ const overview: WorkbenchAdminOverviewV1 = {
       restartRequired: false,
     },
     generatedAt: '2026-08-03T00:00:00.000Z',
+    hostHome: '/state/fabula/workbench',
   },
   hostStatus: 'ready',
   owner: { displayName: 'Owner', capabilityVersion: 2 },
@@ -72,7 +73,7 @@ const advancedResponse = {
   providers: [
     {
       profileId: 'default',
-      kind: 'ai-sdk',
+      kind: 'pi',
       configured: false,
       endpoint: 'https://api.****/v1',
       model: 'de****t',
@@ -81,7 +82,7 @@ const advancedResponse = {
     },
     {
       profileId: 'fast',
-      kind: 'ai-sdk',
+      kind: 'pi',
       configured: true,
       endpoint: 'https://fa****/v1',
       model: 'fa****l',
@@ -171,24 +172,23 @@ describe('owner admin client contracts', () => {
     };
     const client = createAdminClient({ fetch, initialAuthorization: 'owner' });
 
-    await client.createProject({ projectId: 'p-1', displayName: 'One', root: '/private/project' });
+    await client.createProject({ projectId: 'p-1', displayName: 'One' });
     expect(calls[0]?.input).toBe('/api/v1/admin/projects');
     expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({
       version: 1,
       projectId: 'p-1',
       displayName: 'One',
-      root: '/private/project',
     });
 
     await client.updateProvider({
-      kind: 'ai-sdk',
+      kind: 'pi',
       baseUrl: 'https://provider.test',
       model: 'model-a',
     });
     expect(calls[1]?.input).toBe('/api/v1/admin/providers/ai-sdk');
     expect(JSON.parse(String(calls[1]?.init?.body))).toEqual({
       version: 1,
-      kind: 'ai-sdk',
+      kind: 'pi',
       baseUrl: 'https://provider.test',
       model: 'model-a',
     });

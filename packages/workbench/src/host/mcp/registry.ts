@@ -383,7 +383,6 @@ export interface McpAdminProjectSaveInput {
   readonly version: 1;
   readonly projectId: string;
   readonly displayName: string;
-  readonly root: string;
 }
 export interface McpAdminProjectIdInput {
   readonly version: 1;
@@ -1806,21 +1805,18 @@ function parseAdminProjectSave(
 ):
   | { readonly ok: true; readonly value: McpAdminProjectSaveInput }
   | { readonly ok: false; readonly result: McpToolResult } {
-  const parsed = parseAdminVersionedInput(input, ['version', 'projectId', 'displayName', 'root']);
+  const parsed = parseAdminVersionedInput(input, ['version', 'projectId', 'displayName']);
   if (!parsed.ok) return parsed;
   const projectId = adminString(parsed.value, 'projectId');
   const displayName = adminString(parsed.value, 'displayName');
-  const root = adminString(parsed.value, 'root');
   if (!projectId.ok) return projectId;
   if (!displayName.ok) return displayName;
-  if (!root.ok) return root;
   return {
     ok: true,
     value: {
       version: 1,
       projectId: projectId.value,
       displayName: displayName.value,
-      root: root.value,
     },
   };
 }
@@ -2225,18 +2221,15 @@ function parseConfiguration(
       };
     }
     const record = entry as Record<string, unknown>;
-    const entryUnknown = rejectUnknownKeys(record, ['projectId', 'displayName', 'root']);
+    const entryUnknown = rejectUnknownKeys(record, ['projectId', 'displayName']);
     if (entryUnknown) return { ok: false, result: entryUnknown };
     const projectId = requiredString(record, 'projectId');
     if (!projectId.ok) return { ok: false, result: projectId.result };
     const displayName = requiredString(record, 'displayName');
     if (!displayName.ok) return { ok: false, result: displayName.result };
-    const root = requiredString(record, 'root');
-    if (!root.ok) return { ok: false, result: root.result };
     projects.push({
       projectId: projectId.value,
       displayName: displayName.value,
-      root: root.value,
       revisionMirror: { mode: 'disabled' },
       providerProfile: 'default',
       trustedPlugins: [],
@@ -2261,14 +2254,14 @@ function parseConfiguration(
     const providerRecord = provider as Record<string, unknown>;
     const providerUnknown = rejectUnknownKeys(providerRecord, ['kind', 'baseUrl', 'model']);
     if (providerUnknown) return { ok: false, result: providerUnknown };
-    if (providerRecord.kind !== 'ai-sdk') {
-      return { ok: false, result: invalidInput('configuration.provider.kind must be "ai-sdk".') };
+    if (providerRecord.kind !== 'pi') {
+      return { ok: false, result: invalidInput('configuration.provider.kind must be "pi".') };
     }
     const baseUrl = nullableStringField(providerRecord, 'baseUrl');
     if (!baseUrl.ok) return baseUrl;
     const model = nullableStringField(providerRecord, 'model');
     if (!model.ok) return model;
-    parsedProvider = { kind: 'ai-sdk', baseUrl: baseUrl.value, model: model.value };
+    parsedProvider = { kind: 'pi', baseUrl: baseUrl.value, model: model.value };
   }
   if (typeof value.network !== 'object' || value.network === null || Array.isArray(value.network)) {
     return { ok: false, result: invalidInput('configuration.network must be an object.') };

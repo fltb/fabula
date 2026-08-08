@@ -70,8 +70,6 @@ export {
 } from './providers/pi-openai-compatible.js';
 export {
   createPiProviderStack,
-  PI_DEFAULT_BASE_URL,
-  PI_DEFAULT_MODEL,
   type PiProviderStack,
 } from './providers/pi-provider.js';
 export type { DeterministicMockProviderOptions } from './providers/deterministic-mock.js';

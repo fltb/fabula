@@ -30,12 +30,14 @@ export const WORKBENCH_PREFERENCES_STORAGE_KEY = 'novalistically.workbench.prefe
 export type WorkbenchNavigationView =
   | 'project-home'
   | 'scene-canvas'
+  | 'scene-map'
   | 'source-studio'
   | 'graph-route'
   | 'review-hub'
   | 'publication'
   | 'references'
-  | 'agent-chat';
+  | 'agent-chat'
+  | 'settings';
 
 /**
  * Immutable layout preference snapshot. Every field is `readonly`; consumers
@@ -72,12 +74,14 @@ export interface WorkbenchPreferencesStorage {
 const NAVIGATION_VIEWS: readonly WorkbenchNavigationView[] = [
   'project-home',
   'scene-canvas',
+  'scene-map',
   'source-studio',
   'graph-route',
   'review-hub',
   'publication',
   'references',
   'agent-chat',
+  'settings',
 ];
 
 /** Static lookup of every key the v1 envelope may contain. */

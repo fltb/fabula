@@ -663,10 +663,7 @@ async function boot(options: LaunchSmokeBootOptions): Promise<LaunchSmokeHandle>
   const assetsRoot = join(hostHome, 'assets');
   await mkdir(assetsRoot, { recursive: true });
   await writeFile(join(assetsRoot, 'index.html'), '<!doctype html><title>wb</title>');
-  const projectRoot = join(
-    newTempDir(`fabula-parity-gate-project-${options.tag}-`),
-    'agent-project',
-  );
+  const projectRoot = join(hostHome, 'projects', 'agent-project');
   cpSync(FIXTURE_ROOT, projectRoot, { recursive: true });
   const novaYaml = await readFile(join(projectRoot, 'nova.yaml'), 'utf8');
   await writeFile(
@@ -679,7 +676,6 @@ async function boot(options: LaunchSmokeBootOptions): Promise<LaunchSmokeHandle>
       {
         projectId: 'agent-project',
         displayName: 'Agent Project',
-        root: projectRoot,
         providerProfile: 'default',
         revisionMirror: { mode: 'disabled' as const },
         trustedPlugins: [],

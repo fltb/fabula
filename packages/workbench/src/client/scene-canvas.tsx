@@ -84,7 +84,7 @@ export function SceneCanvas(props: SceneCanvasProps) {
               disabled={!candidate().released || props.onRequestAdoption === undefined}
               onClick={() => props.onRequestAdoption?.(candidate())}
             >
-              Adopt into authoring manifest
+              收下这版
             </button>
           </div>
         )}

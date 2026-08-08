@@ -15,7 +15,7 @@ projects:
     root: /absolute/path/on-host
 defaultProjectId: project-id
 provider:
-  kind: ai-sdk
+  kind: pi
   baseUrl: null
   model: null
 network:

@@ -1,4 +1,8 @@
-import { BROWSER_SESSION_HEADER } from '../../contracts/browser-api.js';
+import {
+  BROWSER_PROJECT_IMPORT_PATH,
+  BROWSER_SESSION_HEADER,
+  type BrowserProjectImportResultV1,
+} from '../../contracts/browser-api.js';
 import {
   type AdminDevicePairRequestV1,
   type AdminInviteCreateRequestV1,
@@ -44,7 +48,7 @@ export type AdminFetch = (input: RequestInfo | URL, init?: RequestInit) => Promi
 /** Authorization state known to the browser without storing a session credential. */
 export type AdminAuthorizationState = 'unknown' | 'owner' | 'user' | 'unauthorized';
 
-/** One safe project write. `root` is consumed once by the Host and never read back. */
+/** One safe project write; the Host derives the project root. */
 export type AdminProjectInput = Omit<AdminProjectSaveRequestV1, 'version'>;
 /** One safe provider endpoint/model write; it never includes an API key. */
 export type AdminProviderInput = Omit<AdminProviderUpdateRequestV1, 'version'>;
@@ -189,7 +193,7 @@ export interface AdminSessionRevokeResponseV1 {
 /** Masked provider profile view; credentials never cross this boundary. */
 export interface AdminProviderProfileViewV1 {
   readonly profileId: string;
-  readonly kind: 'ai-sdk';
+  readonly kind: 'pi';
   readonly configured: boolean;
   readonly endpoint: string | null;
   readonly model: string | null;
@@ -297,9 +301,14 @@ export interface AdminProviderProfileTestResponseV1 {
 
 /** Provider profile endpoint/model write; it never includes an API key. */
 export type AdminProviderProfileInput = {
-  readonly kind: 'ai-sdk';
+  readonly kind: 'pi';
   readonly baseUrl: string | null;
   readonly model: string | null;
+  /** Optional pi-ai advanced tuning; only present keys reach the wire. */
+  readonly reasoning?: boolean;
+  readonly contextWindow?: number;
+  readonly maxTokens?: number;
+  readonly headers?: Readonly<Record<string, string>>;
 };
 
 /** One trusted plugin allowlist write (identity fields only). */
@@ -342,6 +351,7 @@ export interface AdminClient {
   deleteProject(projectId: string): Promise<AdminProjectMutationResponseV1>;
   openProject(projectId: string): Promise<AdminProjectMutationResponseV1>;
   closeProject(projectId: string): Promise<AdminProjectMutationResponseV1>;
+  importProject(sourcePath: string): Promise<BrowserProjectImportResultV1>;
   updateProvider(input: AdminProviderInput): Promise<AdminProviderMutationResponseV1>;
   testProvider(): Promise<AdminProviderTestResponseV1>;
   setProviderCredential(apiKey: string): Promise<AdminCredentialResponseV1>;
@@ -391,6 +401,11 @@ const ADMIN_ERROR_CODES = new Set<WorkbenchAdminErrorCode>([
   'PROJECT_PENDING_RECOVERY',
   'INVITE_INVALID',
   'DEVICE_NOT_FOUND',
+  // The owner-gated project import route rejects with browser import codes
+  // (not admin codes); allow them so their messages reach the caller.
+  'PROJECT_IMPORT_NOT_FOUND' as WorkbenchAdminErrorCode,
+  'PROJECT_IMPORT_INVALID' as WorkbenchAdminErrorCode,
+  'PROJECT_IMPORT_CONFLICT' as WorkbenchAdminErrorCode,
   'SESSION_NOT_FOUND',
   'CREDENTIAL_INVALID',
   'PROVIDER_VALIDATION_FAILED',
@@ -552,7 +567,6 @@ export function createAdminClient(options: AdminClientOptions = {}): AdminClient
         fixedVersionBody({
           projectId: input.projectId,
           displayName: input.displayName,
-          root: input.root,
         }),
       );
     },
@@ -564,7 +578,6 @@ export function createAdminClient(options: AdminClientOptions = {}): AdminClient
         fixedVersionBody({
           projectId: input.projectId,
           displayName: input.displayName,
-          root: input.root,
         }),
       );
     },
@@ -577,7 +590,6 @@ export function createAdminClient(options: AdminClientOptions = {}): AdminClient
         fixedVersionBody({
           projectId: input.projectId,
           displayName: input.displayName,
-          root: input.root,
         }),
       );
     },
@@ -601,6 +613,12 @@ export function createAdminClient(options: AdminClientOptions = {}): AdminClient
         `${BROWSER_ADMIN_PROJECTS_PATH}/${pathSegment(projectId)}/close`,
         'POST',
       );
+    },
+    importProject: (sourcePath) => {
+      assertMutationAllowed();
+      return request<BrowserProjectImportResultV1>(BROWSER_PROJECT_IMPORT_PATH, 'POST', {
+        sourcePath,
+      });
     },
     updateProvider: (input) => {
       assertMutationAllowed();
@@ -732,7 +750,15 @@ export function createAdminClient(options: AdminClientOptions = {}): AdminClient
       return request<AdminProviderProfileMutationResponseV1>(
         `${BROWSER_ADMIN_PROVIDERS_PATH}/${pathSegment(profileId)}`,
         'PUT',
-        fixedVersionBody({ kind: input.kind, baseUrl: input.baseUrl, model: input.model }),
+        fixedVersionBody({
+          kind: input.kind,
+          baseUrl: input.baseUrl,
+          model: input.model,
+          ...(input.reasoning === undefined ? {} : { reasoning: input.reasoning }),
+          ...(input.contextWindow === undefined ? {} : { contextWindow: input.contextWindow }),
+          ...(input.maxTokens === undefined ? {} : { maxTokens: input.maxTokens }),
+          ...(input.headers === undefined ? {} : { headers: { ...input.headers } }),
+        }),
       );
     },
     deleteProviderProfile: (profileId) => {

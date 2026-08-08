@@ -18,17 +18,15 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { type FSWatcher, mkdirSync, watch } from 'node:fs';
 import {
-  access,
   chmod,
   mkdir,
   readFile,
-  realpath,
   rename,
   stat,
   unlink,
   writeFile,
 } from 'node:fs/promises';
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import {
   WORKBENCH_CONFIGURATION_VERSION,
   type WorkbenchAgentConfigurationV1,
@@ -73,11 +71,18 @@ export function resolveWorkbenchHome(env: WorkbenchHomeEnv = process.env): strin
   return resolve(home.trim(), '.local', 'state', 'fabula', 'workbench');
 }
 const NETWORK_KEYS = ['mode', 'port', 'allowedHosts', 'allowedOrigins', 'unixSocket'] as const;
-const PROVIDER_KEYS = ['kind', 'baseUrl', 'model'] as const;
+const PROVIDER_KEYS = [
+  'kind',
+  'baseUrl',
+  'model',
+  'reasoning',
+  'contextWindow',
+  'maxTokens',
+  'headers',
+] as const;
 const PROJECT_KEYS = [
   'projectId',
   'displayName',
-  'root',
   'revisionMirror',
   'providerProfile',
   'trustedPlugins',
@@ -124,7 +129,6 @@ function toPlain(configuration: WorkbenchConfigurationV1): Record<string, unknow
     projects: configuration.projects.map((project) => ({
       projectId: project.projectId,
       displayName: project.displayName,
-      root: project.root,
       revisionMirror:
         project.revisionMirror.mode === 'git-best-effort'
           ? { mode: project.revisionMirror.mode, ref: project.revisionMirror.ref }
@@ -145,6 +149,12 @@ function toPlain(configuration: WorkbenchConfigurationV1): Record<string, unknow
           kind: provider.kind,
           baseUrl: provider.baseUrl,
           model: provider.model,
+          ...(provider.reasoning === undefined ? {} : { reasoning: provider.reasoning }),
+          ...(provider.contextWindow === undefined
+            ? {}
+            : { contextWindow: provider.contextWindow }),
+          ...(provider.maxTokens === undefined ? {} : { maxTokens: provider.maxTokens }),
+          ...(provider.headers === undefined ? {} : { headers: { ...provider.headers } }),
         },
       ]),
     ),
@@ -407,9 +417,8 @@ export function validateConfigurationShape(value: unknown): ConfigurationShapeRe
       rejectUnknownKeys(entry, PROJECT_KEYS, where, diagnostics);
       const projectId = stringField(entry, 'projectId', where, diagnostics);
       const displayName = stringField(entry, 'displayName', where, diagnostics);
-      const root = stringField(entry, 'root', where, diagnostics);
       const mirror = entry.revisionMirror;
-      if (projectId === null || displayName === null || root === null || !isRecord(mirror)) {
+      if (projectId === null || displayName === null || !isRecord(mirror)) {
         if (!isRecord(mirror))
           diagnostics.push(
             diagnostic('CONFIG_INVALID', `Field "${where}.revisionMirror" must be a mapping.`),
@@ -514,12 +523,6 @@ export function validateConfigurationShape(value: unknown): ConfigurationShapeRe
         );
         return;
       }
-      if (!isAbsolute(root)) {
-        diagnostics.push(
-          diagnostic('PROJECT_INVALID_ROOT', `Field "${where}.root" must be an absolute path.`),
-        );
-        return;
-      }
       if (seenIds.has(projectId)) {
         diagnostics.push(
           diagnostic('PROJECT_DUPLICATE_ID', `Project id "${projectId}" is registered twice.`),
@@ -530,7 +533,6 @@ export function validateConfigurationShape(value: unknown): ConfigurationShapeRe
       projects.push({
         projectId,
         displayName,
-        root,
         revisionMirror,
         providerProfile,
         trustedPlugins,
@@ -584,7 +586,56 @@ export function validateConfigurationShape(value: unknown): ConfigurationShapeRe
       const kind = stringField(rawProvider, 'kind', providerWhere, diagnostics);
       const baseUrl = nullableStringField(rawProvider, 'baseUrl', providerWhere, diagnostics);
       const model = nullableStringField(rawProvider, 'model', providerWhere, diagnostics);
-      if ((kind === 'ai-sdk' || kind === 'pi') && baseUrl !== null && model !== null) {
+      const reasoning = rawProvider.reasoning;
+      const contextWindow = rawProvider.contextWindow;
+      const maxTokens = rawProvider.maxTokens;
+      const headers = rawProvider.headers;
+      if (reasoning !== undefined && typeof reasoning !== 'boolean') {
+        diagnostics.push(
+          diagnostic('CONFIG_INVALID', `Field "${providerWhere}.reasoning" must be a boolean.`),
+        );
+      }
+      if (
+        contextWindow !== undefined &&
+        (typeof contextWindow !== 'number' ||
+          !Number.isSafeInteger(contextWindow) ||
+          contextWindow <= 0)
+      ) {
+        diagnostics.push(
+          diagnostic(
+            'CONFIG_INVALID',
+            `Field "${providerWhere}.contextWindow" must be a positive integer.`,
+          ),
+        );
+      }
+      if (
+        maxTokens !== undefined &&
+        (typeof maxTokens !== 'number' || !Number.isSafeInteger(maxTokens) || maxTokens <= 0)
+      ) {
+        diagnostics.push(
+          diagnostic(
+            'CONFIG_INVALID',
+            `Field "${providerWhere}.maxTokens" must be a positive integer.`,
+          ),
+        );
+      }
+      let parsedHeaders: Readonly<Record<string, string>> | null = null;
+      if (headers !== undefined) {
+        if (
+          !isRecord(headers) ||
+          Object.values(headers).some((value) => typeof value !== 'string')
+        ) {
+          diagnostics.push(
+            diagnostic(
+              'CONFIG_INVALID',
+              `Field "${providerWhere}.headers" must be a mapping of string to string.`,
+            ),
+          );
+        } else {
+          parsedHeaders = headers as Readonly<Record<string, string>>;
+        }
+      }
+      if (kind === 'pi' && baseUrl !== null && model !== null) {
         if (baseUrl.length > 0 && !/^https?:\/\//.test(baseUrl)) {
           diagnostics.push(
             diagnostic(
@@ -593,16 +644,33 @@ export function validateConfigurationShape(value: unknown): ConfigurationShapeRe
             ),
           );
         }
-        providers[profileId] = {
+        const entry: WorkbenchProviderConfigurationV1 = {
           kind,
           baseUrl: baseUrl.length === 0 ? null : baseUrl,
           model: model.length === 0 ? null : model,
+          ...(rawProvider.reasoning !== undefined && typeof rawProvider.reasoning === 'boolean'
+            ? { reasoning: rawProvider.reasoning }
+            : {}),
+          ...(rawProvider.contextWindow !== undefined &&
+          typeof rawProvider.contextWindow === 'number' &&
+          Number.isSafeInteger(rawProvider.contextWindow) &&
+          rawProvider.contextWindow > 0
+            ? { contextWindow: rawProvider.contextWindow }
+            : {}),
+          ...(rawProvider.maxTokens !== undefined &&
+          typeof rawProvider.maxTokens === 'number' &&
+          Number.isSafeInteger(rawProvider.maxTokens) &&
+          rawProvider.maxTokens > 0
+            ? { maxTokens: rawProvider.maxTokens }
+            : {}),
+          ...(parsedHeaders === null ? {} : { headers: parsedHeaders }),
         };
-      } else if (kind !== 'ai-sdk' && kind !== 'pi' && kind !== null) {
+        providers[profileId] = entry;
+      } else if (kind !== 'pi' && kind !== null) {
         diagnostics.push(
           diagnostic(
             'CONFIG_INVALID',
-            `Unsupported provider kind "${kind}"; only "ai-sdk" and "pi" are valid.`,
+            `Unsupported provider kind "${kind}"; only "pi" is valid.`,
           ),
         );
       }
@@ -845,75 +913,14 @@ export function validateConfigurationShape(value: unknown): ConfigurationShapeRe
 
 /**
  * Validate every configured project as one topology before any project can be
- * opened or registered. Canonical roots are retained only in this call.
+ * opened or registered. All project roots are Host-managed
+ * (`$WORKBENCH_HOME/projects/<projectId>`), so each root is unique by
+ * construction and no filesystem probe is needed here.
  */
 export async function validateConfigurationTopology(
-  configuration: WorkbenchConfigurationV1,
+  _configuration: WorkbenchConfigurationV1,
 ): Promise<readonly ConfigOperationDiagnosticV1[]> {
-  const diagnostics: ConfigOperationDiagnosticV1[] = [];
-  const canonicalRoots: Array<{ readonly projectId: string; readonly root: string }> = [];
-  for (const project of configuration.projects) {
-    let canonicalRoot: string;
-    try {
-      canonicalRoot = await realpath(project.root);
-      await access(canonicalRoot, 4 | 1);
-      const info = await stat(canonicalRoot);
-      if (!info.isDirectory()) throw new Error('not-directory');
-    } catch {
-      diagnostics.push({
-        code: 'PROJECT_NOT_ACCESSIBLE',
-        message: `Project "${project.projectId}" root is not an accessible directory.`,
-      });
-      continue;
-    }
-    canonicalRoots.push({ projectId: project.projectId, root: canonicalRoot });
-    try {
-      const nova = YAML.parse(await readFile(join(canonicalRoot, 'nova.yaml'), 'utf8'));
-      if (
-        !isRecord(nova) ||
-        typeof nova.project !== 'string' ||
-        nova.project !== project.projectId
-      ) {
-        diagnostics.push({
-          code: 'PROJECT_ID_MISMATCH',
-          message: `Project "${project.projectId}" does not match its nova.yaml project id.`,
-        });
-      }
-    } catch {
-      diagnostics.push({
-        code: 'PROJECT_ID_MISMATCH',
-        message: `Project "${project.projectId}" does not match its nova.yaml project id.`,
-      });
-    }
-  }
-  for (let index = 0; index < canonicalRoots.length; index += 1) {
-    const current = canonicalRoots[index];
-    if (current === undefined) continue;
-    for (let nextIndex = index + 1; nextIndex < canonicalRoots.length; nextIndex += 1) {
-      const other = canonicalRoots[nextIndex];
-      if (other === undefined) continue;
-      const currentToOther = relative(current.root, other.root);
-      const otherToCurrent = relative(other.root, current.root);
-      if (currentToOther === '' || otherToCurrent === '') {
-        diagnostics.push({
-          code: 'PROJECT_ROOT_DUPLICATE',
-          message: `Projects "${current.projectId}" and "${other.projectId}" use the same root.`,
-        });
-        continue;
-      }
-      const currentContainsOther =
-        !currentToOther.startsWith('..') && !currentToOther.startsWith(sep);
-      const otherContainsCurrent =
-        !otherToCurrent.startsWith('..') && !otherToCurrent.startsWith(sep);
-      if (currentContainsOther || otherContainsCurrent) {
-        diagnostics.push({
-          code: 'PROJECT_ROOT_NESTED',
-          message: `Projects "${current.projectId}" and "${other.projectId}" use nested roots.`,
-        });
-      }
-    }
-  }
-  return diagnostics;
+  return [];
 }
 
 // ─── File store ──────────────────────────────────────────────────────────────

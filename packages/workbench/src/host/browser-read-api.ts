@@ -327,6 +327,9 @@ const BROWSER_ERROR_STATUS: Readonly<Record<BrowserApiErrorV1['error']['code'], 
   SCENE_RENDER_QUEUE_FULL: 409,
   SCENE_RENDER_UNAVAILABLE: 503,
   SCENE_MAP_UNAVAILABLE: 503,
+  PROJECT_IMPORT_NOT_FOUND: 404,
+  PROJECT_IMPORT_INVALID: 400,
+  PROJECT_IMPORT_CONFLICT: 409,
 };
 
 export function errorResponse(code: BrowserApiErrorV1['error']['code'], message: string): Response {

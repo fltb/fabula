@@ -53,8 +53,8 @@ const WELCOME_PROMPTS: readonly { readonly glyph: string; readonly prompt: strin
   },
   {
     glyph: '◫',
-    prompt: '渲染第 1 章并发布',
-    hint: '渲染首章内容并发布为可查看的产物',
+    prompt: '让 AI 写第 1 章并生成书籍文件',
+    hint: '生成第 1 章散文并输出为可下载的书籍文件',
   },
   {
     glyph: '✓',
@@ -103,15 +103,26 @@ export interface AgentChatProps {
 function runLabel(run: AgentChatRunViewV1): string {
   return `Run ${run.runId.slice(0, 8)} · ${run.status} · ${run.turn}/${run.maxTurns} turns · ${run.toolCalls}/${run.maxToolCalls} tool calls`;
 }
+/** Chinese action label for known Agent tool calls; unknown tools keep their wire name. */
+const TOOL_ACTION_NAMES: Readonly<Record<string, string>> = {
+  nova_render: '渲染',
+  nova_publish: '发布',
+  nova_authoring_submit: '提交',
+  nova_status: '查看状态',
+  nova_authoring_validate: '校验',
+};
+function toolActionName(toolName: string): string {
+  return TOOL_ACTION_NAMES[toolName] ?? toolName;
+}
 
 function receiptLabel(call: AgentChatToolCallReceiptV1): string {
   const result =
     call.status === 'pending'
-      ? 'pending'
+      ? '等待中'
       : call.status === 'succeeded'
-        ? `succeeded ${call.resultSummary ?? ''}`
-        : `failed ${call.resultSummary ?? ''}`;
-  return `${call.toolName} #${call.callIndex} — ${result}`;
+        ? `成功 ${call.resultSummary ?? ''}`
+        : `失败 ${call.resultSummary ?? ''}`;
+  return `${toolActionName(call.toolName)} #${call.callIndex} — ${result}`;
 }
 /** The failed run entry for a message's run id, if any (drives the inline retry chip). */
 function failedRunOf(
@@ -612,8 +623,9 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
                       )}
                       <Show
                         when={
-                          message.role === 'assistant' &&
-                          failedRunOf(runs(), message.runId) !== null
+                          message.role === 'assistant'
+                            ? failedRunOf(runs(), message.runId)
+                            : null
                         }
                       >
                         {(failed) => (
@@ -645,7 +657,7 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
 
           <Show when={runs().length > 0}>
             <div class="agent-runs" data-testid="agent-chat-runs">
-              <h3>Tool-call receipts</h3>
+              <h3>工具调用记录</h3>
               <ul class="grid gap-[var(--wb-space-2)]">
                 <For each={runs()}>
                   {(entry) => {
@@ -716,7 +728,7 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
                                   <li
                                     data-testid={`agent-tool-call-${entry.run.runId}-${call.callIndex}`}
                                   >
-                                    <span class="agent-tool-call-name">{call.toolName}</span>
+                                    <span class="agent-tool-call-name">{toolActionName(call.toolName)}</span>
                                     <span class="agent-tool-call-status" data-status={call.status}>
                                       {receiptLabel(call)}
                                     </span>
@@ -773,7 +785,7 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
               value={draft()}
               onInput={(event) => setDraft(event.currentTarget.value)}
               onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
                   event.preventDefault();
                   void send();
                 }

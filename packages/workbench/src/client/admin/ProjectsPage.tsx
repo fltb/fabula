@@ -60,7 +60,6 @@ export function ProjectsPage(props: ProjectsPageProps) {
   const [projects, setProjects] = createSignal<readonly WorkbenchProjectSafeViewV1[]>([]);
   const [projectId, setProjectId] = createSignal('');
   const [displayName, setDisplayName] = createSignal('');
-  const [root, setRoot] = createSignal('');
   const [selectedProjectId, setSelectedProjectId] = createSignal('');
   const [validation, setValidation] = createSignal<
     'idle' | 'pending' | WorkbenchProjectValidationV1
@@ -87,7 +86,6 @@ export function ProjectsPage(props: ProjectsPageProps) {
   const input = (): AdminProjectInput => ({
     projectId: projectId().trim(),
     displayName: displayName().trim(),
-    root: root().trim(),
   });
 
   const run = async (operation: () => Promise<void>) => {
@@ -109,12 +107,11 @@ export function ProjectsPage(props: ProjectsPageProps) {
     setValidation('pending');
     void run(async () => {
       const value = input();
-      if (!value.projectId || !value.displayName || !value.root) {
+      if (!value.projectId || !value.displayName) {
         setValidation('invalid');
-        throw new Error('Project id, display name, and project root are required for validation.');
+        throw new Error('Project id and display name are required for validation.');
       }
       const request = props.client?.validateProject(value);
-      setRoot('');
       const result = await request;
       if (!result) throw new Error('The owner client is unavailable.');
       setValidation(result.validation);
@@ -129,14 +126,13 @@ export function ProjectsPage(props: ProjectsPageProps) {
   const saveProject = () => {
     void run(async () => {
       const value = input();
-      if (!value.projectId || !value.displayName || !value.root) {
-        throw new Error('Project id, display name, and project root are required.');
+      if (!value.projectId || !value.displayName) {
+        throw new Error('Project id and display name are required.');
       }
       const exists = projects().some((project) => project.projectId === value.projectId);
       const request = exists
         ? props.client?.updateProject(value)
         : props.client?.createProject(value);
-      setRoot('');
       const response = await request;
       if (!response) throw new Error('The owner client is unavailable.');
       if (response.project) {
@@ -190,6 +186,31 @@ export function ProjectsPage(props: ProjectsPageProps) {
       setProjects((current) => current.filter((project) => project.projectId !== id));
       if (selectedProjectId() === id) setSelectedProjectId('');
       setMessage('Project removed from the Host registry. Its project directory was not deleted.');
+    });
+  };
+
+  let importInput: HTMLInputElement | undefined;
+
+  const importProject = () => {
+    void run(async () => {
+      const input = importInput;
+      const file = input?.files?.[0];
+      if (!file) return;
+      // `File.path` is a Chromium-only extension exposing the picked folder's
+      // absolute path; the standard File API has no such field.
+      const fileWithPath = file as { path?: string };
+      const sourcePath = fileWithPath.path;
+      if (typeof sourcePath !== 'string' || sourcePath.length === 0) {
+        throw new Error(
+          'This browser cannot expose the folder path; import is available from the desktop Host.',
+        );
+      }
+      const response = await props.client?.importProject(sourcePath);
+      if (!response) throw new Error('The owner client is unavailable.');
+      setMessage(
+        `Imported "${response.displayName}" (${response.projectId}) into the managed root.`,
+      );
+      input.value = '';
     });
   };
 
@@ -269,30 +290,33 @@ export function ProjectsPage(props: ProjectsPageProps) {
               />
             </Field>
           </div>
-          <Field
-            label="Project root"
-            id="project-root"
-            hint="Consumed by the Host for validation; never echoed after the request."
-          >
-            <input
-              class={INPUT}
-              id="project-root"
-              type="text"
-              value={root()}
-              onInput={(event) => setRoot(event.currentTarget.value)}
-              autocomplete="off"
-              spellcheck={false}
-              disabled={!authorized() || busy()}
-            />
-          </Field>
+          <input
+            ref={(el) => {
+              importInput = el;
+              el.setAttribute('webkitdirectory', '');
+            }}
+            type="file"
+            class="hidden"
+            tabIndex={-1}
+            aria-hidden="true"
+            disabled={!authorized() || busy()}
+          />
           <div class="flex flex-wrap items-center gap-[var(--wb-space-3)]">
+            <button
+              class={SECONDARY_BUTTON}
+              type="button"
+              onClick={() => importInput?.click()}
+              disabled={!authorized() || busy()}
+            >
+              Import project
+            </button>
             <button
               class={SECONDARY_BUTTON}
               type="button"
               onClick={validateProject}
               disabled={!authorized() || busy()}
             >
-              {validation() === 'pending' ? 'Validating…' : 'Validate root'}
+              {validation() === 'pending' ? 'Validating…' : 'Validate'}
             </button>
             <button class={BUTTON} type="submit" disabled={!authorized() || busy()}>
               {busy() ? 'Working…' : 'Save project'}

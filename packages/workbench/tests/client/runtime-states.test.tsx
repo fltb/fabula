@@ -18,8 +18,8 @@ afterEach(cleanup);
 describe('runtime state views', () => {
   it('renders restart-required without exposing any host internals', () => {
     render(() => <RuntimeStatePanel state="configuration-restart-required" />);
-    expect(screen.getByRole('heading', { name: 'Restart required' })).toBeInTheDocument();
-    expect(screen.getByText(/listener must restart/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '需要重启' })).toBeInTheDocument();
+    expect(screen.getByText(/重启后才会生效/i)).toBeInTheDocument();
     expect(screen.queryByText(/root|token|credential|source bytes/i)).not.toBeInTheDocument();
   });
 
@@ -32,20 +32,20 @@ describe('runtime state views', () => {
         onRetry={() => undefined}
       />
     ));
-    expect(screen.getByRole('heading', { name: 'Host connection lost' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Host 连接已断开' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '重试' })).toBeInTheDocument();
     disconnected.unmount();
 
     render(() => (
       <RuntimeStatePanel
         state="project-picker"
         health="unauthorized"
-        actionLabel="Sign in"
+        actionLabel="登录"
         onAction={() => undefined}
       />
     ));
-    expect(screen.getByRole('heading', { name: 'Sign-in required' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '需要登录' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '登录' })).toBeInTheDocument();
   });
 
   it('shows only safe project labels when the Host returns an available catalog', () => {

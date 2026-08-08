@@ -479,9 +479,9 @@ const FAKE_CONFIG_REQUEST = {
   expectedRevision: 'rev-1',
   configuration: {
     version: 1,
-    projects: [{ projectId: 'p1', displayName: 'Project One', root: '/srv/p1' }],
+    projects: [{ projectId: 'p1', displayName: 'Project One' }],
     defaultProjectId: 'p1',
-    provider: { kind: 'ai-sdk', baseUrl: null, model: null },
+    provider: { kind: 'pi', baseUrl: null, model: null },
     network: {
       mode: 'loopback',
       port: 8787,
@@ -509,14 +509,13 @@ const EXPECTED_CANONICAL_CONFIG_REQUEST = {
       {
         projectId: 'p1',
         displayName: 'Project One',
-        root: '/srv/p1',
         revisionMirror: { mode: 'disabled' },
         providerProfile: 'default',
         trustedPlugins: [],
       },
     ],
     defaultProjectId: 'p1',
-    providers: { default: { kind: 'ai-sdk', baseUrl: null, model: null } },
+    providers: { default: { kind: 'pi', baseUrl: null, model: null } },
     network: {
       mode: 'loopback',
       port: 8787,
@@ -2532,7 +2531,7 @@ describe('createProjectSessionMcpRegistry', () => {
         ...FAKE_CONFIG_REQUEST,
         configuration: {
           ...FAKE_CONFIG_REQUEST.configuration,
-          projects: [{ projectId: 'p1', displayName: 'P', root: '/srv/p1', token: 'secret' }],
+          projects: [{ projectId: 'p1', displayName: 'P', token: 'secret' }],
         },
       }),
       'UNKNOWN_FIELD',
@@ -2828,7 +2827,6 @@ describe('createProjectSessionMcpRegistry', () => {
       version: 1,
       projectId: 'p2',
       displayName: 'Project Two',
-      root: '/srv/p2',
     });
     await invoke('nova_admin_membership_upsert', {
       version: 1,

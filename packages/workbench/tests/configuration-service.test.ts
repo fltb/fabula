@@ -39,7 +39,6 @@ function baseConfiguration(
       {
         projectId: 'demo',
         displayName: 'Demo',
-        root,
         revisionMirror: { mode: 'disabled' },
         providerProfile: 'default',
         trustedPlugins: [],
@@ -86,7 +85,6 @@ describe('computeChangedFields / requiresRestart', () => {
         {
           projectId: 'second',
           displayName: 'Second',
-          root: '/tmp/y',
           revisionMirror: { mode: 'disabled' },
           providerProfile: 'default',
           trustedPlugins: [],
@@ -105,7 +103,7 @@ describe('computeChangedFields / requiresRestart', () => {
     const current = baseConfiguration(root);
     const next = baseConfiguration(root, {
       providers: {
-        default: { kind: 'ai-sdk', baseUrl: 'https://api.example.com', model: 'm' },
+        default: { kind: 'pi', baseUrl: 'https://api.example.com', model: 'm' },
       },
     });
     const fields = computeChangedFields(current, next);
@@ -118,13 +116,12 @@ describe('computeChangedFields / requiresRestart', () => {
     const current = baseConfiguration(root);
     const next = baseConfiguration(root, {
       providers: {
-        default: { kind: 'ai-sdk', baseUrl: 'https://api.example.com', model: 'm-1' },
+        default: { kind: 'pi', baseUrl: 'https://api.example.com', model: 'm-1' },
       },
       projects: [
         {
           projectId: 'demo',
           displayName: 'Demo',
-          root,
           revisionMirror: { mode: 'disabled' },
           providerProfile: 'fast',
           trustedPlugins: [
@@ -160,7 +157,6 @@ describe('computeChangedFields / requiresRestart', () => {
         {
           projectId: 'demo',
           displayName: 'Demo',
-          root,
           revisionMirror: { mode: 'disabled' },
           providerProfile: 'default',
           trustedPlugins: [{ name: 'arc', version: '1.0.0', moduleHash: 'abc123', required: true }],
@@ -249,7 +245,7 @@ describe('ConfigurationChangeService apply', () => {
     });
     const winning = baseConfiguration(await projectRoot(), { defaultProjectId: null });
     const losing = baseConfiguration(await projectRoot(), {
-      providers: { default: { kind: 'ai-sdk', baseUrl: null, model: null } },
+      providers: { default: { kind: 'pi', baseUrl: null, model: null } },
     });
 
     // Deterministically pause the first apply inside its validation step, then
@@ -323,7 +319,6 @@ describe('ConfigurationChangeService apply', () => {
           {
             projectId: 'demo',
             displayName: 'Demo',
-            root: await projectRoot(),
             revisionMirror: { mode: 'disabled' },
             providerProfile: 'default',
             trustedPlugins: [],
@@ -331,7 +326,6 @@ describe('ConfigurationChangeService apply', () => {
           {
             projectId: 'other',
             displayName: 'Other',
-            root: await projectRoot('other'),
             revisionMirror: { mode: 'disabled' },
             providerProfile: 'default',
             trustedPlugins: [],
@@ -392,7 +386,7 @@ describe('ConfigurationChangeService apply', () => {
     const receipt = await service.apply({
       candidate: baseConfiguration(root, {
         providers: {
-          default: { kind: 'ai-sdk', baseUrl: 'https://api.example.com', model: 'm' },
+          default: { kind: 'pi', baseUrl: 'https://api.example.com', model: 'm' },
         },
       }),
       expectedRevision: first.activeRevision,
@@ -407,13 +401,12 @@ describe('ConfigurationChangeService apply', () => {
     const root = await projectRoot();
     const candidate = baseConfiguration(root, {
       providers: {
-        default: { kind: 'ai-sdk', baseUrl: 'https://api.example.com', model: 'm-1' },
+        default: { kind: 'pi', baseUrl: 'https://api.example.com', model: 'm-1' },
       },
       projects: [
         {
           projectId: 'demo',
           displayName: 'Demo',
-          root,
           revisionMirror: { mode: 'disabled' },
           providerProfile: 'default',
           trustedPlugins: [{ name: 'arc', version: '1.0.0', moduleHash: 'abc123', required: true }],
@@ -440,7 +433,7 @@ describe('ConfigurationChangeService apply', () => {
     const active = await service.readActive();
     expect(active?.configuration.version).toBe(1);
     expect(active?.configuration.providers.default).toEqual({
-      kind: 'ai-sdk',
+      kind: 'pi',
       baseUrl: 'https://api.example.com',
       model: 'm-1',
     });
@@ -507,7 +500,6 @@ describe('ConfigurationChangeService apply', () => {
           {
             projectId: 'demo',
             displayName: 'Demo',
-            root,
             revisionMirror: { mode: 'disabled' },
             providerProfile: 'fast',
             trustedPlugins: [],
@@ -552,7 +544,6 @@ describe('ConfigurationChangeService apply', () => {
             {
               projectId: 'demo',
               displayName: 'Demo',
-              root,
               revisionMirror: { mode: 'disabled' },
               providerProfile: 'default',
               trustedPlugins: [{ ...entry, required: true }],
@@ -583,7 +574,6 @@ describe('ConfigurationChangeService watcher path', () => {
         {
           projectId: 'second',
           displayName: 'Second',
-          root: await projectRoot('second'),
           revisionMirror: { mode: 'disabled' },
           providerProfile: 'default',
           trustedPlugins: [],

@@ -72,7 +72,7 @@ describe('Publication projections', () => {
       />
     ));
 
-    expect(screen.getByRole('heading', { name: /Publications/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /发布记录/ })).toBeInTheDocument();
     expect(screen.getByTestId('publication-count')).toHaveTextContent('2');
     expect(screen.getByText('output/novel.md')).toBeInTheDocument();
     expect(screen.getByText('output/custom-id.md')).toBeInTheDocument();
@@ -82,7 +82,7 @@ describe('Publication projections', () => {
     expect(screen.getByText('stale')).toBeInTheDocument();
     expect(screen.getByText('source_changed')).toBeInTheDocument();
     expect(screen.getByText('missing_scenes')).toBeInTheDocument();
-    expect(screen.getByText('Stale reasons')).toBeInTheDocument();
+    expect(screen.getByText('过期原因')).toBeInTheDocument();
     // Scene/source identity surfaces as hashes, never as bytes or paths.
     expect(screen.getByText('novel-hash-a…')).toBeInTheDocument();
     expect(screen.getByText('8')).toBeInTheDocument();
@@ -94,8 +94,8 @@ describe('Publication projections', () => {
   it('shows an honest empty state when no publication projection is loaded', () => {
     render(() => <PublicationView projectId="proj-a" publications={null} />);
 
-    expect(screen.getByText('No publication projection')).toBeInTheDocument();
-    expect(screen.getByText(/Open an authenticated project in the Host/)).toBeInTheDocument();
+    expect(screen.getByText('暂无发布数据')).toBeInTheDocument();
+    expect(screen.getByText(/打开已认证的项目/)).toBeInTheDocument();
     expect(screen.queryByTestId('publication-publish-open')).not.toBeInTheDocument();
   });
 
@@ -108,7 +108,7 @@ describe('Publication projections', () => {
       />
     ));
 
-    expect(screen.getByText(/No publications yet/)).toBeInTheDocument();
+    expect(screen.getByText(/还没有发布产物/)).toBeInTheDocument();
   });
 
   it('renders no mock data and no mutation affordances without wired callbacks', () => {
@@ -231,7 +231,7 @@ describe('Publication mutation affordances', () => {
     await user.click(screen.getByTestId('publication-publish-save'));
 
     expect(await screen.findByTestId('publication-publish-success')).toHaveTextContent(
-      'Publication request accepted',
+      '发布请求已接受',
     );
   });
 

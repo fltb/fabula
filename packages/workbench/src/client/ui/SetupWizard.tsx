@@ -1,4 +1,3 @@
-import { Dialog } from '@kobalte/core/dialog';
 import type { JSX } from 'solid-js';
 import { createSignal, For, Match, onMount, Show, Switch } from 'solid-js';
 import type { ConfigOperationReceiptV1, WorkbenchSetupStatusV1 } from '../../contracts/index.js';
@@ -14,21 +13,12 @@ import {
 } from '../setup-client.js';
 import { FIELD, PANEL, PRIMARY_BUTTON, QUIET_BUTTON, RuntimeStatePanel } from './RuntimeStates.js';
 
-export type SetupStep =
-  | 'owner'
-  | 'project'
-  | 'source-validation'
-  | 'provider'
-  | 'network'
-  | 'review';
+export type SetupStep = 'owner' | 'project' | 'provider';
 
 export const SETUP_STEPS: readonly { readonly id: SetupStep; readonly label: string }[] = [
   { id: 'owner', label: 'Owner' },
   { id: 'project', label: 'Project' },
-  { id: 'source-validation', label: 'Source validation' },
   { id: 'provider', label: 'Provider' },
-  { id: 'network', label: 'Network' },
-  { id: 'review', label: 'Review & apply' },
 ];
 
 export interface SetupWizardProps {
@@ -45,7 +35,6 @@ export interface SetupFieldErrors {
   ownerPassword?: string;
   projectId?: string;
   projectDisplayName?: string;
-  projectRoot?: string;
   providerBaseUrl?: string;
   providerModel?: string;
   providerApiKey?: string;
@@ -63,15 +52,12 @@ export function validateOwnerFields(displayName: string, password: string): Setu
   const errors: SetupFieldErrors = {};
   if (trim(displayName).length === 0) errors.displayName = 'Enter a display name.';
   else if (trim(displayName).length > 80) errors.displayName = 'Use 80 characters or fewer.';
-  if (password.length < 12) errors.ownerPassword = 'Use at least 12 characters.';
+  if (password.length > 0 && password.length < 12) {
+    errors.ownerPassword = 'Use at least 12 characters, or leave it empty for no password.';
+  }
   return errors;
 }
-
-export function validateProjectFields(
-  projectId: string,
-  displayName: string,
-  root: string,
-): SetupFieldErrors {
+export function validateProjectFields(projectId: string, displayName: string): SetupFieldErrors {
   const errors: SetupFieldErrors = {};
   if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(trim(projectId))) {
     errors.projectId = 'Use 1–64 letters, numbers, hyphens, or underscores.';
@@ -79,11 +65,6 @@ export function validateProjectFields(
   if (trim(displayName).length === 0) errors.projectDisplayName = 'Enter a project name.';
   else if (trim(displayName).length > 120)
     errors.projectDisplayName = 'Use 120 characters or fewer.';
-  const candidate = trim(root);
-  if (candidate.length === 0) errors.projectRoot = 'Enter the project path on the Host.';
-  else if (!(candidate.startsWith('/') || /^[A-Za-z]:[\\/]/.test(candidate))) {
-    errors.projectRoot = 'Use an absolute path on the Host.';
-  }
   return errors;
 }
 
@@ -129,10 +110,7 @@ export function validateNetworkFields(
 function initialStep(status: WorkbenchSetupStatusV1 | null | undefined): SetupStep {
   if (!status?.ownerCreated) return 'owner';
   if (status.projects.length === 0) return 'project';
-  if (status.phase === 'provider-pending') return 'provider';
-  if (status.phase === 'network-pending') return 'network';
-  if (status.phase === 'ready') return 'review';
-  return 'source-validation';
+  return 'provider';
 }
 
 function safeFailureMessage(error: unknown): string {
@@ -186,24 +164,14 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
     readonly field: SetupField;
     readonly message: string;
   } | null>(null);
-  const [receipt, setReceipt] = createSignal<ConfigOperationReceiptV1 | null>(null);
 
-  const [confirmOpen, setConfirmOpen] = createSignal(false);
-  // Secrets and the absolute root are local signals only. They are cleared as
-  // soon as their one-way Host request completes, including rejected requests.
   const [ownerDisplayName, setOwnerDisplayName] = createSignal('Owner');
   const [ownerPassword, setOwnerPassword] = createSignal('');
   const [projectId, setProjectId] = createSignal('');
   const [projectDisplayName, setProjectDisplayName] = createSignal('');
-  const [projectRoot, setProjectRoot] = createSignal('');
   const [providerBaseUrl, setProviderBaseUrl] = createSignal('');
   const [providerModel, setProviderModel] = createSignal('');
   const [providerApiKey, setProviderApiKey] = createSignal('');
-  const [networkMode, setNetworkMode] = createSignal<SetupNetworkInput['mode']>('loopback');
-  const [networkPort, setNetworkPort] = createSignal('8787');
-  const [unixSocketName, setUnixSocketName] = createSignal('');
-  const [allowedHosts, setAllowedHosts] = createSignal('');
-  const [allowedOrigins, setAllowedOrigins] = createSignal('');
   let validatedProject: SetupProjectInput | null = null;
 
   onMount(() => {
@@ -242,11 +210,10 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
   const projectInput = (): SetupProjectInput => ({
     projectId: trim(projectId()),
     displayName: trim(projectDisplayName()),
-    root: projectRoot(),
   });
 
   const providerInput = (): SetupProviderInput => ({
-    kind: 'ai-sdk',
+    kind: 'pi',
     baseUrl: trim(providerBaseUrl()) || null,
     model: trim(providerModel()) || null,
   });
@@ -276,44 +243,21 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
   const runProjectValidation = async (): Promise<void> => {
     clearErrors();
     const input = projectInput();
-    const local = validateProjectFields(input.projectId, input.displayName, input.root);
+    const local = validateProjectFields(input.projectId, input.displayName);
     setErrors(local);
     if (Object.keys(local).length > 0) return;
     validatedProject = input;
-    // Keep the one-way path only in a non-rendered handoff until source save.
-    setProjectRoot('');
     setPending(true);
     try {
       await props.client.validateProject(input);
-      setStep('source-validation');
-    } catch (error) {
-      validatedProject = null;
-      // The error is rendered below this step only; no Host message/body is
-      // interpolated, so an invalid root cannot appear in the browser.
-      fail('project', error);
-    } finally {
-      setPending(false);
-    }
-  };
-
-  const runSourceValidation = async (): Promise<void> => {
-    clearErrors();
-    const input = validatedProject ?? projectInput();
-    if (input.root.length === 0) {
-      setErrors({ projectRoot: 'Enter the project path again to continue.' });
-      setStep('project');
-      return;
-    }
-    setPending(true);
-    try {
       await props.client.saveProject(input);
       validatedProject = null;
-      setProjectRoot('');
       setStep('provider');
     } catch (error) {
       validatedProject = null;
-      setProjectRoot('');
-      fail('source', error);
+      // The error is rendered below this step only; no Host message/body is
+      // interpolated, so a rejected payload cannot leak into the browser.
+      fail('project', error);
     } finally {
       setPending(false);
     }
@@ -329,7 +273,7 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
       await props.client.validateProvider(providerInput());
       await props.client.saveCredential({ providerId: 'ai-sdk', apiKey: providerApiKey() });
       setProviderApiKey('');
-      setStep('network');
+      await runFinish();
     } catch (error) {
       setProviderApiKey('');
       fail('provider', error);
@@ -338,27 +282,6 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
     }
   };
 
-  const runNetwork = async (): Promise<void> => {
-    clearErrors();
-    const local = validateNetworkFields(networkMode(), networkPort(), unixSocketName());
-    setErrors(local);
-    if (Object.keys(local).length > 0) return;
-    setPending(true);
-    try {
-      await props.client.applyNetwork({
-        mode: networkMode(),
-        port: Number(networkPort()),
-        allowedHosts: parseList(allowedHosts()),
-        allowedOrigins: parseList(allowedOrigins()),
-        unixSocketName: networkMode() === 'unix' ? trim(unixSocketName()) : null,
-      });
-      setStep('review');
-    } catch (error) {
-      fail('network', error);
-    } finally {
-      setPending(false);
-    }
-  };
 
   const runFinish = async (): Promise<void> => {
     clearErrors();
@@ -367,14 +290,11 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
       const result: SetupFinishResult = await props.client.finish(
         status()?.configurationRevision ?? null,
       );
-      setReceipt(result.receipt);
-      setConfirmOpen(false);
       props.onComplete?.(result.receipt);
       if (result.receipt.status === 'restart-required') {
         props.onStateChange?.('configuration-restart-required');
       }
     } catch (error) {
-      setConfirmOpen(false);
       fail('review', error);
     } finally {
       setPending(false);
@@ -460,7 +380,7 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
                 <StepHeading
                   eyebrow="Step 1 / Owner"
                   title="Create the owner account"
-                  description="This account controls the local Host. The password is sent once over the setup endpoint and is never echoed."
+                  description="This account controls the local Host. The password is optional; leave it empty for a passwordless first launch on this machine."
                 />
                 <form
                   class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-4)]"
@@ -488,7 +408,8 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
                     class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
                     for="setup-owner-password"
                   >
-                    Password
+                    Password{' '}
+                    <span class="font-normal text-[var(--wb-muted)]">(optional)</span>
                     <input
                       class={FIELD}
                       id="setup-owner-password"
@@ -512,7 +433,7 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
                 <StepHeading
                   eyebrow="Step 2 / Project"
                   title="Register a project"
-                  description="Enter the project path on the Host. It is validated server-side and cleared from this browser after source validation."
+                  description="Name your project. The Host keeps it in its own workspace; you never need to pick a folder."
                 />
                 <form
                   class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-4)]"
@@ -559,51 +480,26 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
                   </label>
                   <label
                     class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
-                    for="setup-project-root"
+                    for="setup-project-location"
                   >
-                    Project path on Host
+                    Workspace location
                     <input
-                      class={FIELD}
-                      id="setup-project-root"
+                      class={`${FIELD} cursor-not-allowed bg-[var(--wb-surface-muted)] text-[var(--wb-muted)]`}
+                      id="setup-project-location"
                       type="text"
-                      autocomplete="off"
-                      value={projectRoot()}
-                      onInput={(event) => setProjectRoot(event.currentTarget.value)}
-                      aria-invalid={Boolean(inputError('projectRoot'))}
-                      aria-describedby={describedBy('projectRoot', 'setup-project-root-error')}
+                      readOnly
+                      disabled
+                      value={`${status()?.hostHome ?? '$WORKBENCH_HOME'}/projects/${trim(projectId()) || '<project-id>'}`}
                     />
-                    <FieldError id="setup-project-root-error" message={inputError('projectRoot')} />
                   </label>
-                  <StepActions pending={pending()} nextLabel="Validate project" onBack={goBack} />
+                  <StepActions pending={pending()} nextLabel="Create project" onBack={goBack} />
                 </form>
               </Match>
 
-              <Match when={step() === 'source-validation'}>
-                <StepHeading
-                  eyebrow="Step 3 / Source validation"
-                  title="Confirm the authoring source"
-                  description="The Host now checks the project authoring topology. Accepted source remains Host-owned; this wizard never reads raw source into the browser."
-                />
-                <div class="mt-[var(--wb-space-8)] rounded-[var(--wb-radius-md)] border border-[var(--wb-ready-border)] bg-[var(--wb-ready-surface)] p-[var(--wb-space-5)]">
-                  <p class="text-sm font-semibold text-[var(--wb-success)]">
-                    Project path validated by Host
-                  </p>
-                  <p class="mt-[var(--wb-space-2)] text-sm leading-relaxed text-[var(--wb-ink-soft)]">
-                    Save the validated project registration to continue. The path itself is
-                    intentionally not repeated here.
-                  </p>
-                </div>
-                <StepActions
-                  pending={pending()}
-                  nextLabel="Save validated source"
-                  onBack={goBack}
-                  onNext={() => void runSourceValidation()}
-                />
-              </Match>
 
               <Match when={step() === 'provider'}>
                 <StepHeading
-                  eyebrow="Step 4 / Provider"
+                  eyebrow="Step 3 / Provider"
                   title="Connect the provider"
                   description="Endpoint and model are validated first. The credential is then handed directly to the Host credential store and cleared from this browser."
                 />
@@ -675,182 +571,12 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
                   </label>
                   <StepActions
                     pending={pending()}
-                    nextLabel="Validate and save provider"
+                    nextLabel="Finish setup"
                     onBack={goBack}
                   />
                 </form>
               </Match>
 
-              <Match when={step() === 'network'}>
-                <StepHeading
-                  eyebrow="Step 5 / Network"
-                  title="Choose the listener policy"
-                  description="Loopback is the safe first-launch default. LAN and Unix policies are explicit and may require a controlled restart."
-                />
-                <form
-                  class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-4)]"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void runNetwork();
-                  }}
-                >
-                  <label
-                    class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
-                    for="setup-network-mode"
-                  >
-                    Listener mode
-                    <select
-                      class={FIELD}
-                      id="setup-network-mode"
-                      value={networkMode()}
-                      onChange={(event) =>
-                        setNetworkMode(event.currentTarget.value as SetupNetworkInput['mode'])
-                      }
-                    >
-                      <option value="loopback">Loopback (this machine)</option>
-                      <option value="lan">LAN (trusted network)</option>
-                      <option value="unix">Unix socket</option>
-                    </select>
-                  </label>
-                  <label
-                    class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
-                    for="setup-network-port"
-                  >
-                    Port
-                    <input
-                      class={FIELD}
-                      id="setup-network-port"
-                      inputmode="numeric"
-                      value={networkPort()}
-                      onInput={(event) => setNetworkPort(event.currentTarget.value)}
-                      aria-invalid={Boolean(inputError('networkPort'))}
-                      aria-describedby={describedBy('networkPort', 'setup-network-port-error')}
-                    />
-                    <FieldError id="setup-network-port-error" message={inputError('networkPort')} />
-                  </label>
-                  <Show when={networkMode() === 'unix'}>
-                    <label
-                      class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
-                      for="setup-unix-socket-name"
-                    >
-                      Unix socket name
-                      <input
-                        class={FIELD}
-                        id="setup-unix-socket-name"
-                        autocomplete="off"
-                        value={unixSocketName()}
-                        onInput={(event) => setUnixSocketName(event.currentTarget.value)}
-                        aria-invalid={Boolean(inputError('unixSocketName'))}
-                        aria-describedby={describedBy(
-                          'unixSocketName',
-                          'setup-unix-socket-name-error',
-                        )}
-                      />
-                      <FieldError
-                        id="setup-unix-socket-name-error"
-                        message={inputError('unixSocketName')}
-                      />
-                    </label>
-                  </Show>
-                  <label
-                    class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
-                    for="setup-allowed-hosts"
-                  >
-                    Allowed hosts{' '}
-                    <span class="font-normal text-[var(--wb-muted)]">
-                      (comma separated, optional)
-                    </span>
-                    <input
-                      class={FIELD}
-                      id="setup-allowed-hosts"
-                      value={allowedHosts()}
-                      onInput={(event) => setAllowedHosts(event.currentTarget.value)}
-                    />
-                  </label>
-                  <label
-                    class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
-                    for="setup-allowed-origins"
-                  >
-                    Allowed origins{' '}
-                    <span class="font-normal text-[var(--wb-muted)]">
-                      (comma separated, optional)
-                    </span>
-                    <input
-                      class={FIELD}
-                      id="setup-allowed-origins"
-                      value={allowedOrigins()}
-                      onInput={(event) => setAllowedOrigins(event.currentTarget.value)}
-                    />
-                  </label>
-                  <StepActions pending={pending()} nextLabel="Validate listener" onBack={goBack} />
-                </form>
-              </Match>
-
-              <Match when={step() === 'review'}>
-                <StepHeading
-                  eyebrow="Step 6 / Review"
-                  title="Review and apply setup"
-                  description="Only safe labels and validation outcomes are shown. Secrets and Host paths are never repeated in this review."
-                />
-                <dl class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-3)] sm:grid-cols-2">
-                  <ReviewItem label="Owner" value={ownerDisplayName() || 'Owner account created'} />
-                  <ReviewItem label="Project" value={projectDisplayName() || 'Validated project'} />
-                  <ReviewItem label="Source" value="Authoring topology validated" />
-                  <ReviewItem label="Provider" value="Endpoint, model, and credential validated" />
-                  <ReviewItem label="Listener" value={`${networkMode()} / port ${networkPort()}`} />
-                  <ReviewItem label="Credentials" value="Stored by Host; not shown" />
-                </dl>
-                <div class="mt-[var(--wb-space-8)] flex flex-wrap items-center justify-between gap-[var(--wb-space-3)]">
-                  <button class={QUIET_BUTTON} type="button" onClick={goBack} disabled={pending()}>
-                    Back
-                  </button>
-                  <Dialog open={confirmOpen()} onOpenChange={setConfirmOpen}>
-                    <Dialog.Trigger class={PRIMARY_BUTTON} disabled={pending()}>
-                      {pending() ? 'Applying…' : 'Review and apply'}
-                    </Dialog.Trigger>
-                    <Dialog.Portal>
-                      <Dialog.Overlay class="fixed inset-0 z-40 bg-[var(--wb-overlay)]" />
-                      <Dialog.Content class="fixed left-1/2 top-1/2 z-50 w-[min(32rem,calc(100vw-var(--wb-space-6)))] -translate-x-1/2 -translate-y-1/2 rounded-[var(--wb-radius-lg)] border border-[var(--wb-border-strong)] bg-[var(--wb-surface)] p-[var(--wb-space-6)] shadow-[var(--wb-shadow-drawer)] focus-visible:outline focus-visible:outline-3 focus-visible:outline-[var(--wb-focus)]">
-                        <Dialog.Title class="font-[var(--font-display)] text-2xl font-bold text-[var(--wb-ink)]">
-                          Apply Workbench setup?
-                        </Dialog.Title>
-                        <Dialog.Description class="mt-[var(--wb-space-3)] text-sm leading-relaxed text-[var(--wb-muted)]">
-                          This commits the validated, secret-free configuration. Provider
-                          credentials remain in the Host credential store, and the listener may
-                          require a restart.
-                        </Dialog.Description>
-                        <div class="mt-[var(--wb-space-6)] flex justify-end gap-[var(--wb-space-3)]">
-                          <Dialog.CloseButton class={QUIET_BUTTON} type="button">
-                            Cancel
-                          </Dialog.CloseButton>
-                          <button
-                            class={PRIMARY_BUTTON}
-                            type="button"
-                            disabled={pending()}
-                            onClick={() => void runFinish()}
-                          >
-                            Apply setup
-                          </button>
-                        </div>
-                      </Dialog.Content>
-                    </Dialog.Portal>
-                  </Dialog>
-                </div>
-                <Show when={receipt()}>
-                  {(current) => (
-                    <p
-                      class="mt-[var(--wb-space-5)] text-sm text-[var(--wb-success)]"
-                      role="status"
-                      data-testid="setup-receipt"
-                    >
-                      Setup{' '}
-                      {current().status === 'restart-required'
-                        ? 'accepted; restart required.'
-                        : 'accepted.'}
-                    </p>
-                  )}
-                </Show>
-              </Match>
             </Switch>
           </section>
         </section>

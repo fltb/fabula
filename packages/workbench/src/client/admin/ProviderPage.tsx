@@ -115,7 +115,7 @@ export function ProviderPage(props: ProviderPageProps) {
       const id = profileId().trim();
       if (!id) throw new Error('A provider profile id is required.');
       const response = await props.client?.upsertProviderProfile(id, {
-        kind: 'ai-sdk',
+        kind: 'pi',
         baseUrl: baseUrl().trim() || null,
         model: model().trim() || null,
       });

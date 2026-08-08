@@ -20,7 +20,6 @@ describe('createSetupClient', () => {
     await client.validateProject({
       projectId: 'project-a',
       displayName: 'A Project',
-      root: '/private/project-root',
     });
 
     expect(calls[0]?.input).toBe('http://host.test/api/v1/setup/projects/validate');
@@ -28,7 +27,6 @@ describe('createSetupClient', () => {
       version: 1,
       projectId: 'project-a',
       displayName: 'A Project',
-      root: '/private/project-root',
     });
   });
 
@@ -50,7 +48,6 @@ describe('createSetupClient', () => {
       client.validateProject({
         projectId: 'project-a',
         displayName: 'A Project',
-        root: '/private/project-root',
       }),
     ).rejects.toMatchObject({
       name: 'SetupApiError',
@@ -62,7 +59,6 @@ describe('createSetupClient', () => {
       await client.validateProject({
         projectId: 'project-a',
         displayName: 'A Project',
-        root: '/private/project-root',
       });
     } catch (error) {
       expect(error).toBeInstanceOf(SetupApiError);

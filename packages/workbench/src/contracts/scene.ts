@@ -184,6 +184,18 @@ export interface SceneDetailViewV1 {
   readonly stale: boolean;
   /** Frontmatter context fingerprint; null when never adopted. */
   readonly adoptedSceneHash: string | null;
+  /**
+   * Raw working-layer YAML of the scene's event document — the exact text
+   * the scene card form edits and rewrites through the Yjs working channel
+   * (`getText('prose')`). Null when no working document is available.
+   */
+  readonly eventYaml?: string | null;
+  /**
+   * Working-document identity of the scene's event file (the Yjs ticket
+   * scope); null when unavailable. For event files the seeded working
+   * document id equals the manifest logical path.
+   */
+  readonly eventDocumentId?: string | null;
 }
 
 // ─── Scene render trigger ────────────────────────────────────────────────────

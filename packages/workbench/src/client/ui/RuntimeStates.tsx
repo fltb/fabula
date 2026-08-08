@@ -19,33 +19,33 @@ export const RUNTIME_HEALTH_COPY: Readonly<
   >
 > = {
   loading: {
-    title: 'Checking Host status',
-    description: 'The browser is asking the Host for a safe readiness status.',
+    title: '正在检查 Host 状态',
+    description: '浏览器正在向 Host 请求安全的就绪状态。',
     marker: '…',
   },
   empty: {
-    title: 'No project is ready',
-    description: 'The Host is available, but no project can be opened yet.',
+    title: '暂无可用项目',
+    description: 'Host 可用，但当前还没有可以打开的项目。',
     marker: '○',
   },
   disconnected: {
-    title: 'Host connection lost',
-    description: 'Reconnect to the local Workbench Host before continuing.',
+    title: 'Host 连接已断开',
+    description: '请重新连接本地 Workbench Host 后继续。',
     marker: '—',
   },
   unauthorized: {
-    title: 'Sign-in required',
-    description: 'This session is missing, expired, or no longer authorized.',
+    title: '需要登录',
+    description: '当前会话缺失、已过期或不再被授权。',
     marker: '⌁',
   },
   fatal: {
-    title: 'Host error',
-    description: 'The Host returned an unexpected failure. No project data was inferred.',
+    title: 'Host 错误',
+    description: 'Host 返回了意外失败，未推断出项目数据。',
     marker: '!',
   },
   ready: {
-    title: 'Host connected',
-    description: 'The authenticated Host is ready to supply a project projection.',
+    title: 'Host 已连接',
+    description: '已认证的 Host 已就绪，可以加载项目数据。',
     marker: '·',
   },
 };
@@ -65,41 +65,38 @@ const RUNTIME_STATE_COPY: Readonly<
   >
 > = {
   setup: {
-    title: 'Set up this Workbench',
-    description:
-      'Create the owner, validate a project, connect a provider, and review the listener policy.',
+    title: '设置 Workbench',
+    description: '创建所有者、登记项目、连接模型，然后完成设置。',
     marker: '1',
   },
   'bootstrap-owner': {
-    title: 'Create the owner account',
-    description: 'The first owner is created only through the loopback setup surface.',
+    title: '创建所有者账户',
+    description: '首个所有者只能通过本机设置界面创建。',
     marker: '1',
   },
   login: {
-    title: 'Sign in to the Workbench',
-    description: 'Your session lives in memory and is never written to browser storage.',
+    title: '登录 Workbench',
+    description: '会话仅保存在内存中，绝不会写入浏览器存储。',
     marker: '→',
   },
   'project-picker': {
-    title: 'Choose a project',
-    description: 'Only Host-authorized project labels are shown here.',
+    title: '选择项目',
+    description: '这里只显示 Host 授权的项目名称。',
     marker: '◇',
   },
   workspace: {
-    title: 'Workspace',
-    description: 'Load the accepted Host projection for this project.',
+    title: '工作区',
+    description: '加载该项目的已接受数据。',
     marker: '·',
   },
   'configuration-restart-required': {
-    title: 'Restart required',
-    description:
-      'The configuration was accepted, but the listener must restart before it is active.',
+    title: '需要重启',
+    description: '配置已接受，但监听器需要重启后才会生效。',
     marker: '↻',
   },
   'fatal-host-error': {
-    title: 'Workbench Host error',
-    description:
-      'The Host could not complete this request. No credentials, paths, or source were displayed.',
+    title: 'Workbench Host 错误',
+    description: 'Host 无法完成此请求。未显示任何凭据、路径或源内容。',
     marker: '!',
   },
 };
@@ -163,11 +160,11 @@ export function LoginForm(props: LoginFormProps): JSX.Element {
     const nextPassword = password();
     setPassword('');
     if (nextUserId.length === 0) {
-      setLocalError('Enter your user ID.');
+      setLocalError('请输入用户 ID。');
       return;
     }
     if (nextPassword.length === 0) {
-      setLocalError('Enter your password.');
+      setLocalError('请输入密码。');
       return;
     }
     setLocalError(null);
@@ -184,17 +181,17 @@ export function LoginForm(props: LoginFormProps): JSX.Element {
           id="login-heading"
           class="font-[var(--font-display)] text-3xl font-bold text-[var(--wb-ink)]"
         >
-          Sign in
+          登录
         </h1>
         <p class="mt-[var(--wb-space-3)] text-sm leading-relaxed text-[var(--wb-muted)]">
-          Authenticate with the local Host. This browser keeps the session in memory only.
+          使用本地 Host 认证。此浏览器仅将会话保存在内存中。
         </p>
         <form class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-4)]" onSubmit={submit}>
           <label
             class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
             for="login-user-id"
           >
-            User ID
+            用户 ID
             <input
               class={FIELD}
               id="login-user-id"
@@ -208,7 +205,7 @@ export function LoginForm(props: LoginFormProps): JSX.Element {
             class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
             for="login-password"
           >
-            Password
+            密码
             <input
               class={FIELD}
               id="login-password"
@@ -225,7 +222,7 @@ export function LoginForm(props: LoginFormProps): JSX.Element {
             </p>
           </Show>
           <button class={PRIMARY_BUTTON} type="submit" disabled={props.pending}>
-            {props.pending ? 'Signing in…' : 'Sign in'}
+            {props.pending ? '正在登录…' : '登录'}
           </button>
         </form>
       </section>
@@ -247,17 +244,16 @@ export function ProjectPicker(props: ProjectPickerProps): JSX.Element {
     <main class="min-h-screen bg-[var(--wb-canvas)] px-[var(--wb-space-4)] py-[var(--wb-space-10)]">
       <section class={PANEL} aria-labelledby="project-picker-heading">
         <p class="mb-[var(--wb-space-1)] text-[0.625rem] font-extrabold uppercase tracking-[0.12em] text-[var(--wb-muted)]">
-          Workbench / Project access
+          Workbench / 项目访问
         </p>
         <h1
           id="project-picker-heading"
           class="font-[var(--font-display)] text-3xl font-bold text-[var(--wb-ink)]"
         >
-          Choose a project
+          选择项目
         </h1>
         <p class="mt-[var(--wb-space-3)] text-sm leading-relaxed text-[var(--wb-muted)]">
-          Project paths stay on the Host. This picker uses only safe labels returned for your
-          session.
+          项目路径保留在 Host 上。这里只使用你的会话对应的安全项目名称。
         </p>
         <Show
           when={!props.pending && props.projects.length > 0}
@@ -267,7 +263,7 @@ export function ProjectPicker(props: ProjectPickerProps): JSX.Element {
                 state="project-picker"
                 health={props.pending ? 'loading' : (props.health ?? 'empty')}
                 message={props.error ?? undefined}
-                actionLabel={props.onRetry ? 'Try again' : undefined}
+                actionLabel={props.onRetry ? '重试' : undefined}
                 onAction={props.onRetry}
               />
             </div>
@@ -275,7 +271,7 @@ export function ProjectPicker(props: ProjectPickerProps): JSX.Element {
         >
           <ul
             class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-3)]"
-            aria-label="Available projects"
+            aria-label="可用项目"
           >
             <For each={props.projects}>
               {(project) => (
@@ -290,7 +286,7 @@ export function ProjectPicker(props: ProjectPickerProps): JSX.Element {
                         {project.displayName}
                       </strong>
                       <span class="mt-1 block text-xs text-[var(--wb-muted)]">
-                        {project.open ? 'Open on Host' : 'Available on Host'}
+                        {project.open ? '已在 Host 打开' : 'Host 可用'}
                       </span>
                     </span>
                     <span aria-hidden="true" class="text-lg text-[var(--wb-accent)]">
@@ -328,7 +324,7 @@ export function AdminOutlet(props: {
       <RuntimeStatePanel
         state="login"
         health="unauthorized"
-        actionLabel={props.onSignIn ? 'Sign in' : undefined}
+        actionLabel={props.onSignIn ? '登录' : undefined}
         onAction={props.onSignIn}
       />
     </main>

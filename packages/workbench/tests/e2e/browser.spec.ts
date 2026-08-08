@@ -76,7 +76,7 @@ async function makeSetupReady(fixture: HostFixture): Promise<void> {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       version: 1,
-      kind: 'ai-sdk',
+      kind: 'pi',
       baseUrl: 'http://127.0.0.1:9',
       model: 'mock',
     }),

@@ -1,13 +1,16 @@
-import { createSignal, For, Show } from 'solid-js';
+import { createEffect, createSignal, For, Show } from 'solid-js';
+import YAML from 'yaml';
 import type {
   ProjectAccessRole,
   SceneAdoptionViewV1,
   SceneDetailViewV1,
   SceneMapViewV1,
   SceneRowRenderStatusV1,
+  SceneSummaryRowV1,
   SceneThreadProgressPointV1,
 } from '../contracts/index.js';
 import { SceneInspector } from './SceneInspector';
+import { replaceWorkingDocumentText } from './yjs-editor.js';
 
 export interface SceneMapProps {
   readonly projectId: string | null;
@@ -32,28 +35,122 @@ export interface SceneMapProps {
   readonly onRequestAdoption?: (candidate: SceneAdoptionViewV1) => void;
   /** Re-requests the Host scene map after a mutation. */
   readonly onRefresh?: () => void | Promise<void>;
+  /** Transient browser session for the scene-card Yjs writeback. */
+  readonly sourceSessionId?: string | null;
 }
 
 /** Render-pipeline tone of one row: committed+adopted, rendered-draft, or never rendered. */
 type RowRenderTone = 'released' | 'draft' | 'blocked';
 
 const RENDER_TONE_LABEL: Record<RowRenderTone, string> = {
-  released: '✓ released',
-  draft: '◷ draft',
-  blocked: '✗ blocked',
+  released: '✓ 已发布',
+  draft: '◷ 草稿',
+  blocked: '✗ 未渲染',
 };
 
 const RENDER_TONE_TITLE: Record<RowRenderTone, string> = {
-  released: 'A committed render exists and is adopted into the manifest.',
-  draft: 'A committed render exists but is not adopted yet.',
-  blocked: 'No committed render exists for this scene.',
+  released: '已有已提交的渲染并被收下到作品清单。',
+  draft: '已有已提交的渲染，但尚未被收下。',
+  blocked: '该场景还没有已提交的渲染。',
 };
 
 const ADOPT_LABEL: Record<SceneRowRenderStatusV1, string> = {
-  unadopted: 'unadopted',
-  adopted_current: 'adopted · current',
-  adopted_stale: 'adopted · stale',
+  unadopted: '未收下',
+  adopted_current: '已收下',
+  adopted_stale: '已过期（内容变了）',
 };
+
+/** Curated emotional-valence vocabulary drawn from the authoring fixtures (schema-free string). */
+const VALENCE_OPTIONS: readonly string[] = [
+  'tension',
+  'wonder_anxiety',
+  'fear_resentment',
+  'lonely_then_protected',
+  'grief_abandonment',
+  'desperate_then_hopeful',
+  'hopeful_earnest',
+  'restless_discovery',
+  'warm_then_ominous',
+  'ecstatic_infatuation',
+  'comic_romantic',
+  'sorrow_reflection',
+  'shock_resolve',
+  'compassionate_solemn',
+  'bittersweet_grief',
+  'mysterious_anticipation',
+  'triumphant_justice',
+  'catastrophic_tragedy',
+  'desolate_grief',
+];
+
+/** Valid sceneType values from the EventFile schema. */
+const SCENE_TYPE_OPTIONS: readonly string[] = ['linear', 'flashback', 'flashforward', 'dream', 'parallel'];
+
+/** One scene-card edit draft: the 6 editable fields of the event YAML. */
+interface SceneEditDraft {
+  readonly title: string;
+  /** sceneBrief block plus `- beat` lines, edited as one textarea. */
+  readonly body: string;
+  /** emotionalValence; '' = unset/clear. */
+  readonly valence: string;
+  /** storyTime; '' = keep the parsed value untouched. */
+  readonly storyTime: string;
+  readonly sceneType: string;
+}
+
+/** Split the body textarea back into sceneBrief + beats (non-`- ` lines = brief). */
+function parseSceneBody(body: string): { readonly brief: string; readonly beats: string[] } {
+  const beats: string[] = [];
+  const briefLines: string[] = [];
+  for (const line of body.split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('- ')) beats.push(trimmed.slice(2).trim());
+    else briefLines.push(line);
+  }
+  return { brief: briefLines.join('\n').trim(), beats };
+}
+
+/** Draft derived from the map row (title/sceneType/storyTime only; body needs the detail). */
+function draftFromRow(scene: SceneSummaryRowV1): SceneEditDraft {
+  return {
+    title: scene.title,
+    body: '',
+    valence: '',
+    storyTime: scene.storyTime,
+    sceneType: scene.sceneType,
+  };
+}
+
+/** Draft derived from the detail's working event YAML; null when it cannot be read. */
+function draftFromDetail(detail: SceneDetailViewV1): SceneEditDraft | null {
+  const eventYaml = detail.eventYaml;
+  if (typeof eventYaml !== 'string' || eventYaml.length === 0) return null;
+  let parsed: unknown;
+  try {
+    parsed = YAML.parse(eventYaml);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== 'object' || parsed === null) return null;
+  const event = parsed as Record<string, unknown>;
+  const title = typeof event.title === 'string' ? event.title : '';
+  const brief = typeof event.sceneBrief === 'string' ? event.sceneBrief : '';
+  const beats = Array.isArray(event.beats)
+    ? event.beats.filter((beat): beat is string => typeof beat === 'string')
+    : [];
+  const body = [brief, ...beats.map((beat) => `- ${beat}`)]
+    .filter((part) => part.length > 0)
+    .join('\n');
+  const storyTimeRaw = event.storyTime;
+  return {
+    title,
+    body,
+    valence: typeof event.emotionalValence === 'string' ? event.emotionalValence : '',
+    // Structured story times are kept as-is; only plain-string anchors are editable.
+    storyTime: typeof storyTimeRaw === 'string' ? storyTimeRaw : '',
+    sceneType: typeof event.sceneType === 'string' ? event.sceneType : 'linear',
+  };
+}
 
 /** Short hash display; the full value stays in the title tooltip. */
 function shortHash(value: string | null | undefined): string {
@@ -144,6 +241,149 @@ export function SceneMap(props: SceneMapProps) {
   const selectScene = (eventId: string): void => {
     setSelectedEventId(eventId);
     props.onSelectScene?.(eventId);
+  };
+
+  // ── Scene card editor state (plan Step 5) ──────────────────────────────
+  const [editingEventId, setEditingEventId] = createSignal<string | null>(null);
+  const [editDraft, setEditDraft] = createSignal<SceneEditDraft | null>(null);
+  const [editBusy, setEditBusy] = createSignal(false);
+  const [editError, setEditError] = createSignal<string | null>(null);
+  const [editSaved, setEditSaved] = createSignal(false);
+  /** True once the author types in the form; the detail-prefill then stands down. */
+  let draftTouched = false;
+
+  const storyTimeOptions = (): string[] => {
+    const options: string[] = [];
+    for (const scene of allScenes()) {
+      if (scene.storyTime.length > 0 && !options.includes(scene.storyTime)) options.push(scene.storyTime);
+    }
+    const current = editDraft()?.storyTime ?? '';
+    if (current.length > 0 && !options.includes(current)) options.push(current);
+    return options;
+  };
+
+  const valenceOptions = (): string[] => {
+    const options = [...VALENCE_OPTIONS];
+    const current = editDraft()?.valence ?? '';
+    if (current.length > 0 && !options.includes(current)) options.push(current);
+    return options;
+  };
+
+  const sceneTypeOptions = (): string[] => {
+    const options = [...SCENE_TYPE_OPTIONS];
+    const current = editDraft()?.sceneType ?? '';
+    if (current.length > 0 && !options.includes(current)) options.push(current);
+    return options;
+  };
+
+  const updateDraft = (patch: Partial<SceneEditDraft>): void => {
+    draftTouched = true;
+    setEditDraft((current) => (current === null ? current : { ...current, ...patch }));
+  };
+
+  const openEdit = (scene: SceneSummaryRowV1): void => {
+    draftTouched = false;
+    setEditingEventId(scene.eventId);
+    setEditError(null);
+    setEditSaved(false);
+    setEditBusy(false);
+    const detail = props.detail;
+    setEditDraft(
+      detail !== null && detail !== undefined && detail.eventId === scene.eventId
+        ? (draftFromDetail(detail) ?? draftFromRow(scene))
+        : draftFromRow(scene),
+    );
+    // Ensure the detail (eventYaml + working document id) loads for prefill
+    // and the writeback; the prefill effect upgrades the draft when it lands.
+    selectScene(scene.eventId);
+  };
+
+  const cancelEdit = (): void => {
+    draftTouched = false;
+    setEditingEventId(null);
+    setEditDraft(null);
+    setEditError(null);
+    setEditSaved(false);
+    setEditBusy(false);
+  };
+
+  // Upgrade the draft from the working event YAML once the detail arrives.
+  createEffect(() => {
+    const eventId = editingEventId();
+    const detail = props.detail;
+    if (eventId === null || detail === null || detail === undefined || detail.eventId !== eventId) {
+      return;
+    }
+    if (draftTouched) return;
+    const fromDetail = draftFromDetail(detail);
+    if (fromDetail !== null) setEditDraft(fromDetail);
+  });
+
+  const saveEdit = async (eventId: string): Promise<void> => {
+    const draft = editDraft();
+    const detail = props.detail;
+    if (draft === null) return;
+    if (detail === null || detail === undefined || detail.eventId !== eventId) {
+      setEditError('场景数据尚未载入，请稍候再试。');
+      return;
+    }
+    const { eventYaml, eventDocumentId } = detail;
+    if (typeof eventYaml !== 'string' || eventYaml.length === 0 || typeof eventDocumentId !== 'string') {
+      setEditError('该场景没有可编辑的工作区文档（可用 Source Studio 创建）。');
+      return;
+    }
+    if (typeof props.sourceSessionId !== 'string' || props.sourceSessionId.length === 0) {
+      setEditError('工作区会话不可用，无法写回。');
+      return;
+    }
+    if (props.projectId === null) {
+      setEditError('项目不可用。');
+      return;
+    }
+    if (draft.title.trim().length === 0) {
+      setEditError('标题不能为空。');
+      return;
+    }
+    let parsed: Record<string, unknown>;
+    try {
+      const raw = YAML.parse(eventYaml);
+      if (typeof raw !== 'object' || raw === null) throw new Error('not an object');
+      parsed = raw as Record<string, unknown>;
+    } catch {
+      setEditError('当前场景 YAML 无法解析，请先在 Source Studio 修复。');
+      return;
+    }
+    const { brief, beats } = parseSceneBody(draft.body);
+    // Merge exactly the 6 editable fields; every other field stays untouched.
+    const merged: Record<string, unknown> = { ...parsed };
+    merged.title = draft.title.trim();
+    merged.sceneBrief = brief.length > 0 ? brief : (parsed.sceneBrief ?? '');
+    merged.beats =
+      beats.length > 0 ? beats : (Array.isArray(parsed.beats) ? (parsed.beats as unknown[]) : []);
+    if (draft.valence.length > 0) merged.emotionalValence = draft.valence;
+    else delete merged.emotionalValence;
+    if (draft.storyTime.length > 0) merged.storyTime = draft.storyTime;
+    merged.sceneType = draft.sceneType.length > 0 ? draft.sceneType : (parsed.sceneType ?? 'linear');
+    const nextYaml = YAML.stringify(merged);
+    setEditBusy(true);
+    setEditError(null);
+    try {
+      await replaceWorkingDocumentText({
+        projectId: props.projectId,
+        documentId: eventDocumentId,
+        sessionId: props.sourceSessionId,
+        text: nextYaml,
+      });
+      setEditSaved(true);
+      // Refresh the map + detail; the detail re-reads the new working YAML.
+      await props.onRefresh?.();
+      await selectScene(eventId);
+      draftTouched = true;
+    } catch (cause) {
+      setEditError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setEditBusy(false);
+    }
   };
 
   const allScenes = () => props.map?.chapters.flatMap((chapter) => chapter.scenes) ?? [];
@@ -253,10 +493,10 @@ export function SceneMap(props: SceneMapProps) {
                                     </div>
                                     <div class="scene-badges">
                                       <span class="scene-badge scene-badge-changed">
-                                        {scene.changedCount} changed
+                                        {scene.changedCount} 处变更
                                       </span>
                                       <span class="scene-badge scene-badge-intro">
-                                        {scene.introCount} intro
+                                        {scene.introCount} 次引入
                                       </span>
                                       <span
                                         class={`scene-badge scene-badge-adopt scene-badge-adopt-${scene.renderStatus}`}
@@ -275,7 +515,7 @@ export function SceneMap(props: SceneMapProps) {
                                       class="scene-hash-chain"
                                       title={`adoptedSceneHash=${scene.adoptedSceneHash ?? '—'} · currentSceneHash=${scene.currentSceneHash ?? '—'} · proseHash=${scene.proseHash ?? '—'} · revision=${scene.revisionId ?? '—'}`}
                                     >
-                                      <span class="scene-hash-label">hash</span>{' '}
+                                      <span class="scene-hash-label">哈希</span>{' '}
                                       {shortHash(scene.adoptedSceneHash)}
                                       <span class="scene-hash-arrow">→</span>
                                       {shortHash(scene.currentSceneHash)}
@@ -288,9 +528,128 @@ export function SceneMap(props: SceneMapProps) {
                                       <span class="scene-render-dot" aria-hidden="true" />
                                       {RENDER_TONE_LABEL[tone]}
                                     </div>
+                                    <button
+                                      type="button"
+                                      class="btn btn-ghost scene-edit-toggle"
+                                      aria-label={`编辑 ${scene.eventId}`}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        openEdit(scene);
+                                      }}
+                                    >
+                                      编辑
+                                    </button>
                                   </div>
                                 </div>
                               </div>
+                            <Show
+                              when={editingEventId() === scene.eventId ? editDraft() : null}
+                            >
+                                {(draft) => (
+                                  <div class="scene-edit-form" aria-label={`编辑场景 ${scene.eventId}`}>
+                                    <div class="scene-edit-grid">
+                                      <label class="scene-edit-field">
+                                        <span>标题</span>
+                                        <input
+                                          type="text"
+                                          value={draft().title}
+                                          onInput={(event) =>
+                                            updateDraft({ title: event.currentTarget.value })
+                                          }
+                                          aria-label={`标题 ${scene.eventId}`}
+                                        />
+                                      </label>
+                                      <label class="scene-edit-field scene-edit-field-wide">
+                                        <span>正文（sceneBrief + beats）</span>
+                                        <textarea
+                                          rows={6}
+                                          value={draft().body}
+                                          onInput={(event) =>
+                                            updateDraft({ body: event.currentTarget.value })
+                                          }
+                                          aria-label={`正文 ${scene.eventId}`}
+                                          placeholder="第一段为场景概述；以 - 开头的行作为 beats。"
+                                        />
+                                      </label>
+                                      <label class="scene-edit-field">
+                                        <span>情绪</span>
+                                        <select
+                                          onInput={(event) =>
+                                            updateDraft({ valence: event.currentTarget.value })
+                                          }
+                                          aria-label={`情绪 ${scene.eventId}`}
+                                        >
+                                          <option value="">（不指定）</option>
+                                          {valenceOptions().map((option) => (
+                                            <option value={option} selected={option === draft().valence}>
+                                              {option}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </label>
+                                      <label class="scene-edit-field">
+                                        <span>时间</span>
+                                        <select
+                                          onInput={(event) =>
+                                            updateDraft({ storyTime: event.currentTarget.value })
+                                          }
+                                          aria-label={`时间 ${scene.eventId}`}
+                                        >
+                                          <option value="">（保留原值）</option>
+                                          {storyTimeOptions().map((option) => (
+                                            <option value={option} selected={option === draft().storyTime}>
+                                              {option}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </label>
+                                      <label class="scene-edit-field">
+                                        <span>场景类型</span>
+                                        <select
+                                          onInput={(event) =>
+                                            updateDraft({ sceneType: event.currentTarget.value })
+                                          }
+                                          aria-label={`场景类型 ${scene.eventId}`}
+                                        >
+                                          {sceneTypeOptions().map((option) => (
+                                            <option value={option} selected={option === draft().sceneType}>
+                                              {option}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </label>
+                                    </div>
+                                    <div class="scene-edit-actions">
+                                      <button
+                                        type="button"
+                                        class="btn btn-primary"
+                                        disabled={editBusy()}
+                                        onClick={() => void saveEdit(scene.eventId)}
+                                      >
+                                        {editBusy() ? '保存中…' : '保存'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        class="btn"
+                                        disabled={editBusy()}
+                                        onClick={cancelEdit}
+                                      >
+                                        取消
+                                      </button>
+                                    </div>
+                                    <Show when={editSaved()}>
+                                      <p class="scene-edit-note" role="status">
+                                        已写入工作区（尚未提交；可在 Source Studio 提交生效）。
+                                      </p>
+                                    </Show>
+                                    <Show when={editError() !== null}>
+                                      <p class="scene-edit-error" role="alert">
+                                        {editError()}
+                                      </p>
+                                    </Show>
+                                  </div>
+                                )}
+                              </Show>
                             </li>
                           );
                         }}

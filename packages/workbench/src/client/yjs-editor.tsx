@@ -146,6 +146,107 @@ async function requestYjsTicket(
   return body.ticket;
 }
 
+/** One-shot programmatic working-document text replacement. */
+export interface ReplaceWorkingDocumentTextInput {
+  readonly projectId: string;
+  /** Host-validated working-document id (the Yjs ticket scope). */
+  readonly documentId: string;
+  /** Transient session credential used only to request a one-time Yjs ticket. */
+  readonly sessionId: string;
+  /** Full replacement text for the `prose` Yjs text type. */
+  readonly text: string;
+  /** Same-origin Host URL; defaults to the current page origin. */
+  readonly baseUrl?: string;
+}
+
+/** Bound the write against a silent sync so the caller promise never hangs. */
+const REPLACE_WRITE_TIMEOUT_MS = 10_000;
+
+/**
+ * Replace the full working text of one document through the same
+ * authenticated Yjs channel the editor uses: request a one-time ticket,
+ * bind the `/yjs` WebSocket, wait for the authoritative sync state, then
+ * `getText('prose').delete(0, len); insert(0, text)` so the resulting diff
+ * update is sent and persisted Host-side. Resolves after the update has been
+ * handed to the socket; rejects on ticket/connection/sync failures.
+ */
+export function replaceWorkingDocumentText(
+  input: ReplaceWorkingDocumentTextInput,
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const descriptor: SourceStudioDocumentDescriptorV1 = {
+      projectId: input.projectId,
+      documentId: input.documentId,
+      kind: 'raw-yaml',
+      available: true,
+    };
+    const document = new Y.Doc();
+    const text = document.getText(WORKING_TEXT_TYPE);
+    let socket: WebSocket | null = null;
+    let settled = false;
+    let applied = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const settle = (error?: unknown): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      socket?.close();
+      socket = null;
+      document.destroy();
+      if (error === undefined) resolve();
+      else reject(error instanceof Error ? error : new Error(String(error)));
+    };
+
+    // Local transaction (the replacement) → send the diff to the Host.
+    document.on('update', (update: Uint8Array, origin: unknown) => {
+      if (origin === REMOTE_ORIGIN || socket?.readyState !== WebSocket.OPEN) return;
+      socket.send(encodeSyncFrame(SYNC_UPDATE, update));
+      // Frames are ordered ahead of the close frame, so the persisted update
+      // reaches the Host before the connection finalizes.
+      queueMicrotask(() => settle());
+    });
+
+    void requestYjsTicket(input.baseUrl, descriptor, input.sessionId)
+      .then((ticket) => {
+        if (settled) return;
+        socket = new WebSocket(yjsUrl(input.baseUrl, descriptor, ticket));
+        socket.binaryType = 'arraybuffer';
+        socket.addEventListener('open', () => {
+          if (settled || socket === null) return;
+          socket.send(encodeSyncFrame(SYNC_STEP_1, Y.encodeStateVector(document)));
+        });
+        socket.addEventListener('message', (event) => {
+          void bytesFromSocketData(event.data)
+            .then((bytes) => {
+              if (settled) return;
+              const frame = parseSyncFrame(bytes);
+              if (frame === null) return;
+              if (frame.syncType !== SYNC_STEP_2 && frame.syncType !== SYNC_UPDATE) return;
+              Y.applyUpdate(document, frame.payload, REMOTE_ORIGIN);
+              if (applied) return;
+              applied = true;
+              // Authoritative state is loaded: replace the full text. The
+              // update event above sends the diff and settles the promise.
+              text.delete(0, text.length);
+              text.insert(0, input.text);
+            })
+            .catch(() => settle(new Error('working document sync failed')));
+        });
+        socket.addEventListener('close', () => {
+          if (!settled) settle(new Error('working document connection closed before write'));
+        });
+        socket.addEventListener('error', () => {
+          if (!settled) settle(new Error('working document connection failed'));
+        });
+        timer = setTimeout(() => {
+          if (!settled) settle(new Error('working document write timed out'));
+        }, REPLACE_WRITE_TIMEOUT_MS);
+      })
+      .catch((cause: unknown) => settle(cause));
+  });
+}
+
 /**
  * CodeMirror/Yjs editor binding for one Host-validated descriptor. The only
  * network writes here are authenticated binary WebSocket Yjs updates. No

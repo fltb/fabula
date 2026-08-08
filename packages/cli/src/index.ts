@@ -29,11 +29,11 @@ import {
   inspectProjectGraph,
 } from '@novalistically/core/tooling';
 import {
-  PiOpenAICompatibleProvider,
   createFileCoreRuntimeServices,
   FileMockPass2Provider,
   FileProjectSourceLoader,
   FileProjectSourceWriter,
+  PiOpenAICompatibleProvider,
 } from '@novalistically/node-host';
 import { Command } from 'commander';
 import { resolveRoute } from './route.ts';
@@ -104,8 +104,10 @@ function selector(input: { eventId?: string; all?: boolean; chapter?: string }):
 }
 
 function provider(options: { provider?: string; referenceDir?: string }): LLMProvider {
-  if (options.provider === undefined || options.provider === 'ai-sdk') {
-    return new PiOpenAICompatibleProvider();
+  if (options.provider === undefined || options.provider === 'pi') {
+    const baseUrl = process.env.NOVALISTICALLY_AI_BASE_URL ?? null;
+    const model = process.env.NOVALISTICALLY_AI_MODEL ?? null;
+    return new PiOpenAICompatibleProvider({ baseURL: baseUrl, model });
   }
   if (options.provider === 'mock-pass2') {
     if (!options.referenceDir) {
@@ -515,7 +517,9 @@ source
         }),
         true,
       );
-      console.log('Next step: run "fabula source validate --working" to validate the working layer.');
+      console.log(
+        'Next step: run "fabula source validate --working" to validate the working layer.',
+      );
       return;
     }
     const projectDir = ensureProjectDir();
@@ -897,7 +901,7 @@ review
   )
   .option('--text <text>', 'replacement content (required for --action replace)')
   .option('--severity <severity>', 'nit, suggestion, or blocking (replace only)')
-  .option('--category <category>', REVIEW_CATEGORIES.join(', ') + ' (replace only)')
+  .option('--category <category>', `${REVIEW_CATEGORIES.join(', ')} (replace only)`)
   .option('--json')
   .action(
     async (options: {

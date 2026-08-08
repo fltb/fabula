@@ -125,6 +125,7 @@ import {
   type BrowserAuthoringEventSource,
   createBrowserAuthoringApi,
 } from './browser-authoring-api.js';
+import { createBrowserImportApi } from './browser-import-api.js';
 import { createBrowserPublicationApi } from './browser-publication-api.js';
 import { createBrowserReferenceApi } from './browser-reference-api.js';
 import { createBrowserPrincipalResolver } from './browser-read-api.js';
@@ -185,7 +186,11 @@ import {
   createCanonicalStateProjectionService,
   DEFAULT_SNAPSHOT_INTERVAL,
 } from './state/canonical-state-projection.js';
-import { createWorkbenchRuntime, type WorkbenchRuntime } from './workbench-runtime.js';
+import {
+  createWorkbenchRuntime,
+  type ManagedProjectConfigurationV1,
+  type WorkbenchRuntime,
+} from './workbench-runtime.js';
 import {
   createSessionAuthPort,
   createYjsPersistencePort,
@@ -194,16 +199,12 @@ import {
 
 export interface WorkbenchLaunchConfig extends HostServerOptions {
   readonly mode: 'workbench';
-  readonly provider: 'ai-sdk' | 'mock';
+  readonly provider: 'pi' | 'mock';
   readonly allowMockProvider: boolean;
   /** Resolved Host home directory; owns SQLite and coordinator state. */
   readonly hostHome: string;
   /** SQLite path owned by the Host; always passed to the persistence worker. */
   readonly databasePath: string;
-  /** Optional env-derived single project; absent = unconfigured setup runtime. */
-  readonly projectRoot?: string;
-  readonly projectId?: string;
-  readonly displayName?: string;
   /** Custom assets root; defaults to the packaged `dist/client` outside dev. */
   readonly assetsRoot?: string;
   readonly allowBootstrap: boolean;
@@ -335,19 +336,6 @@ function validateConfig(config: WorkbenchLaunchConfig): void {
   if (!config.hostHome || !config.databasePath) {
     throw new Error('Workbench requires a Host home and database path');
   }
-  if (config.projectRoot === undefined && !isLoopbackConfig(config)) {
-    throw new Error(
-      'An unconfigured Workbench starts loopback-only; LAN or reverse-proxy binding requires an owner-configured Host',
-    );
-  }
-  if (
-    config.projectRoot === undefined &&
-    (config.lan === true || config.unixSocket !== undefined)
-  ) {
-    throw new Error(
-      'An unconfigured Workbench starts loopback-only; LAN or Unix-socket binding requires an owner-configured Host',
-    );
-  }
   if (config.allowBootstrap && !isLoopbackConfig(config)) {
     throw new Error('Workbench bootstrap is permitted only on loopback');
   }
@@ -443,6 +431,11 @@ function pluginsEnabledIn(source: ProjectSourceSnapshotV1): boolean {
   const plugins = (parsed as Record<string, unknown>).plugins;
   if (typeof plugins !== 'object' || plugins === null) return false;
   return (plugins as Record<string, unknown>).enabled === true;
+}
+
+/** Host-managed project root: `$WORKBENCH_HOME/projects/<projectId>`. */
+function managedProjectRoot(hostHome: string, projectId: string): string {
+  return join(hostHome, 'projects', projectId);
 }
 
 /**
@@ -656,8 +649,6 @@ export function parseWorkbenchLaunchConfig(
   const databasePathRaw = opt(env.WORKBENCH_DATABASE_PATH);
   const databasePath =
     databasePathRaw === undefined ? join(hostHome, 'workbench.sqlite') : resolve(databasePathRaw);
-  const projectRootRaw = opt(env.WORKBENCH_PROJECT_ROOT);
-  const projectRoot = projectRootRaw === undefined ? undefined : resolve(projectRootRaw);
   const assetsRootRaw = opt(env.WORKBENCH_ASSETS_ROOT);
   const assetsRoot =
     assetsRootRaw !== undefined
@@ -674,9 +665,9 @@ export function parseWorkbenchLaunchConfig(
   const port = portRaw === undefined ? 8787 : Number(portRaw);
   if (!Number.isInteger(port) || port < 0 || port > 65535)
     throw new Error('WORKBENCH_PORT must be 0..65535');
-  const providerValue = opt(env.WORKBENCH_PROVIDER) ?? 'ai-sdk';
-  if (providerValue !== 'ai-sdk' && providerValue !== 'mock') {
-    throw new Error('WORKBENCH_PROVIDER must be ai-sdk or mock');
+  const providerValue = opt(env.WORKBENCH_PROVIDER) ?? 'pi';
+  if (providerValue !== 'pi' && providerValue !== 'mock') {
+    throw new Error('WORKBENCH_PROVIDER must be pi or mock');
   }
   const allowedHostsRaw = opt(env.WORKBENCH_ALLOWED_HOSTS) ?? '127.0.0.1';
   const allowedOriginsRaw = opt(env.WORKBENCH_ALLOWED_ORIGINS);
@@ -686,15 +677,6 @@ export function parseWorkbenchLaunchConfig(
     allowMockProvider: env.WORKBENCH_ALLOW_MOCK_PROVIDER === 'true',
     hostHome,
     databasePath,
-    projectRoot,
-    projectId:
-      projectRoot === undefined
-        ? undefined
-        : (opt(env.WORKBENCH_PROJECT_ID) ?? basename(projectRoot)),
-    displayName:
-      projectRoot === undefined
-        ? undefined
-        : (opt(env.WORKBENCH_DISPLAY_NAME) ?? basename(projectRoot)),
     assetsRoot,
     allowBootstrap,
     persistenceWorkerEntry: workerEntryRaw === undefined ? undefined : resolve(workerEntryRaw),
@@ -853,6 +835,17 @@ export async function startWorkbench(
     });
     const storedConfiguration = await configurationService.readActive().catch(() => null);
     const activeConfiguration = configuration ?? storedConfiguration?.configuration ?? null;
+    // An unconfigured Host (no workbench.yaml, no projects) serves only the
+    // loopback setup wizard; LAN / Unix-socket / reverse-proxy binding
+    // requires an owner-configured Host.
+    if (
+      activeConfiguration === null &&
+      (!isLoopbackConfig(config) || config.lan === true || config.unixSocket !== undefined)
+    ) {
+      throw new Error(
+        'An unconfigured Workbench starts loopback-only; LAN or Unix-socket binding requires an owner-configured Host',
+      );
+    }
 
     // renderPolicy threading lands with Stage 1.9 core wiring: the sampling
     // policy is available here as `activeConfiguration?.renderPolicy ??
@@ -880,9 +873,6 @@ export async function startWorkbench(
     // bare shared MockProvider (whose default echo is non-JSON and blocked
     // every release).
     const credentialStore = createProviderCredentialStore();
-    // Stage 2 swaps the constructor by `kind` ('pi' vs legacy 'ai-sdk');
-    // both currently build through the same openai-compatible AiSdkProvider
-    // path (the factory ignores `kind`), so 'pi' falls through unchanged.
     const provider =
       config.providerFactory ??
       new HostProviderFactory({
@@ -895,24 +885,21 @@ export async function startWorkbench(
                 createDeterministicMockProvider({ referenceDirs: mockReferenceDirs(projectRoot) })
             : undefined,
       });
-    // Env prefill (WORKBENCH_PROJECT_ROOT/PROJECT_ID/DISPLAY_NAME) only
-    // applies when activeConfiguration === null (unconfigured); once
-    // workbench.yaml exists, env prefill is fully ignored:
-    // `activeConfiguration?.projects` short-circuits the fallback below.
-    const configuredProjects: readonly WorkbenchProjectConfigurationV1[] =
-      activeConfiguration?.projects ??
-      (config.projectRoot === undefined
-        ? []
-        : [
-            {
-              projectId: config.projectId ?? basename(config.projectRoot),
-              displayName: config.displayName ?? basename(config.projectRoot),
-              root: config.projectRoot,
-              revisionMirror: { mode: 'disabled' },
-              providerProfile: 'default',
-              trustedPlugins: [],
-            },
-          ]);
+    // Every project root is Host-managed: `$WORKBENCH_HOME/projects/<projectId>`.
+    // Roots are derived here once and attached to the launch list, so every
+    // session/authoring consumer reads the same managed root.
+    const configuredProjects: readonly ManagedProjectConfigurationV1[] = (
+      activeConfiguration?.projects ?? []
+    ).map((project) => ({
+      ...project,
+      root: managedProjectRoot(config.hostHome, project.projectId),
+    }));
+    // The managed project roots are created before any session opens; the
+    // per-project runtime tree (`projects/<id>/runtime`) is created later by
+    // the session factory with the same recursive mkdir pattern.
+    for (const project of configuredProjects) {
+      await mkdir(managedProjectRoot(config.hostHome, project.projectId), { recursive: true });
+    }
     // Reference routes are mounted only after a durable Host-owned job/chunk
     // adapter is available; the portable manifest and objects remain under
     // each configured project root.
@@ -979,7 +966,7 @@ export async function startWorkbench(
       },
     };
     const audit = createAgentDurableAudit({ client: persistence.client });
-    const projectConfiguration = new Map<string, WorkbenchProjectConfigurationV1>();
+    const projectConfiguration = new Map<string, ManagedProjectConfigurationV1>();
     const revisionMirrors = new Map(
       configuredProjects.map((project) => [project.projectId, project.revisionMirror] as const),
     );
@@ -1073,7 +1060,7 @@ export async function startWorkbench(
       if (!referenceLimits.enabled) return undefined;
       return createWorkbenchReferencePort({
         projectId,
-        projectRoot: project.root,
+        projectRoot: project.root ?? managedProjectRoot(config.hostHome, projectId),
         jobsRoot: join(config.hostHome, 'reference-jobs'),
         referenceLimits,
       });
@@ -1112,12 +1099,15 @@ export async function startWorkbench(
     const runtimeLifecycle = createWorkbenchRuntime({
       registry: sessions,
       createSession: async (project) => {
+        // Host-managed root: the launch list carries it; admin-opened
+        // projects derive it from the project id.
+        const projectRoot = project.root ?? managedProjectRoot(config.hostHome, project.projectId);
         // The project authority lease must be held before the session bundle
         // (session, Core runtime, authoring runtime) is constructed: every
         // accepted source materialization runs under this token. A live or
         // healthy lease owned by another Host fails the open with the typed
         // authority-unavailable error and the project stays unopened.
-        const coordinator = coordinatorFor(project);
+        const coordinator = coordinatorFor({ projectId: project.projectId, root: projectRoot });
         const authorityToken = await coordinator.acquireWorkbenchAuthority(instanceNonce);
         authorityTokens.set(project.projectId, authorityToken);
         // Per-project provider: the project's canonical `providerProfile`
@@ -1129,9 +1119,9 @@ export async function startWorkbench(
           configuredProjects.find((entry) => entry.projectId === project.projectId)
             ?.providerProfile ?? 'default';
         const sessionProvider = await provider
-          .createForProfile(profileId, activeConfiguration?.providers[profileId], project.root)
+          .createForProfile(profileId, activeConfiguration?.providers[profileId], projectRoot)
           .catch(() => unavailableProvider);
-        const source = new FileProjectSourceLoader().load(project.root);
+        const source = new FileProjectSourceLoader().load(projectRoot);
         // Trusted-plugin activation (plan 7.1-7.2): only when the project
         // intent flag `nova.yaml.plugins.enabled` is true do we attempt
         // activation, and only exact trustedPlugins name/version/moduleHash
@@ -1145,7 +1135,7 @@ export async function startWorkbench(
         if (pluginsEnabledIn(source)) {
           try {
             pluginActivation = await activateNodePlugins({
-              projectRoot: project.root,
+              projectRoot,
               trustedPlugins: trustedPlugins.map((entry) => ({
                 name: entry.name,
                 version: entry.version,
@@ -1183,7 +1173,7 @@ export async function startWorkbench(
         });
         const coreRuntime = createProjectCoreRuntime({
           projectId: project.projectId,
-          services: createFileCoreRuntimeServices(project.root, {
+          services: createFileCoreRuntimeServices(projectRoot, {
             provider: sessionProvider,
             artifactRoot: join(config.hostHome, 'projects', project.projectId, 'runtime'),
           }),
@@ -1258,7 +1248,7 @@ export async function startWorkbench(
           createProjectPublicationService({
             projectId: project.projectId,
             session,
-            projectRoot: project.root,
+            projectRoot,
             publicationStore: createProjectPublicationStore(persistence.client),
             operations: operationService,
           }),
@@ -1270,14 +1260,14 @@ export async function startWorkbench(
         await persistence.client.request('upsertProject', {
           projectId: project.projectId,
           displayName: project.displayName,
-          rootLabel: basename(project.root),
+          rootLabel: basename(projectRoot),
           createdAt: existing?.createdAt ?? now,
           updatedAt: now,
         });
-        const statusReporter = new FileProjectStatusReporter(project.root);
+        const statusReporter = new FileProjectStatusReporter(projectRoot);
         const projectAuthoring = await createProjectAuthoringRuntime({
           projectId: project.projectId,
-          projectRoot: project.root,
+          projectRoot,
           hostStagingRoot: join(config.hostHome, 'staging', project.projectId),
           session,
           revisionMirror: revisionMirrors.get(project.projectId) ?? { mode: 'disabled' },
@@ -1332,7 +1322,8 @@ export async function startWorkbench(
           // key is stored yet: the project must still open — the Agent
           // surface simply stays absent for it (fail closed, feature derived
           // from registered services only). Tests/parity inject a
-          // deterministic model; the pi defaults fill a missing baseUrl/model.
+          // deterministic model; a missing baseUrl/model throws and the
+          // Agent surface stays absent for the project.
           let agentModel:
             | { readonly model: Model<Api>; readonly streamFn: StreamFn }
             | null = config.agentModel ?? null;
@@ -1416,7 +1407,7 @@ export async function startWorkbench(
         let authoringWatcher: ProjectAuthoringTreeWatcher;
         try {
           authoringWatcher = createProjectAuthoringTreeWatcher({
-            projectRoot: project.root,
+            projectRoot,
             onChange: (input) => projectAuthoring.observer.notify(input).then(() => undefined),
           });
         } catch (error) {
@@ -1511,6 +1502,9 @@ export async function startWorkbench(
       'graph-route',
       'review-hub',
       'publication',
+      // Settings (author LLM panel, plan Step 4): always-on; the view is
+      // owner-gated client-side, non-owners see a read-only status.
+      'settings',
       // References (plan 9.1): derived from referenceLimits.enabled, the same
       // gate the MCP reference port uses; disabled limits remove the feature
       // (and with it every browser reference route) for the whole Host.
@@ -1685,6 +1679,11 @@ export async function startWorkbench(
                       projection,
                       execution: session.runtime.services.execution,
                       eventId,
+                      // The scene card form edits the working layer; the
+                      // authoring runtime's document store materializes it
+                      // (seeded document id === manifest logical path).
+                      workingContent: async (documentId) =>
+                        authoring.get(projectId)?.documents.materializeDocument(documentId) ?? null,
                     });
                   },
                 }
@@ -1713,6 +1712,7 @@ export async function startWorkbench(
       credentials: credentialStore,
       auth,
       listenerMode: () => hostServer.status().mode,
+      hostHome: config.hostHome,
       runtime: runtimeLifecycle,
     });
     const defaultProjectId =
@@ -1731,7 +1731,7 @@ export async function startWorkbench(
         const project =
           active?.configuration.projects.find((entry) => entry.projectId === projectId) ??
           configuredProjects.find((entry) => entry.projectId === projectId);
-        return project?.root ?? null;
+        return project === undefined ? null : managedProjectRoot(config.hostHome, project.projectId);
       },
     });
     const adminConfiguration: McpAdminPort = createLaunchAdminPort({
@@ -1874,6 +1874,7 @@ export async function startWorkbench(
       credentials: credentialStore,
       auth,
       listenerMode: () => hostServer.status().mode,
+      hostHome: config.hostHome,
       runtime: runtimeLifecycle,
     }).register(hostServer);
     createAdminApi({
@@ -1920,6 +1921,15 @@ export async function startWorkbench(
         return { mode: status.mode, port: status.port };
       },
       unixSocketDir: join(config.hostHome, 'sockets'),
+    }).register(hostServer);
+    // Owner-gated project import (author-mode plan Step 3): copies an
+    // external project tree into the managed root and registers it. Unlike
+    // the per-project browser surfaces it must be available even when no
+    // project is configured yet — importing IS how the first project lands.
+    createBrowserImportApi({
+      principal,
+      configuration: configurationService,
+      hostHome: config.hostHome,
     }).register(hostServer);
     if (configuredProjects.length > 0) {
       createBrowserAuthoringApi({
@@ -2406,7 +2416,6 @@ export function createLaunchAdminPort(options: LaunchAdminPortOptions): McpAdmin
           {
             projectId: input.projectId,
             displayName: input.displayName,
-            root: input.root,
             revisionMirror: { mode: 'disabled' },
             providerProfile: 'default',
             trustedPlugins: [],
@@ -2438,7 +2447,6 @@ export function createLaunchAdminPort(options: LaunchAdminPortOptions): McpAdmin
               {
                 projectId: input.projectId,
                 displayName: input.displayName,
-                root: input.root,
                 revisionMirror: { mode: 'disabled' },
                 providerProfile: 'default',
                 trustedPlugins: [],
@@ -2470,7 +2478,6 @@ export function createLaunchAdminPort(options: LaunchAdminPortOptions): McpAdmin
             ? {
                 projectId: input.projectId,
                 displayName: input.displayName,
-                root: input.root,
                 revisionMirror: { mode: 'disabled' },
                 providerProfile: 'default',
                 trustedPlugins: [],

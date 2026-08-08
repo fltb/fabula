@@ -19,6 +19,7 @@ import type { UserRole } from './persistence.js';
 import type { ProjectAccessRole } from './configuration.js';
 
 export type { ProjectAccessRole };
+export type { ReferenceItemV1 };
 
 /** Version of the browser read API contract carried by every response DTO. */
 export const BROWSER_API_VERSION = 1 as const;
@@ -43,6 +44,8 @@ export const BROWSER_SESSION_PATH = `${BROWSER_API_BASE_PATH}/session`;
 export const BROWSER_PROJECTS_PATH = `${BROWSER_API_BASE_PATH}/projects`;
 /** `GET /api/v1/projects/:projectId/overview` — project overview. */
 export const BROWSER_PROJECT_OVERVIEW_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/overview`;
+/** `POST /api/v1/projects/import` — copy an external project tree into the managed root. */
+export const BROWSER_PROJECT_IMPORT_PATH = `${BROWSER_API_BASE_PATH}/projects/import`;
 /** `GET /api/v1/projects/:projectId/graphs` — canonical graph for one route. */
 export const BROWSER_PROJECT_GRAPHS_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/graphs`;
 /** `GET /api/v1/projects/:projectId/references` — safe reference catalog. */
@@ -179,7 +182,8 @@ export type WorkbenchProjectFeatureV1 =
   | 'review-hub'
   | 'publication'
   | 'references'
-  | 'agent-chat';
+  | 'agent-chat'
+  | 'settings';
 
 /** Versioned capabilities envelope for one project. */
 export interface BrowserProjectCapabilitiesV1 {
@@ -277,6 +281,17 @@ export interface BrowserProjectReferenceRetryResultV1 {
   readonly job: ReferenceJobV1;
 }
 
+/**
+ * One project import result. The Host copied the source tree into the
+ * managed root (`$WORKBENCH_HOME/projects/<projectId>`) and registered the
+ * project in the active configuration under a single revision-CAS apply.
+ */
+export interface BrowserProjectImportResultV1 {
+  readonly version: BrowserApiVersion;
+  readonly projectId: string;
+  readonly displayName: string;
+}
+
 /** Typed browser read API error codes, grouped by HTTP status class. */
 export type BrowserApiErrorCode =
   /** 401 — the presented session is missing, revoked, or unknown. */
@@ -352,7 +367,13 @@ export type BrowserApiErrorCode =
   /** 400 — the scene adoption request is malformed or violates a documented bound. */
   | 'SCENE_ADOPTION_INVALID'
   /** 503 — the scene adoption preview cannot be produced by the host. */
-  | 'SCENE_ADOPTION_UNAVAILABLE';
+  | 'SCENE_ADOPTION_UNAVAILABLE'
+  /** 404 — the project import source path does not exist or is not a directory. */
+  | 'PROJECT_IMPORT_NOT_FOUND'
+  /** 400 — the import source is missing or has an unparseable nova.yaml. */
+  | 'PROJECT_IMPORT_INVALID'
+  /** 409 — the managed project target of an import already exists. */
+  | 'PROJECT_IMPORT_CONFLICT';
 /** Secret-free error envelope for every non-2xx browser read response. */
 export interface BrowserApiErrorV1 {
   readonly error: {

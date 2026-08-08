@@ -28,6 +28,7 @@ const status: WorkbenchSetupStatusV1 = {
     restartRequired: false,
   },
   generatedAt: '2026-08-03T00:00:00.000Z',
+  hostHome: '/state/fabula/workbench',
 };
 
 function createClient(overrides: Partial<SetupClient> = {}): SetupClient {
@@ -52,7 +53,7 @@ function createClient(overrides: Partial<SetupClient> = {}): SetupClient {
     validateProvider: vi.fn(async () => ({
       version: 1 as const,
       validation: 'valid' as const,
-      kind: 'ai-sdk' as const,
+      kind: 'pi' as const,
     })),
     saveCredential: vi.fn(async () => ({
       version: 1 as const,
@@ -82,8 +83,8 @@ function createClient(overrides: Partial<SetupClient> = {}): SetupClient {
 afterEach(cleanup);
 
 describe('setup wizard state and validation', () => {
-  it('keeps local errors on the project step and clears the submitted root', async () => {
-    expect(validateProjectFields('bad id', 'Project', '/tmp/project').projectId).toBeDefined();
+  it('keeps local errors on the project step and never collects a project root', async () => {
+    expect(validateProjectFields('bad id', 'Project').projectId).toBeDefined();
     expect(validateNetworkFields('unix', '8787').unixSocketName).toBeDefined();
 
     const client = createClient({
@@ -101,14 +102,14 @@ describe('setup wizard state and validation', () => {
 
     await user.type(screen.getByLabelText('Project identifier'), 'project-a');
     await user.type(screen.getByLabelText('Display name'), 'A Project');
-    await user.type(screen.getByLabelText('Project path on Host'), '/private/project-root');
-    await user.click(screen.getByRole('button', { name: 'Validate project' }));
+    // The wizard collects no project path: the Host derives the managed root.
+    expect(screen.queryByLabelText('Project path on Host')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Workspace location')).toHaveAttribute('readonly');
+    await user.click(screen.getByRole('button', { name: 'Create project' }));
 
     expect(await screen.findByTestId('setup-server-error')).toHaveTextContent(
       'The Host could not validate this project.',
     );
-    expect(screen.getByLabelText('Project path on Host')).toHaveValue('');
-    expect(screen.queryByText('/private/project-root')).not.toBeInTheDocument();
   });
 
   it('clears the owner password after the one-way owner request', async () => {
@@ -129,7 +130,7 @@ describe('setup wizard state and validation', () => {
       />
     ));
 
-    await user.type(screen.getByLabelText('Password'), 'a-safe-password-123');
+    await user.type(screen.getByLabelText(/^Password/), 'a-safe-password-123');
     await user.click(screen.getByRole('button', { name: 'Create owner' }));
 
     expect(onOwnerCreated).toHaveBeenCalledWith('session');

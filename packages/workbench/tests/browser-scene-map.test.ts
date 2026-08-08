@@ -24,6 +24,7 @@ import {
   MemoryStateLogRepository,
   MemoryStateSnapshotRepository,
 } from '@novalistically/core/testing';
+import YAML from 'yaml';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   BROWSER_PROJECT_SCENE_MAP_PATH,
@@ -351,6 +352,13 @@ async function harness(): Promise<Harness> {
         execution,
         eventId,
         authoringSource,
+        // Mirrors the launch wiring: the authoring runtime materializes the
+        // working document by id; E3 simulates "no working document".
+        workingContent: async (documentId) =>
+          documentId === 'chapters/chapter_02/E3.yaml'
+            ? null
+            : (snapshot.documents.find((document) => document.logicalPath === documentId)
+                ?.content ?? null),
       });
     },
   };
@@ -567,6 +575,31 @@ describe('browser scene map surface (plan 9.2)', () => {
     expect(body.discourse.assertions.length).toBeGreaterThan(0);
     expect(body.renderStatus).toBe('adopted_current');
     expect(body.stale).toBe(false);
+    // Working event YAML (plan Step 5): the scene card edits this exact text.
+    expect(body.eventDocumentId).toBe('chapters/chapter_01/E1.yaml');
+    expect(typeof body.eventYaml).toBe('string');
+    const eventYaml = YAML.parse(body.eventYaml as string) as Record<string, unknown>;
+    expect(eventYaml.event).toBe('E1');
+    expect(eventYaml.title).toBe('Encounter');
+    expect(eventYaml.pov).toEqual({ character: 'narrator', type: 'first_person' });
+  });
+
+  it('nulls the working event YAML when the working document is unavailable', async () => {
+    const h = await harness();
+    const server = trackServer(createHostServer({ port: 0, browser: browserOptions(h.sceneMap) }));
+    await server.start();
+    // E3's working document is unavailable in the harness port.
+    const res = await server.app.request(
+      BROWSER_PROJECT_SCENE_PATH.replace(':projectId', PROJECT_ID).replace(':eventId', 'E3'),
+      { headers: authHeaders },
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as SceneDetailViewV1;
+    expect(body.eventId).toBe('E3');
+    // The document identity is still derivable (the event file exists); the
+    // working content is not.
+    expect(body.eventDocumentId).toBe('chapters/chapter_02/E3.yaml');
+    expect(body.eventYaml).toBeNull();
   });
 
   it('404s unknown scenes and 503s when the port is absent', async () => {

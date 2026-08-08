@@ -60,6 +60,9 @@ const REVIEW_ERROR_CODES: Readonly<Record<BrowserApiErrorCode, true>> = {
   SCENE_RENDER_QUEUE_FULL: true,
   SCENE_RENDER_UNAVAILABLE: true,
   SCENE_MAP_UNAVAILABLE: true,
+  PROJECT_IMPORT_NOT_FOUND: true,
+  PROJECT_IMPORT_INVALID: true,
+  PROJECT_IMPORT_CONFLICT: true,
 
 };
 

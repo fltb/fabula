@@ -79,7 +79,20 @@ function lifecycleErrorMessage(error: unknown): string {
 }
 
 function statusLabel(status: BrowserReviewCommentV1['status']): string {
-  return status;
+  switch (status) {
+    case 'open':
+      return '待处理';
+    case 'addressed':
+      return '已处理';
+    case 'resolved':
+      return '已解决';
+    case 'wontfix':
+      return '不修复';
+    case 'superseded':
+      return '已被替代';
+    default:
+      return status;
+  }
 }
 
 function SeverityBadge(props: { readonly severity: BrowserReviewSeverityV1 }) {
@@ -139,18 +152,18 @@ function ReviewCommentCard(props: {
       <p class="review-comment-content">{comment().content}</p>
       <dl class="review-comment-meta">
         <div>
-          <dt>Scene event</dt>
+          <dt>场景事件</dt>
           <dd>
             <code>{comment().eventId}</code>
           </dd>
         </div>
         <div>
-          <dt>Created</dt>
+          <dt>创建时间</dt>
           <dd>{comment().createdAt}</dd>
         </div>
         <Show when={comment().supersedesId !== null}>
           <div>
-            <dt>Replaces</dt>
+            <dt>替代</dt>
             <dd>
               <code>{comment().supersedesId}</code>
             </dd>
@@ -158,8 +171,8 @@ function ReviewCommentCard(props: {
         </Show>
       </dl>
       <Show when={comment().applications.length > 0}>
-        <section class="review-revision-linkage" aria-label="Revision linkage">
-          <h4>Addressed by revisions</h4>
+        <section class="review-revision-linkage" aria-label="修订关联">
+          <h4>相关修订</h4>
           <ul>
             <For each={comment().applications}>
               {(application) => (
@@ -183,7 +196,7 @@ function ReviewCommentCard(props: {
                 data-testid={`reopen-${comment().commentId}`}
                 onClick={() => sendStatusAction('reopen')}
               >
-                Reopen
+                重新打开
               </button>
             }
           >
@@ -193,7 +206,7 @@ function ReviewCommentCard(props: {
               data-testid={`resolve-${comment().commentId}`}
               onClick={() => sendStatusAction('resolve')}
             >
-              Resolve
+                标记已解决
             </button>
             <button
               class="text-button"
@@ -201,7 +214,7 @@ function ReviewCommentCard(props: {
               data-testid={`wontfix-${comment().commentId}`}
               onClick={() => sendStatusAction('wontfix')}
             >
-              Wontfix
+                不修复
             </button>
             <Show when={comment().severity !== 'blocking'}>
               <button
@@ -210,7 +223,7 @@ function ReviewCommentCard(props: {
                 data-testid={`escalate-${comment().commentId}`}
                 onClick={() => sendStatusAction('escalate')}
               >
-                Escalate
+                升级
               </button>
             </Show>
           </Show>
@@ -229,7 +242,7 @@ function ReviewCommentCard(props: {
           >
             <input
               class="review-replacement-input"
-              aria-label="Replacement comment text"
+              aria-label="替换意见内容"
               value={replacement()}
               onInput={(event) => setReplacement(event.currentTarget.value)}
               data-testid={`replace-text-${comment().commentId}`}
@@ -251,7 +264,7 @@ function ReviewCommentCard(props: {
                 setReplaceOpen(false);
               }}
             >
-              Cancel
+              取消
             </button>
           </Show>
         </div>
@@ -294,31 +307,31 @@ function ReviewGateCard(props: {
       </div>
       <dl class="review-comment-meta">
         <div>
-          <dt>Scene event</dt>
+          <dt>场景事件</dt>
           <dd>
             <code>{gate().eventId}</code>
           </dd>
         </div>
         <div>
-          <dt>Candidate revision</dt>
+          <dt>候选修订</dt>
           <dd>
             <code>{gate().revisionId}</code>
           </dd>
         </div>
         <div>
-          <dt>Source hash</dt>
+          <dt>源哈希</dt>
           <dd>
             <code>{gate().sourceHash}</code>
           </dd>
         </div>
         <div>
-          <dt>Warnings</dt>
+          <dt>警告</dt>
           <dd>{gate().warningFingerprints.length}</dd>
         </div>
       </dl>
       <Show when={gate().decision !== null}>
         <p class="review-gate-decision" data-decision={gate().decision?.decision}>
-          Decided {gate().decision?.decision} on {gate().decision?.decidedAt}:{' '}
+          已决定：{gate().decision?.decision} · {gate().decision?.decidedAt}：{' '}
           {gate().decision?.reason}
         </p>
       </Show>
@@ -332,7 +345,7 @@ function ReviewGateCard(props: {
               checked={decision() === 'accept'}
               onChange={() => setDecision('accept')}
             />{' '}
-            Accept
+            通过
           </label>
           <label>
             <input
@@ -342,7 +355,7 @@ function ReviewGateCard(props: {
               checked={decision() === 'reject'}
               onChange={() => setDecision('reject')}
             />{' '}
-            Reject
+            拒绝
           </label>
           <input
             class="review-gate-reason"
@@ -420,8 +433,8 @@ export function ReviewHub(props: ReviewHubProps) {
     <section class="review-hub" aria-labelledby="review-hub-heading">
       <header class="review-hub-header">
         <div>
-          <p class="region-kicker">Human review</p>
-          <h2 id="review-hub-heading">Review Hub</h2>
+          <p class="region-kicker">人工评审</p>
+          <h2 id="review-hub-heading">评审中心</h2>
         </div>
         <Show when={props.onRefresh !== undefined}>
           <button
@@ -430,7 +443,7 @@ export function ReviewHub(props: ReviewHubProps) {
             data-testid="review-refresh"
             onClick={() => void props.onRefresh?.()}
           >
-            Refresh
+            刷新
           </button>
         </Show>
       </header>
@@ -461,13 +474,13 @@ export function ReviewHub(props: ReviewHubProps) {
             when={props.reviewError !== null && props.reviewError !== undefined}
             fallback={
               <section class="screen-empty" aria-live="polite">
-                <h3>No review projection</h3>
-                <p>Open an authenticated project in the Host to load its review comments.</p>
+                <h3>暂无评审数据</h3>
+                <p>打开已认证的项目以加载其评审意见。</p>
               </section>
             }
           >
             <section class="screen-empty" aria-live="polite" data-testid="review-load-error">
-              <h3>Review Hub could not be loaded</h3>
+              <h3>评审中心加载失败</h3>
               <p>{props.reviewError}</p>
               <Show when={props.onRefresh !== undefined}>
                 <button
@@ -476,7 +489,7 @@ export function ReviewHub(props: ReviewHubProps) {
                   data-testid="review-load-retry"
                   onClick={() => void props.onRefresh?.()}
                 >
-                  Retry
+                  重试
                 </button>
               </Show>
             </section>
@@ -487,7 +500,7 @@ export function ReviewHub(props: ReviewHubProps) {
           <section class="review-comments" aria-labelledby="review-comments-heading">
             <div class="review-section-heading">
               <h3 id="review-comments-heading">
-                Comments{' '}
+                评审意见{' '}
                 <span class="review-count" data-testid="review-count">
                   {review().comments.length}
                 </span>
@@ -502,7 +515,7 @@ export function ReviewHub(props: ReviewHubProps) {
                       data-testid="review-add-open"
                       onClick={() => setAddOpen(true)}
                     >
-                      Add comment
+                      添加评审意见
                     </button>
                   }
                 >
@@ -514,8 +527,8 @@ export function ReviewHub(props: ReviewHubProps) {
                     }}
                   >
                     <input
-                      aria-label="Scene event id"
-                      placeholder="Scene event id (e.g. E1)"
+                      aria-label="场景事件编号"
+                      placeholder="场景事件编号（如 E1）"
                       value={addEventId()}
                       onInput={(event) => setAddEventId(event.currentTarget.value)}
                       data-testid="review-add-event"
@@ -543,8 +556,8 @@ export function ReviewHub(props: ReviewHubProps) {
                       </For>
                     </select>
                     <textarea
-                      aria-label="Comment text"
-                      placeholder="Comment text"
+                      aria-label="评审意见内容"
+                      placeholder="评审意见内容"
                       value={addContent()}
                       onInput={(event) => setAddContent(event.currentTarget.value)}
                       data-testid="review-add-text"
@@ -557,10 +570,10 @@ export function ReviewHub(props: ReviewHubProps) {
                       }
                       data-testid="review-add-save"
                     >
-                      Add
+                      添加
                     </button>
                     <button class="text-button" type="button" onClick={() => setAddOpen(false)}>
-                      Cancel
+                      取消
                     </button>
                   </form>
                 </Show>
@@ -568,9 +581,9 @@ export function ReviewHub(props: ReviewHubProps) {
             </div>
             <Show
               when={review().comments.length > 0}
-              fallback={<p class="screen-note">No review comments have been recorded.</p>}
+              fallback={<p class="screen-note">还没有评审意见。</p>}
             >
-              <ul class="review-comment-list" aria-label="Review comments">
+              <ul class="review-comment-list" aria-label="评审意见">
                 <For each={review().comments}>
                   {(comment) => (
                     <ReviewCommentCard
@@ -591,21 +604,21 @@ export function ReviewHub(props: ReviewHubProps) {
 
       <Show
         when={props.gates}
-        fallback={<p class="screen-note">No release-gate projection is loaded.</p>}
+        fallback={<p class="screen-note">暂无检查项数据。</p>}
       >
         {(gates) => (
           <section class="review-gates" aria-labelledby="review-gates-heading">
             <h3 id="review-gates-heading">
-              Release gates{' '}
+              发布检查项{' '}
               <span class="review-count" data-testid="gate-count">
                 {gates().gates.length}
               </span>
             </h3>
             <Show
               when={gates().gates.length > 0}
-              fallback={<p class="screen-note">No release gates are open.</p>}
+              fallback={<p class="screen-note">没有待处理的检查项。</p>}
             >
-              <ul class="review-gate-list" aria-label="Release gates">
+              <ul class="review-gate-list" aria-label="发布检查项">
                 <For each={gates().gates}>
                   {(gate) => (
                     <ReviewGateCard
@@ -624,13 +637,13 @@ export function ReviewHub(props: ReviewHubProps) {
 
       <Show
         when={props.history}
-        fallback={<p class="screen-note">No review history trail is loaded.</p>}
+        fallback={<p class="screen-note">暂无评审历史记录。</p>}
       >
         {(history) => (
           <Show when={history().entries.length > 0}>
             <section class="review-history" aria-labelledby="review-history-heading">
-              <h3 id="review-history-heading">History</h3>
-              <ol class="review-history-list" aria-label="Review event trail">
+              <h3 id="review-history-heading">历史</h3>
+              <ol class="review-history-list" aria-label="评审事件流">
                 <For each={history().entries}>
                   {(entry) => (
                     <li data-history-kind={entry.kind}>

@@ -1,7 +1,7 @@
 # 当前系统状态（源码核验）
 
 **时间**：2026-08-08 CST
-**当前实现检查点**：`main` 当前工作树（Workbench 产品收敛 Stage 1–7 + 8.3 已交付，Stage 8 收口进行中：config `version:1` 单一契约 + renderPolicy、`@earendil-works/pi-ai` / `pi-agent-core` 换核、CLI 改名 `fabula`、`npm start` 产品入口、agent 消息持久化 schema v8、运行时边界声明；门禁状态诚实记录见下表——Node 26 下五包 typecheck 通过、bench 包受 b90d472 orphan 影响，Node 24 下 argon2 相关测试不可运行）
+**当前实现检查点**：`main` 当前工作树（Workbench 产品收敛 Stage 1–9 已交付 + 2026-08-08 Author Mode 改造已交付：`kind` 仅剩 `'pi'`、托管根 `$WORKBENCH_HOME/projects/<id>`、3 步 Setup 向导（owner 可免密）、项目导入（拷贝）、Settings LLM 面板（pi-ai 预设 + 高级参数）、场景卡表单编辑（Yjs 写回）、UI 中文化；门禁状态诚实记录见下表——Node 26 下五包 typecheck 通过、bench 包受 b90d472 orphan 影响，Node 24 下 argon2 相关测试不可运行）
 **权威顺序**：当前源码、package manifests、可复现门禁结果；本页优先于历史计划、阶段报告和归档设计。
 
 > 本页描述已经由源码或门禁证明的现状，不把设计目标、未接线类型或历史测量当作已交付能力。历史文档应保留其当时的证据与日期，并链接到本页，而不应改写历史。
@@ -9,7 +9,7 @@
 | 门禁 | 结果 |
 |---|---|
 | `npm run typecheck`（Node 26 / fnm 26.5.0，收敛会话记录） | core / node-host / cli / workbench-protocol / workbench 五包 `tsc -b` 通过；**bench 包不 clean（源码核验）**：b90d472 遗留的 closed-loop orphan 仍在——`packages/bench/src/closed-loop-runner.ts` 导入从未提交的 `./closed-loop.js`（按 NodeNext 解析即 TS2307），且该文件未从 `index.ts` 导出（孤儿文件，无调用方）；`dist/closed-loop.d.ts` 是陈旧构建产物 |
-| Node 26 环境（2026-08-08 全量验证，fnm v26.7.0） | **全仓库测试全绿**：workbench host 736/736、client 168/168、core+node-host+protocol+cli 2922/2922（合计 3,826）。argon2 测试（`auth-password` / `auth-service` / `setup-api` / `launch` / `parity`）在 Node 26 全部通过。`npm start` 冒烟：listener 与 workbench 均启动，`/health` `/api/v1/setup/status` `/role` `/scene-map` 端点响应正确（未认证正确返回 SESSION_NOT_FOUND）。**bench 包 typecheck 仍不 clean**（b90d472 closed-loop 孤儿，见上行） |
+| Node 26 环境（2026-08-08 全量验证，fnm v26.7.0） | **全仓库测试全绿**：workbench host 744/744、client 175/175、core+node-host+protocol+cli 2924/2924（合计 3,843）。argon2 测试（`auth-password` / `auth-service` / `setup-api` / `launch` / `parity`）在 Node 26 全部通过。端到端（本轮新增核验）：`WORKBENCH_CONTROL_FD3=disabled` 直跑 `dist/host/host/main.js`，setup owner（空密码）→ project → provider → credential → finish 全流程 200 且 `projects/demo/nova.yaml` 骨架 + `config/workbench.yaml` 落盘；`POST /api/v1/projects/import`（拷贝、排除 `.git/.nova/output`、重复 409）；admin provider upsert 携带 `reasoning/contextWindow/maxTokens/headers` 四字段 round-trip；浏览器 3 步向导（Owner/Project/Provider）+ 工作区路径预览 `/tmp/.../projects/demo`。**bench 包 typecheck 仍不 clean**（b90d472 closed-loop 孤儿，见上行） |
 | 2026-08-06 基线（收敛前，供参考） | `npm test` 根 3,197 + Host 716 + Client 156、`typecheck:dead-code`、`typecheck:e2e`、`build`、`bundle-check`、`check:public-api`（六包全部登记）、`test:e2e` 23/23、`lint` 0 errors / 0 warnings——均为收敛前记录，收敛后未全量重跑 |
 
 ## 2026-08-08 产品收敛记录（Stage 1–9 全部交付）
@@ -29,6 +29,20 @@
 - **错误恢复/空态分离/断连（Stage 9.3）**：review/publication/references/scene-adoption 均区分 error-state（带 Retry）与 empty-state；AgentChat run 失败内联 chip + 重试；Host 事件流断开 → 红点 + 「与 Host 的连接中断，正在重连…」banner；加载期 skeleton。
 - **Onboarding 首访引导（Stage 9.4）**：localStorage 门控 4 步 mini tour（Agent Chat 入口 / Source Studio / Review Hub / Publication）；欢迎卡 icon+描述升级；Agent 未启用 banner（配置提示 + settings 钩子）。
 - **Stage 9 交付门禁（9.6）**：`npm run build` 全绿（core/node-host/bench/workbench-protocol/cli/workbench host+client）；5 包 `tsc -b` 干净；Node 26 下全仓库 3,826 测试全绿（host 736 / client 168 / core+node-host+protocol+cli 2922）；`npm start` 冒烟启动 + 端点探测通过。**bench 包 typecheck 例外**（b90d472 closed-loop 孤儿，见门禁表）。
+
+## 2026-08-08 Author Mode 改造记录（托管根 + 极简向导 + LLM 面板 + 场景卡）
+
+面向非程序员作者的 Workbench 开箱即用改造，已交付并核验：
+
+- **`kind: 'ai-sdk'` 彻底移除（wire 清理）**：协议层 `WorkbenchProviderConfigurationV1.kind` 仅剩 `'pi'`；host/setup/admin/MCP 校验、registry、launch `WORKBENCH_PROVIDER`、CLI 分支、前端字面量全部收窄。凭据 key 前缀 `ai-sdk:<profileId>` 与 wire id `providerId: 'ai-sdk'` **保留不动**（内部契约）。`grep "kind: 'ai-sdk'"` 于三包源码零匹配。
+- **托管根（root 字段删除）**：`WorkbenchProjectConfigurationV1` 不再有 `root`；所有项目根派生为 `$WORKBENCH_HOME/projects/<projectId>`（`managedProjectRoot`，launch 装配时挂到项目对象，14 个消费者不变）。`WORKBENCH_PROJECT_ROOT/PROJECT_ID/DISPLAY_NAME` env 预填删除；`validateConfigurationTopology` 死代码清空（托管根天然唯一）；未配置 Host 的 loopback-only 守卫移到 `startWorkbench`。launch 启动时 mkdir 托管项目根。setup status 新增 `hostHome` 字段（向导派生路径预览）。
+- **3 步 Setup 向导（owner/project/provider）**：network/review/source-validation 步骤删除，provider 步骤直接 finish（默认 loopback 网络策略由 finish 应用）；owner 密码可选（空 = 免密，`bootstrapOwner` 落不可验证的 `DUMMY_PASSWORD_HASH`，LAN 登录仍需真密码）；project 步骤无路径输入，显示只读工作区路径预览。
+- **托管项目骨架 + 导入**：`saveProjectHandler` 落盘 `projects/<id>/nova.yaml`（project/title/defaultModel: mock）+ 空 `definitions/`；新 `POST /api/v1/projects/import`（JSON `{sourcePath}`，owner 门控）：404 源缺失 / 400 nova.yaml 不可解析 / 409 目标已存在，拷贝排除 `.git/.nova/output`，经 `configuration.apply` 注册；前端 ProjectsPage 文件选择器入口。5 个路由测试。
+- **Settings LLM 面板（`SettingsView.tsx` + `provider-presets.ts`）**：预设网格来自 pi-ai `getBuiltinProviders()`/`getBuiltinModels()`（**动态 `import('@earendil-works/pi-ai/providers/all')` 独立 chunk**，过滤 `api === 'openai-completions'` 且有 baseUrl 的供应商，点击只预填表单）+ 自定义 baseUrl/model/key + 测试凭据 + 可折叠高级区（reasoning/contextWindow/maxTokens/headers）。协议 `WorkbenchProviderConfigurationV1` 扩展这四个可选字段，file-store 校验/round-trip，provider-factory 透传。
+- **无默认运行时（用户决策）**：`PI_DEFAULT_BASE_URL/PI_DEFAULT_MODEL` 常量全部删除（`grep` 零匹配）；baseUrl/model 缺失时 `createPiProviderStack` 抛错，provider-factory 显式 `HostProviderError('PROVIDER_NOT_CONFIGURED')`；CLI `'pi'` 分支显式读 `NOVALISTICALLY_AI_BASE_URL/MODEL` env。
+- **场景卡编辑器**：`SceneDetailViewV1` 新增 `eventYaml`/`eventDocumentId`（detail 路由从 working 层 materialize）；SceneMap 行内「编辑」表单（标题/正文 sceneBrief+beats/情绪/时间/场景类型），保存 = 解析现有 YAML → 只合并这 6 个字段 → 重序列化 → 经 Yjs `getText('prose')` 写回（`replaceWorkingDocumentText`，触发现有提交门）。Source Studio 保留。
+- **UI 中文化**：AgentChat 欢迎卡/工具 receipts（nova_render→渲染 等映射表）、ReviewHub（发布检查项、按钮/空态）、PublicationView、RuntimeStates（登录/项目选择）、SceneMap/Inspector（已收下/已过期、收下这版、技术详情折叠区）中文化；wire 契约（API 路径/错误码/`nova_*` 工具名）未动。
+- **门禁**：host 744/744、client 175/175、core+node-host+protocol+cli 2924/2924（合计 3,843）全绿；五包 typecheck 干净；`npm run build`（types + esbuild 包）成功且 pi-ai 目录独立成 chunk；lint 仅剩 bench 孤儿与未触碰文件的既有漂移。
 
 
 ## 包与依赖边界

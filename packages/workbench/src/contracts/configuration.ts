@@ -157,7 +157,7 @@ export interface WorkbenchProjectSafeViewV1 {
  * API key never exists here (only the `configured` boolean does).
  */
 export interface WorkbenchProviderReadViewV1 {
-  readonly kind: 'ai-sdk';
+  readonly kind: 'pi';
   /** True when the Host credential store holds a validated key. */
   readonly configured: boolean;
   /** Masked endpoint, or null when unset. */
@@ -218,6 +218,8 @@ export interface WorkbenchSetupStatusV1 {
   readonly provider: WorkbenchProviderReadViewV1 | null;
   readonly network: WorkbenchNetworkReadViewV1;
   readonly generatedAt: string;
+  /** Host-managed base directory; the wizard derives the project path from it. */
+  readonly hostHome: string | null;
 }
 
 /**
@@ -244,7 +246,7 @@ export interface WorkbenchAdminOverviewV1 {
 /** Provider endpoint/model update from the dashboard. Never carries an API key. */
 export interface AdminProviderUpdateRequestV1 {
   readonly version: WorkbenchConfigurationVersion;
-  readonly kind: 'ai-sdk';
+  readonly kind: 'pi';
   readonly baseUrl: string | null;
   readonly model: string | null;
 }
@@ -286,19 +288,18 @@ export interface AdminDevicePairRequestV1 {
 // ─── Host-only one-way setup/admin mutation inputs ──────────────────────────
 
 /**
- * Project registration input from the setup wizard / Projects page. `root` is
- * a one-way input: it is validated Host-side and never echoed in any read DTO.
- * Host-only wire type (not re-exported through the browser barrel).
+ * Project registration input from the setup wizard / Projects page. Project
+ * roots are derived Host-side (`$WORKBENCH_HOME/projects/<projectId>`) and
+ * never accepted from the browser. Host-only wire type (not re-exported
+ * through the browser barrel).
  */
 export interface SetupSaveProjectRequestV1 {
   readonly version: WorkbenchConfigurationVersion;
   readonly projectId: string;
   readonly displayName: string;
-  /** Absolute project root; one-way input, never returned. */
-  readonly root: string;
 }
 
-/** Project registration used by the owner dashboard; same one-way `root` rule. */
+/** Project registration used by the owner dashboard; same derived-root rule. */
 export type AdminProjectSaveRequestV1 = SetupSaveProjectRequestV1;
 
 /**

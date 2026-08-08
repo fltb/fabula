@@ -105,6 +105,7 @@ export type {
   BrowserProjectReferenceReadQueryV1,
   BrowserProjectReferenceReadResultV1,
   BrowserProjectReferenceRetryResultV1,
+  BrowserProjectImportResultV1,
   BrowserProjectSummaryV1,
   BrowserPublicationGetResultV1,
   BrowserPublicationKindV1,
@@ -138,6 +139,7 @@ export type {
   BrowserReviewUpdateRequestV1,
   BrowserSessionPrincipalV1,
   ProjectAccessRole,
+  ReferenceItemV1,
   WorkbenchProjectFeatureV1,
 } from './browser-api.js';
 export type {

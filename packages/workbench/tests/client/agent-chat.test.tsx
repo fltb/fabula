@@ -144,8 +144,8 @@ describe('AgentChat surface', () => {
     // Durable history receipts render per run.
     expect(screen.getByTestId('agent-run-run-1')).toBeInTheDocument();
     expect(screen.getByTestId('agent-run-run-2')).toBeInTheDocument();
-    expect(screen.getByTestId('agent-tool-call-run-2-0')).toHaveTextContent('nova_status');
-    expect(screen.getByTestId('agent-tool-call-run-2-0')).toHaveTextContent('succeeded');
+    expect(screen.getByTestId('agent-tool-call-run-2-0')).toHaveTextContent('查看状态');
+    expect(screen.getByTestId('agent-tool-call-run-2-0')).toHaveTextContent('成功');
     expect(screen.getByTestId('agent-chat-input')).toBeInTheDocument();
   });
 
@@ -273,7 +273,7 @@ describe('AgentChat surface', () => {
       call: { ...receipt, callIndex: 0, status: 'pending', resultRef: null, resultSummary: null },
     });
     await waitFor(() => {
-      expect(screen.getByTestId('agent-tool-call-run-1-0')).toHaveTextContent('pending');
+      expect(screen.getByTestId('agent-tool-call-run-1-0')).toHaveTextContent('等待中');
     });
   });
 

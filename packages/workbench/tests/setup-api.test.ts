@@ -41,14 +41,13 @@ afterEach(async () => {
   await Promise.all(disposers.splice(0).map((fn) => fn()));
 });
 
-function baseConfiguration(root: string): WorkbenchConfigurationV1 {
+function baseConfiguration(): WorkbenchConfigurationV1 {
   return {
     version: 1,
     projects: [
       {
         projectId: 'demo',
         displayName: 'Demo',
-        root,
         revisionMirror: { mode: 'disabled' },
         providerProfile: 'default',
         trustedPlugins: [],
@@ -102,7 +101,7 @@ async function createHarness(options: { preconfigured?: boolean } = {}): Promise
   openServers.push(server);
   if (options.preconfigured === true) {
     await configuration.apply({
-      candidate: baseConfiguration(projectRoot),
+      candidate: baseConfiguration(),
       expectedRevision: null,
       origin: 'setup',
     });
@@ -207,7 +206,7 @@ describe('setup gating', () => {
 
 describe('setup wizard flow', () => {
   it('walks owner -> project -> provider -> network -> finish and writes the YAML', async () => {
-    const { projectRoot, server, configuration, auth } = await createHarness();
+    const { server, configuration, auth } = await createHarness();
 
     const initial = await jsonRequest(server, 'GET', BROWSER_SETUP_STATUS_PATH);
     expect(initial.body).toMatchObject({ phase: 'unconfigured', configurationPresent: false });
@@ -235,18 +234,16 @@ describe('setup wizard flow', () => {
       version: 1,
       projectId: 'demo',
       displayName: 'Demo',
-      root: projectRoot,
     });
     expect(validated.status).toBe(200);
     expect(validated.body).toMatchObject({ validation: 'valid' });
-    // The one-way root input is never echoed.
-    expect(JSON.stringify(validated.body)).not.toContain(projectRoot);
+    // The project input never carries a root; the Host derives it.
+    expect(JSON.stringify(validated.body)).not.toContain('root');
 
     const saved = await jsonRequest(server, 'POST', BROWSER_SETUP_PROJECTS_PATH, {
       version: 1,
       projectId: 'demo',
       displayName: 'Demo',
-      root: projectRoot,
     });
     expect(saved.status).toBe(200);
     expect(saved.body).toMatchObject({ projectId: 'demo', defaultProject: true });
@@ -255,14 +252,13 @@ describe('setup wizard flow', () => {
       version: 1,
       projectId: 'demo',
       displayName: 'Demo 2',
-      root: projectRoot,
     });
     expect(duplicate.status).toBe(409);
     expect(duplicate.body).toMatchObject({ error: { code: 'PROJECT_DUPLICATE_ID' } });
 
     const provider = await jsonRequest(server, 'POST', BROWSER_SETUP_PROVIDERS_VALIDATE_PATH, {
       version: 1,
-      kind: 'ai-sdk',
+      kind: 'pi',
       baseUrl: 'https://api.example.com',
       model: 'model-x',
     });
@@ -328,7 +324,6 @@ describe('setup wizard flow', () => {
       version: 1,
       projectId: 'demo',
       displayName: 'Demo',
-      root: '/tmp',
       userId: 'attacker',
     });
     expect(unknown.status).toBe(400);

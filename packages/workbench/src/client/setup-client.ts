@@ -41,15 +41,14 @@ export interface SetupOwnerInput {
   readonly displayName: string;
 }
 
-/** One-way input: `root` is never returned by the Host or retained by the client. */
+/** One-way input: the Host derives the project root; it is never sent here. */
 export interface SetupProjectInput {
   readonly projectId: string;
   readonly displayName: string;
-  readonly root: string;
 }
 
 export interface SetupProviderInput {
-  readonly kind: 'ai-sdk';
+  readonly kind: 'pi';
   readonly baseUrl: string | null;
   readonly model: string | null;
 }
@@ -74,7 +73,7 @@ export interface SetupValidationResult {
   readonly validation: 'valid';
   readonly projectId?: string;
   readonly defaultProject?: boolean;
-  readonly kind?: 'ai-sdk';
+  readonly kind?: 'pi';
 }
 
 export interface SetupCredentialResult {
@@ -194,7 +193,6 @@ function oneWayBody(input: SetupProjectInput): Record<string, unknown> {
     version: SETUP_CONTRACT_VERSION,
     projectId: input.projectId,
     displayName: input.displayName,
-    root: input.root,
   };
 }
 

@@ -110,26 +110,26 @@ describe('Review Hub projections', () => {
   it('renders comments with status, severity and revision linkage', () => {
     render(() => <ReviewHub projectId="proj-a" review={review} gates={gates} history={history} />);
 
-    expect(screen.getByRole('heading', { name: /Comments/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /评审意见/ })).toBeInTheDocument();
     expect(screen.getByTestId('review-count')).toHaveTextContent('2');
     expect(screen.getByText('The prose is rushed.')).toBeInTheDocument();
     expect(screen.getByText('Plot hole.')).toBeInTheDocument();
     expect(screen.getAllByText('open').length).toBeGreaterThan(0);
-    expect(screen.getByText('addressed')).toBeInTheDocument();
-    expect(screen.getByText('Addressed by revisions')).toBeInTheDocument();
+    expect(screen.getByText('已处理')).toBeInTheDocument();
+    expect(screen.getByText('相关修订')).toBeInTheDocument();
     expect(screen.getAllByText(/rev-2/).length).toBeGreaterThan(0);
     expect(screen.getByTestId('gate-count')).toHaveTextContent('1');
     expect(screen.getByText('gate-1')).toBeInTheDocument();
-    expect(screen.getByText('History')).toBeInTheDocument();
+    expect(screen.getByText('历史')).toBeInTheDocument();
     expect(screen.getByText('comment_applied')).toBeInTheDocument();
   });
 
   it('shows an honest empty state when no review projection is loaded', () => {
     render(() => <ReviewHub projectId="proj-a" review={null} gates={null} history={null} />);
 
-    expect(screen.getByText('No review projection')).toBeInTheDocument();
-    expect(screen.getByText(/Open an authenticated project in the Host/)).toBeInTheDocument();
-    expect(screen.getByText('No release-gate projection is loaded.')).toBeInTheDocument();
+    expect(screen.getByText('暂无评审数据')).toBeInTheDocument();
+    expect(screen.getByText(/打开已认证的项目/)).toBeInTheDocument();
+    expect(screen.getByText('暂无检查项数据。')).toBeInTheDocument();
     expect(screen.queryByTestId('review-add-open')).not.toBeInTheDocument();
   });
 

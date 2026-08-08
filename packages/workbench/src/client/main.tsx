@@ -26,9 +26,11 @@ import type {
   BrowserReviewAddRequestV1,
   BrowserReviewGateDecideRequestV1,
   BrowserReviewGateListV1,
+  BrowserReviewListV1,
   BrowserReviewHistoryV1,
   BrowserReviewUpdateRequestV1,
   BrowserSessionPrincipalV1,
+  ConfigOperationReceiptV1,
   ProjectAccessRole,
   SceneAdoptionViewV1,
   SceneDetailViewV1,
@@ -729,7 +731,7 @@ function WorkspaceRoute(props: {
 
   return (
     <Show
-      when={workspace() !== null}
+      when={workspace()}
       fallback={
         <RuntimeStatePanel
           state="workspace"

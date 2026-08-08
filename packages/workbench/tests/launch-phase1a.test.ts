@@ -67,15 +67,10 @@ function newTempDir(prefix: string): string {
 
 // ─── Canonical V1 launch configuration helpers ──────────────────────────────
 
-function launchProject(
-  projectId: string,
-  displayName: string,
-  root: string,
-): WorkbenchProjectConfigurationV1 {
+function launchProject(projectId: string, displayName: string): WorkbenchProjectConfigurationV1 {
   return {
     projectId,
     displayName,
-    root,
     revisionMirror: { mode: 'disabled' },
     providerProfile: 'default',
     trustedPlugins: [],
@@ -244,9 +239,8 @@ describe('parseWorkbenchLaunchConfig env policy', () => {
       XDG_STATE_HOME: '/state',
       HOME: '/home/test',
     });
-    expect(config.projectRoot).toBeUndefined();
     expect(config.assetsRoot).toBeUndefined();
-    expect(config.provider).toBe('ai-sdk');
+    expect(config.provider).toBe('pi');
     expect(config.hostHome).toBe(resolve('/state/fabula/workbench'));
     expect(config.databasePath).toBe(resolve('/state/fabula/workbench/workbench.sqlite'));
   });
@@ -272,35 +266,29 @@ describe('parseWorkbenchLaunchConfig env policy', () => {
     expect(config.databasePath).toBe(resolve('/custom/db/workbench.sqlite'));
   });
 
-  it('derives project id and display name from a legacy env project root', () => {
+
+  it('keeps an unconfigured first startup loopback-only', async () => {
+    // Env parsing no longer carries project/root state; the loopback-only
+    // guard lives in startWorkbench, which rejects LAN / Unix-socket
+    // binding for an unconfigured Host (no workbench.yaml, no projects).
     const config = parseWorkbenchLaunchConfig({
       WORKBENCH_MODE: 'workbench',
       WORKBENCH_DEV: 'true',
-      WORKBENCH_PROJECT_ROOT: '/srv/nova/world-of-ash',
+      WORKBENCH_LAN: 'true',
       HOME: '/home/test',
     });
-    expect(config.projectRoot).toBe(resolve('/srv/nova/world-of-ash'));
-    expect(config.projectId).toBe('world-of-ash');
-    expect(config.displayName).toBe('world-of-ash');
-  });
-
-  it('keeps an unconfigured first startup loopback-only', () => {
-    expect(() =>
-      parseWorkbenchLaunchConfig({
-        WORKBENCH_MODE: 'workbench',
-        WORKBENCH_DEV: 'true',
-        WORKBENCH_LAN: 'true',
-        HOME: '/home/test',
+    expect(config.lan).toBe(true);
+    const hostHome = newTempDir('fabula-launch-lan-');
+    await expect(
+      startWorkbench({
+        ...config,
+        hostHome,
+        databasePath: join(hostHome, 'workbench.sqlite'),
+        allowBootstrap: false,
+        persistenceWorkerEntry: await workerBundle(),
+        workerTerminationTimeoutMs: 2_000,
       }),
-    ).toThrow(/loopback-only/);
-    expect(() =>
-      parseWorkbenchLaunchConfig({
-        WORKBENCH_MODE: 'workbench',
-        WORKBENCH_DEV: 'true',
-        WORKBENCH_UNIX_SOCKET: '/run/fabula/wb.sock',
-        HOME: '/home/test',
-      }),
-    ).toThrow(/loopback-only/);
+    ).rejects.toThrow(/loopback-only/);
   });
 
   it('rejects mock provider without the explicit dev override', () => {
@@ -354,7 +342,7 @@ describe('HostProviderFactory credential boundary', () => {
     try {
       const factory = new HostProviderFactory({
         store: new XdgCredentialFileStore({ configDir: newTempDir('fabula-launch-credential-') }),
-        configuration: { kind: 'ai-sdk', baseUrl: 'https://provider.test/v1', model: 'm-1' },
+        configuration: { kind: 'pi', baseUrl: 'https://provider.test/v1', model: 'm-1' },
       });
       const error = await factory.create().catch((e: unknown) => e);
       expect(error).toBeInstanceOf(HostProviderError);
@@ -372,7 +360,7 @@ describe('HostProviderFactory credential boundary', () => {
     await store.set('ai-sdk:default', 'store-secret');
     const factory = new HostProviderFactory({
       store,
-      configuration: { kind: 'ai-sdk', baseUrl: 'https://provider.test/v1', model: 'm-1' },
+      configuration: { kind: 'pi', baseUrl: 'https://provider.test/v1', model: 'm-1' },
     });
     const provider = await factory.create();
     expect(provider.name).toBe('pi-openai-compatible');
@@ -390,10 +378,10 @@ describe('HostProviderFactory credential boundary', () => {
     await store.set('ai-sdk:prod-eu', 'prod-eu-secret');
     const factory = new HostProviderFactory({
       store,
-      configuration: { kind: 'ai-sdk', baseUrl: 'https://default.test/v1', model: 'm-default' },
+      configuration: { kind: 'pi', baseUrl: 'https://default.test/v1', model: 'm-default' },
     });
     const provider = await factory.createForProfile('prod-eu', {
-      kind: 'ai-sdk',
+      kind: 'pi',
       baseUrl: 'https://prod-eu.test/v1',
       model: 'm-prod-eu',
     });
@@ -407,10 +395,26 @@ describe('HostProviderFactory credential boundary', () => {
   it('rejects an unconfigured profile without touching the credential store', async () => {
     const factory = new HostProviderFactory({
       store: new XdgCredentialFileStore({ configDir: newTempDir('fabula-launch-credential-') }),
-      configuration: { kind: 'ai-sdk', baseUrl: 'https://provider.test/v1', model: 'm-1' },
+      configuration: { kind: 'pi', baseUrl: 'https://provider.test/v1', model: 'm-1' },
     });
     const error = await factory
       .createForProfile('missing-profile', undefined)
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(HostProviderError);
+    expect((error as HostProviderError).code).toBe('PROVIDER_NOT_CONFIGURED');
+  });
+
+  it('rejects a profile with unset baseUrl/model instead of defaulting', async () => {
+    const store = new XdgCredentialFileStore({
+      configDir: newTempDir('fabula-launch-credential-'),
+    });
+    await store.set('ai-sdk:default', 'store-secret');
+    const factory = new HostProviderFactory({
+      store,
+      configuration: { kind: 'pi', baseUrl: null, model: null },
+    });
+    const error = await factory
+      .createForProfile('default', { kind: 'pi', baseUrl: null, model: null })
       .catch((e: unknown) => e);
     expect(error).toBeInstanceOf(HostProviderError);
     expect((error as HostProviderError).code).toBe('PROVIDER_NOT_CONFIGURED');
@@ -516,7 +520,7 @@ describe('startWorkbench setup runtime', () => {
     await writeFile(join(assetsRoot, 'index.html'), '<!doctype html><title>wb</title>');
     const handle = await startWorkbench({
       mode: 'workbench',
-      provider: 'ai-sdk',
+      provider: 'pi',
       allowMockProvider: false,
       hostHome,
       databasePath: join(hostHome, 'workbench.sqlite'),
@@ -545,6 +549,17 @@ describe('startWorkbench setup runtime', () => {
     await mkdir(assetsRoot, { recursive: true });
     await writeFile(join(assetsRoot, 'index.html'), '<!doctype html>');
     const databasePath = join(hostHome, 'workbench.sqlite');
+    // The managed project root is created at launch, but the project has no
+    // nova.yaml: FileProjectSourceLoader.load -> ENOENT after the worker has
+    // already been spawned.
+    await mkdir(join(hostHome, 'config'), { recursive: true });
+    await writeFile(
+      join(hostHome, 'config', 'workbench.yaml'),
+      serializeConfigurationYaml(
+        launchConfiguration([launchProject('missing-project', 'Missing')]),
+      ),
+      'utf8',
+    );
     const config: WorkbenchLaunchConfig = {
       mode: 'workbench',
       provider: 'mock',
@@ -553,16 +568,12 @@ describe('startWorkbench setup runtime', () => {
       databasePath,
       assetsRoot,
       allowBootstrap: false,
-      // Nonexistent project root: FileProjectSourceLoader.load -> realpathSync
-      // throws after the worker has already been spawned.
-      projectRoot: join(hostHome, 'no-such-project'),
-      projectId: 'missing-project',
       persistenceWorkerEntry: await workerBundle(),
       workerTerminationTimeoutMs: 2_000,
       host: 'loopback',
       port: 0,
     };
-    await expect(startWorkbench(config)).rejects.toThrow(/ENOENT|no such file/i);
+    await expect(startWorkbench(config)).rejects.toThrow(/missing|ENOENT|no such file/i);
     // The worker must be terminated and its database handle released even
     // though startup failed mid-composition.
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -574,8 +585,8 @@ describe('startWorkbench setup runtime', () => {
     await mkdir(assetsRoot, { recursive: true });
     await writeFile(join(assetsRoot, 'index.html'), '<!doctype html><title>wb</title>');
     const fixtureRoot = resolve(packageRoot, '..', '..', 'fixtures', 'workbench-authoring');
-    const rootA = join(newTempDir('fabula-launch-project-a-'), 'project-a');
-    const rootB = join(newTempDir('fabula-launch-project-b-'), 'project-b');
+    const rootA = join(hostHome, 'projects', 'project-a');
+    const rootB = join(hostHome, 'projects', 'project-b');
     await Promise.all([
       cp(fixtureRoot, rootA, { recursive: true }),
       cp(fixtureRoot, rootB, { recursive: true }),
@@ -597,8 +608,8 @@ describe('startWorkbench setup runtime', () => {
     );
     const configuration = launchConfiguration(
       [
-        launchProject('project-a', 'Project A', rootA),
-        launchProject('project-b', 'Project B', rootB),
+        launchProject('project-a', 'Project A'),
+        launchProject('project-b', 'Project B'),
       ],
       { defaultProjectId: 'project-a' },
     );
@@ -709,10 +720,10 @@ describe('startWorkbench setup runtime', () => {
     await mkdir(assetsRoot, { recursive: true });
     await writeFile(join(assetsRoot, 'index.html'), '<!doctype html><title>wb</title>');
     const fixtureRoot = resolve(packageRoot, '..', '..', 'fixtures', 'workbench-authoring');
-    const projectRoot = join(newTempDir('fabula-launch-admin-project-'), 'launch-project');
+    const projectRoot = join(hostHome, 'projects', 'launch-project');
     await cp(fixtureRoot, projectRoot, { recursive: true });
     const configuration = launchConfiguration([
-      launchProject('launch-project', 'Launch Project', projectRoot),
+      launchProject('launch-project', 'Launch Project'),
     ]);
     await mkdir(join(hostHome, 'config'), { recursive: true });
     await writeFile(
@@ -920,10 +931,10 @@ describe('startWorkbench setup runtime', () => {
     await mkdir(assetsRoot, { recursive: true });
     await writeFile(join(assetsRoot, 'index.html'), '<!doctype html><title>wb</title>');
     const fixtureRoot = resolve(packageRoot, '..', '..', 'fixtures', 'workbench-authoring');
-    const projectRoot = join(newTempDir('fabula-launch-status-project-'), 'launch-project');
+    const projectRoot = join(hostHome, 'projects', 'launch-project');
     await cp(fixtureRoot, projectRoot, { recursive: true });
     const configuration = launchConfiguration([
-      launchProject('launch-project', 'Launch Status Project', projectRoot),
+      launchProject('launch-project', 'Launch Status Project'),
     ]);
     await mkdir(join(hostHome, 'config'), { recursive: true });
     await writeFile(
@@ -1024,10 +1035,10 @@ describe('startWorkbench setup runtime', () => {
     // zhu-fu carries `snapshotInterval: 3` in nova.yaml and 14 canonical
     // events — the service must persist snapshots at 3, 6, 9, 12.
     const fixtureRoot = resolve(packageRoot, '..', '..', 'fixtures', 'zhu-fu');
-    const projectRoot = join(newTempDir('fabula-launch-projection-project-'), 'launch-project');
+    const projectRoot = join(hostHome, 'projects', 'launch-project');
     await cp(fixtureRoot, projectRoot, { recursive: true });
     const configuration = launchConfiguration([
-      launchProject('launch-project', 'Launch Projection Project', projectRoot),
+      launchProject('launch-project', 'Launch Projection Project'),
     ]);
     await mkdir(join(hostHome, 'config'), { recursive: true });
     await writeFile(
@@ -1179,10 +1190,10 @@ describe('startWorkbench setup runtime', () => {
     await mkdir(assetsRoot, { recursive: true });
     await writeFile(join(assetsRoot, 'index.html'), '<!doctype html><title>wb</title>');
     const fixtureRoot = resolve(packageRoot, '..', '..', 'fixtures', 'workbench-authoring');
-    const projectRoot = join(newTempDir('fabula-launch-review-project-'), 'launch-project');
+    const projectRoot = join(hostHome, 'projects', 'launch-project');
     await cp(fixtureRoot, projectRoot, { recursive: true });
     const configuration = launchConfiguration([
-      launchProject('launch-project', 'Launch Review Project', projectRoot),
+      launchProject('launch-project', 'Launch Review Project'),
     ]);
     await mkdir(join(hostHome, 'config'), { recursive: true });
     await writeFile(
@@ -1311,7 +1322,7 @@ describe('startWorkbench setup runtime', () => {
     await mkdir(assetsRoot, { recursive: true });
     await writeFile(join(assetsRoot, 'index.html'), '<!doctype html><title>wb</title>');
     const fixtureRoot = resolve(packageRoot, '..', '..', 'fixtures', 'zhu-fu');
-    const projectRoot = join(newTempDir('fabula-launch-device-render-project-'), 'launch-project');
+    const projectRoot = join(hostHome, 'projects', 'launch-project');
     await cp(fixtureRoot, projectRoot, { recursive: true });
     // The zhu-fu fixture declares `project: zhu-fu`; the session/execution
     // repo key accepted scenes by the SOURCE's project id, so the copied
@@ -1325,7 +1336,7 @@ describe('startWorkbench setup runtime', () => {
       ),
     );
     const configuration = launchConfiguration([
-      launchProject('launch-project', 'Launch Device Render', projectRoot),
+      launchProject('launch-project', 'Launch Device Render'),
     ]);
     await mkdir(join(hostHome, 'config'), { recursive: true });
     await writeFile(
@@ -1483,9 +1494,9 @@ describe('startWorkbench setup runtime', () => {
 describe('project write authority lease', () => {
   const leaseFixtureRoot = resolve(packageRoot, '..', '..', 'fixtures', 'workbench-authoring');
 
-  /** Copy the authoring fixture into a fresh root and rewrite its project id. */
-  async function leaseProjectRoot(prefix: string, projectId: string): Promise<string> {
-    const root = join(newTempDir(prefix), projectId);
+  /** Copy the authoring fixture into the host's managed project root. */
+  async function leaseProjectRoot(hostHome: string, projectId: string): Promise<string> {
+    const root = join(hostHome, 'projects', projectId);
     await cp(leaseFixtureRoot, root, { recursive: true });
     const novaPath = join(root, 'nova.yaml');
     await writeFile(
@@ -1498,14 +1509,17 @@ describe('project write authority lease', () => {
     return root;
   }
 
-  async function leaseLaunchConfig(
-    hostHome: string,
-    projectRoot: string,
-    projectId: string,
-  ): Promise<WorkbenchLaunchConfig> {
+  /** Register the project in `$hostHome/config/workbench.yaml` and return the launch config. */
+  async function leaseLaunchConfig(hostHome: string, projectId: string): Promise<WorkbenchLaunchConfig> {
     const assetsRoot = join(hostHome, 'assets');
     await mkdir(assetsRoot, { recursive: true });
     await writeFile(join(assetsRoot, 'index.html'), '<!doctype html><title>wb</title>');
+    await mkdir(join(hostHome, 'config'), { recursive: true });
+    await writeFile(
+      join(hostHome, 'config', 'workbench.yaml'),
+      serializeConfigurationYaml(launchConfiguration([launchProject(projectId, 'Lease Project')])),
+      'utf8',
+    );
     return {
       mode: 'workbench',
       provider: 'mock',
@@ -1518,24 +1532,18 @@ describe('project write authority lease', () => {
       workerTerminationTimeoutMs: 2_000,
       host: 'loopback',
       port: 0,
-      projectRoot,
-      projectId,
     };
   }
 
   it('rejects a second Host opening the same project root while authority is held', async () => {
-    const sharedRoot = await leaseProjectRoot('fabula-lease-shared-', 'shared-project');
-    const first = await startWorkbench(
-      await leaseLaunchConfig(newTempDir('fabula-lease-host1-'), sharedRoot, 'shared-project'),
-    );
+    const hostHome = newTempDir('fabula-lease-shared-');
+    await leaseProjectRoot(hostHome, 'shared-project');
+    const first = await startWorkbench(await leaseLaunchConfig(hostHome, 'shared-project'));
     try {
-      const secondConfig = await leaseLaunchConfig(
-        newTempDir('fabula-lease-host2-'),
-        sharedRoot,
-        'shared-project',
-      );
-      // A different WORKBENCH_HOME with the same project root must not become
-      // a second authority: the project open fails with the typed error.
+      // Both Hosts share the WORKBENCH_HOME, so both resolve the same
+      // managed project root; the second Host's open must fail with the
+      // typed authority error while the first holds the lease.
+      const secondConfig = await leaseLaunchConfig(hostHome, 'shared-project');
       const error = await startWorkbench(secondConfig).catch((caught: unknown) => caught);
       expect(error).toBeInstanceOf(ProjectAuthorityUnavailableError);
       expect(String((error as Error).message)).toMatch(/authority/i);
@@ -1545,21 +1553,18 @@ describe('project write authority lease', () => {
   });
 
   it('releases the project authority on close so another Host can re-acquire', async () => {
-    const sharedRoot = await leaseProjectRoot('fabula-lease-reacquire-', 'shared-project');
-    const first = await startWorkbench(
-      await leaseLaunchConfig(newTempDir('fabula-lease-rehost1-'), sharedRoot, 'shared-project'),
-    );
+    const hostHome = newTempDir('fabula-lease-reacquire-');
+    await leaseProjectRoot(hostHome, 'shared-project');
+    const first = await startWorkbench(await leaseLaunchConfig(hostHome, 'shared-project'));
     await first.close();
     // After close the instance-CAS release removed the lease; a fresh Host
-    // over the same root opens normally.
-    const second = await startWorkbench(
-      await leaseLaunchConfig(newTempDir('fabula-lease-rehost2-'), sharedRoot, 'shared-project'),
-    );
+    // over the same managed root opens normally.
+    const second = await startWorkbench(await leaseLaunchConfig(hostHome, 'shared-project'));
     await second.close();
   });
 
   it('surfaces recovery-required and never writes when the lease is lost during materialize', async () => {
-    const root = await leaseProjectRoot('fabula-lease-materialize-', 'lease-project');
+    const root = await leaseProjectRoot(newTempDir('fabula-lease-materialize-'), 'lease-project');
     const coordinator = new ProjectWriteCoordinator(root, { projectId: 'lease-project' });
     const nonce = 'materialize-test-nonce';
     const token = await coordinator.acquireWorkbenchAuthority(nonce);
@@ -1605,15 +1610,14 @@ describe('project write authority lease', () => {
     const assetsRoot = join(hostHome, 'assets');
     await mkdir(assetsRoot, { recursive: true });
     await writeFile(join(assetsRoot, 'index.html'), '<!doctype html><title>wb</title>');
-    const rootA = await leaseProjectRoot('fabula-lease-profile-a-', 'profile-a');
-    const rootB = await leaseProjectRoot('fabula-lease-profile-b-', 'profile-b');
+    const rootA = await leaseProjectRoot(hostHome, 'profile-a');
+    const rootB = await leaseProjectRoot(hostHome, 'profile-b');
     const configuration = {
       version: 1 as const,
       projects: [
         {
           projectId: 'profile-a',
           displayName: 'Profile A',
-          root: rootA,
           revisionMirror: { mode: 'disabled' as const },
           providerProfile: 'alpha',
           trustedPlugins: [],
@@ -1621,7 +1625,6 @@ describe('project write authority lease', () => {
         {
           projectId: 'profile-b',
           displayName: 'Profile B',
-          root: rootB,
           revisionMirror: { mode: 'disabled' as const },
           providerProfile: 'beta',
           trustedPlugins: [],
@@ -1629,8 +1632,8 @@ describe('project write authority lease', () => {
       ],
       defaultProjectId: 'profile-a',
       providers: {
-        alpha: { kind: 'ai-sdk' as const, baseUrl: 'https://alpha.test/v1', model: 'm-alpha' },
-        beta: { kind: 'ai-sdk' as const, baseUrl: 'https://beta.test/v1', model: 'm-beta' },
+        alpha: { kind: 'pi' as const, baseUrl: 'https://alpha.test/v1', model: 'm-alpha' },
+        beta: { kind: 'pi' as const, baseUrl: 'https://beta.test/v1', model: 'm-beta' },
       },
       network: {
         mode: 'loopback' as const,
@@ -1723,10 +1726,10 @@ describe('trusted plugin activation and discovery (plan 7)', () => {
     createHash('sha256').update(pluginIndexSource(name)).digest('hex');
 
   async function pluginProjectRoot(
-    prefix: string,
+    hostHome: string,
     options: { enabled: boolean; pluginNames: readonly string[] },
   ): Promise<{ root: string; lifecycleLog: string }> {
-    const root = join(newTempDir(prefix), 'launch-project');
+    const root = join(hostHome, 'projects', 'launch-project');
     await cp(pluginFixtureRoot, root, { recursive: true });
     const nova = await readFile(join(root, 'nova.yaml'), 'utf8');
     await writeFile(
@@ -1772,7 +1775,6 @@ describe('trusted plugin activation and discovery (plan 7)', () => {
   };
 
   function configurationV1(
-    root: string,
     trustedPlugins: readonly TestTrustedPlugin[],
   ): Parameters<typeof serializeConfigurationYaml>[0] {
     return {
@@ -1781,7 +1783,6 @@ describe('trusted plugin activation and discovery (plan 7)', () => {
         {
           projectId: 'launch-project',
           displayName: 'Plugin Project',
-          root,
           revisionMirror: { mode: 'disabled' },
           providerProfile: 'default',
           trustedPlugins,
@@ -1804,22 +1805,20 @@ describe('trusted plugin activation and discovery (plan 7)', () => {
   }
 
   async function bootPluginHost(
-    prefix: string,
-    root: string,
+    hostHome: string,
     trustedPlugins: readonly TestTrustedPlugin[],
   ): Promise<{
     handle: WorkbenchLaunchHandle;
     credential: string;
     ownerHeaders: Record<string, string>;
   }> {
-    const hostHome = newTempDir(prefix);
     const assetsRoot = join(hostHome, 'assets');
     await mkdir(assetsRoot, { recursive: true });
     await writeFile(join(assetsRoot, 'index.html'), '<!doctype html><title>wb</title>');
     await mkdir(join(hostHome, 'config'), { recursive: true });
     await writeFile(
       join(hostHome, 'config', 'workbench.yaml'),
-      serializeConfigurationYaml(configurationV1(root, trustedPlugins)),
+      serializeConfigurationYaml(configurationV1(trustedPlugins)),
       'utf8',
     );
     const handle = await startWorkbench({
@@ -1878,11 +1877,12 @@ describe('trusted plugin activation and discovery (plan 7)', () => {
   }
 
   it('activates matching trusted plugins, injects the hooks manager, and shuts down in reverse order', async () => {
-    const { root, lifecycleLog } = await pluginProjectRoot('fabula-plugin-active-', {
+    const hostHome = newTempDir('fabula-plugin-active-');
+    const { lifecycleLog } = await pluginProjectRoot(hostHome, {
       enabled: true,
       pluginNames: ['plugin-a', 'plugin-b'],
     });
-    const host = await bootPluginHost('fabula-plugin-active-host-', root, [
+    const host = await bootPluginHost(hostHome, [
       { name: 'plugin-a', version: '1.0.0', moduleHash: moduleHashOf('plugin-a'), required: true },
       { name: 'plugin-b', version: '1.0.0', moduleHash: moduleHashOf('plugin-b'), required: false },
     ]);
@@ -1913,11 +1913,12 @@ describe('trusted plugin activation and discovery (plan 7)', () => {
   });
 
   it('keeps the project open with a blocking diagnostic when a required plugin fails identity verification', async () => {
-    const { root, lifecycleLog } = await pluginProjectRoot('fabula-plugin-mismatch-', {
+    const hostHome = newTempDir('fabula-plugin-mismatch-');
+    const { lifecycleLog } = await pluginProjectRoot(hostHome, {
       enabled: true,
       pluginNames: ['plugin-a'],
     });
-    const host = await bootPluginHost('fabula-plugin-mismatch-host-', root, [
+    const host = await bootPluginHost(hostHome, [
       { name: 'plugin-a', version: '9.9.9', moduleHash: moduleHashOf('plugin-a'), required: true },
     ]);
     try {
@@ -1949,11 +1950,12 @@ describe('trusted plugin activation and discovery (plan 7)', () => {
   });
 
   it('never activates plugins when nova.yaml.plugins.enabled is false', async () => {
-    const { root, lifecycleLog } = await pluginProjectRoot('fabula-plugin-disabled-', {
+    const hostHome = newTempDir('fabula-plugin-disabled-');
+    const { lifecycleLog } = await pluginProjectRoot(hostHome, {
       enabled: false,
       pluginNames: ['plugin-a'],
     });
-    const host = await bootPluginHost('fabula-plugin-disabled-host-', root, [
+    const host = await bootPluginHost(hostHome, [
       { name: 'plugin-a', version: '1.0.0', moduleHash: moduleHashOf('plugin-a'), required: true },
     ]);
     try {
@@ -1979,11 +1981,12 @@ describe('trusted plugin activation and discovery (plan 7)', () => {
   it('exposes name-sorted discovered plugin identities through the owner admin route', async () => {
     // Discovery is independent of the activation intent flag: the owner admin
     // must see on-disk identities before deciding what to trust.
-    const { root } = await pluginProjectRoot('fabula-plugin-discovery-', {
+    const hostHome = newTempDir('fabula-plugin-discovery-');
+    await pluginProjectRoot(hostHome, {
       enabled: false,
       pluginNames: ['plugin-zeta', 'plugin-alpha'],
     });
-    const host = await bootPluginHost('fabula-plugin-discovery-host-', root, []);
+    const host = await bootPluginHost(hostHome, []);
     try {
       const discovered = await fetch(
         `${host.handle.endpoint}/api/v1/admin/plugins/discovered/launch-project`,
@@ -2059,7 +2062,7 @@ describe('agent-chat launch capability gate', () => {
     await mkdir(assetsRoot, { recursive: true });
     await writeFile(join(assetsRoot, 'index.html'), '<!doctype html><title>wb</title>');
     const fixtureRoot = resolve(packageRoot, '..', '..', 'fixtures', 'workbench-authoring');
-    const projectRoot = join(newTempDir('fabula-launch-agent-project-'), 'agent-project');
+    const projectRoot = join(hostHome, 'projects', 'agent-project');
     await cp(fixtureRoot, projectRoot, { recursive: true });
     await writeFile(
       join(projectRoot, 'nova.yaml'),
@@ -2069,7 +2072,7 @@ describe('agent-chat launch capability gate', () => {
       ),
     );
     const configuration = launchConfiguration([
-      launchProject('agent-project', 'Agent Project', projectRoot),
+      launchProject('agent-project', 'Agent Project'),
     ]);
     await mkdir(join(hostHome, 'config'), { recursive: true });
     await writeFile(
@@ -2136,7 +2139,7 @@ describe('agent-chat launch capability gate', () => {
     await mkdir(assetsRoot, { recursive: true });
     await writeFile(join(assetsRoot, 'index.html'), '<!doctype html><title>wb</title>');
     const fixtureRoot = resolve(packageRoot, '..', '..', 'fixtures', 'workbench-authoring');
-    const projectRoot = join(newTempDir('fabula-launch-agent-on-project-'), 'agent-project');
+    const projectRoot = join(hostHome, 'projects', 'agent-project');
     await cp(fixtureRoot, projectRoot, { recursive: true });
     await writeFile(
       join(projectRoot, 'nova.yaml'),
@@ -2151,7 +2154,6 @@ describe('agent-chat launch capability gate', () => {
         {
           projectId: 'agent-project',
           displayName: 'Agent Project',
-          root: projectRoot,
           providerProfile: 'default',
           revisionMirror: { mode: 'disabled' as const },
           trustedPlugins: [],

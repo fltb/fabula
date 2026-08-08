@@ -8,8 +8,7 @@ import {
 } from '@earendil-works/pi-ai';
 import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy';
 
-export const PI_DEFAULT_BASE_URL = 'https://opencode.ai/zen/v1';
-export const PI_DEFAULT_MODEL = 'deepseek-v4-flash-free';
+
 
 export interface PiProviderStack {
   readonly models: MutableModels;
@@ -27,9 +26,16 @@ export function createPiProviderStack(options: {
   readonly reasoning?: boolean;
   readonly maxTokens?: number;
   readonly contextWindow?: number;
+  /** Extra request headers for the OpenAI-compatible endpoint (e.g. proxy auth). */
+  readonly headers?: Readonly<Record<string, string>>;
 }): PiProviderStack {
-  const baseUrl = options.baseURL ?? PI_DEFAULT_BASE_URL;
-  const modelId = options.modelId ?? PI_DEFAULT_MODEL;
+  const baseUrl = options.baseURL ?? null;
+  const modelId = options.modelId ?? null;
+  if (!baseUrl || !modelId) {
+    throw new Error(
+      'provider baseURL and model are required; configure them in Workbench settings',
+    );
+  }
   const apiKey = options.apiKey ?? '';
   const models = createModels();
   const provider = createProvider<Api>({
@@ -54,6 +60,7 @@ export function createPiProviderStack(options: {
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
         contextWindow: options.contextWindow ?? 128_000,
         maxTokens: options.maxTokens ?? 32_000,
+        ...(options.headers === undefined ? {} : { headers: { ...options.headers } }),
       },
     ],
     api: openAICompletionsApi(),

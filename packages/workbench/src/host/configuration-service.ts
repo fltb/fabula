@@ -153,7 +153,7 @@ export function computeChangedFields(
       (other.revisionMirror.mode === 'git-best-effort' &&
         project.revisionMirror.mode === 'git-best-effort' &&
         other.revisionMirror.ref !== project.revisionMirror.ref);
-    if (other.displayName !== project.displayName || other.root !== project.root || mirrorChanged) {
+    if (other.displayName !== project.displayName || mirrorChanged) {
       changed.push(`projects.${project.projectId}`);
     }
     if (other.providerProfile !== project.providerProfile) {

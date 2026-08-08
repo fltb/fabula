@@ -7,11 +7,11 @@
  *   to the AI SDK as an explicit `apiKey` option, so provider construction
  *   can never fall back to `NOVALISTICALLY_AI_API_KEY` or any other
  *   process-environment key.
- * - Endpoint and model come from the validated Phase-0 provider configuration
- *   DTO (`WorkbenchProviderConfigurationV1`) when present, with explicit
- *   in-module defaults when unset. The process environment is never
- *   consulted, so a running Host's provider behavior cannot drift with the
- *   shell.
+ * - Endpoint and model come from the validated provider configuration DTO
+ *   (`WorkbenchProviderConfigurationV1`) when present; an unset baseUrl or
+ *   model is rejected with `PROVIDER_NOT_CONFIGURED` (there is no runtime
+ *   default). The process environment is never consulted, so a running
+ *   Host's provider behavior cannot drift with the shell.
  * - Readiness and validation outputs are secret-free by construction: they
  *   carry only a `configured` boolean, a masked endpoint, a non-secret model
  *   id and validation status — never the key.
@@ -23,11 +23,7 @@
  */
 
 import type { LLMProvider } from '@novalistically/core';
-import {
-  PI_DEFAULT_BASE_URL,
-  PI_DEFAULT_MODEL,
-  PiOpenAICompatibleProvider,
-} from '@novalistically/node-host';
+import { PiOpenAICompatibleProvider } from '@novalistically/node-host';
 import type {
   ConfigOperationDiagnosticV1,
   WorkbenchProjectValidationV1,
@@ -39,20 +35,6 @@ import {
   type ProviderCredentialStore,
   providerCredentialKey,
 } from './providers/index.js';
-
-/**
- * Provider id under which legacy (pre-profile) Hosts stored the AI-SDK API
- * key. New Hosts store profile-scoped keys (`ai-sdk:<profileId>`); the
- * credential store falls back to this bare key for the default profile.
- */
-export const HOST_AI_SDK_PROVIDER_ID = 'ai-sdk';
-/** One-time migration notice: legacy provider kind `ai-sdk` is read as `pi`. */
-let warnedLegacyAiSdkKind = false;
-function warnLegacyAiSdkKindOnce(): void {
-  if (warnedLegacyAiSdkKind) return;
-  warnedLegacyAiSdkKind = true;
-  console.warn('legacy kind ai-sdk treated as pi');
-}
 
 export type HostProviderErrorCode =
   | 'PROVIDER_NOT_CONFIGURED'
@@ -201,7 +183,7 @@ export class HostProviderFactory {
       this.#overrideForProject !== undefined ||
       (this.#configuration !== null && (await this.hasCredential()));
     return {
-      kind: 'ai-sdk',
+      kind: 'pi',
       configured,
       endpoint:
         this.#configuration === null ? null : maskProviderEndpoint(this.#configuration.baseUrl),
@@ -260,16 +242,24 @@ export class HostProviderFactory {
         `No stored AI provider credential for profile "${profileId}"; save one through Workbench setup or the owner dashboard`,
       );
     }
-    if (configuration.kind !== 'pi') {
-      warnLegacyAiSdkKindOnce();
+    if (!configuration.baseUrl || !configuration.model) {
+      throw new HostProviderError(
+        'PROVIDER_NOT_CONFIGURED',
+        'provider baseUrl and model must be set in Workbench settings',
+      );
     }
     return new PiOpenAICompatibleProvider({
-      baseURL: configuration.baseUrl ?? PI_DEFAULT_BASE_URL,
+      baseURL: configuration.baseUrl,
       apiKey,
-      model: configuration.model ?? PI_DEFAULT_MODEL,
+      model: configuration.model,
+      ...(configuration.reasoning === undefined ? {} : { reasoning: configuration.reasoning }),
+      ...(configuration.contextWindow === undefined
+        ? {}
+        : { contextWindow: configuration.contextWindow }),
+      ...(configuration.maxTokens === undefined ? {} : { maxTokens: configuration.maxTokens }),
+      ...(configuration.headers === undefined ? {} : { headers: { ...configuration.headers } }),
     });
   }
-
   /**
    * Run a cancellable provider validation probe. Returns secret-free
    * diagnostics (empty on success) and updates the readiness validation

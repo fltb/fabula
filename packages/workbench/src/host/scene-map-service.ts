@@ -75,6 +75,13 @@ export interface SceneMapServiceInput {
   readonly authoringSource?: ProjectSourceSnapshotV1;
   /** Timestamp source for the generatedAt field; defaults to the system clock. */
   readonly now?: () => string;
+  /**
+   * Working-layer content of one document, by working-document id. For event
+   * files the seeded working id equals the manifest logical path. Absent or
+   * null means no working document is available; the scene-detail route uses
+   * this port to carry the raw event YAML the scene card edits.
+   */
+  readonly workingContent?: (documentId: string) => Promise<string | null>;
 }
 
 export interface SceneDetailServiceInput extends SceneMapServiceInput {
@@ -434,6 +441,21 @@ export async function loadSceneDetail(
   }
 
   const record = await execution.readAcceptedScene({ projectId, eventId });
+  // The scene's event file document: the working layer the scene card form
+  // edits (documentId === manifest logical path for seeded event documents).
+  let eventDocumentId: string | null = null;
+  outer: for (const chapter of compilation.data.chapters.values()) {
+    for (const eventFile of chapter.events) {
+      if (eventFile.event === eventId) {
+        eventDocumentId = eventFile.logicalPath ?? null;
+        break outer;
+      }
+    }
+  }
+  const eventYaml =
+    eventDocumentId === null
+      ? null
+      : ((await input.workingContent?.(eventDocumentId)) ?? null);
   const hashes = hashesFor(compilation, source, eventId, record);
   const adopted = adoptedSceneFor(adoptionSource, eventId);
   const stale =
@@ -460,6 +482,8 @@ export async function loadSceneDetail(
         : 'unadopted',
       stale,
       adoptedSceneHash: adopted.fingerprint,
+      eventYaml,
+      eventDocumentId,
     },
   };
 }

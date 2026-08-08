@@ -93,18 +93,11 @@ describe('Workbench shell layout controls', () => {
     expect(screen.getByRole('button', { name: 'Project Home' })).toBeInTheDocument();
   });
 
-  it('pins the Inspector and expands operations', async () => {
+  it('expands the operation center without the removed Inspector column', async () => {
     const user = userEvent.setup();
-    render(() => <App initialInspectorPinned={true} initialOperationCenterExpanded={false} />);
+    render(() => <App initialOperationCenterExpanded={false} />);
 
-    const inspectorPin = screen.getByRole('button', { name: 'Unpin Inspector' });
-    expect(inspectorPin).toHaveAttribute('aria-pressed', 'true');
-    await user.click(inspectorPin);
-    expect(screen.getByRole('button', { name: 'Pin Inspector' })).toHaveAttribute(
-      'aria-pressed',
-      'false',
-    );
-
+    expect(screen.queryByTestId('inspector')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Expand' }));
     expect(screen.getByText('No operations running')).toBeInTheDocument();
   });
@@ -130,27 +123,18 @@ describe('Workbench responsive drawers', () => {
       expect(screen.queryByRole('dialog', { name: 'Navigation' })).not.toBeInTheDocument(),
     );
 
-    await user.click(screen.getByRole('button', { name: 'Open Inspector' }));
-    const inspectorDrawer = await screen.findByRole('dialog', { name: 'Inspector' });
-    expect(within(inspectorDrawer).getByTestId('inspector')).toBeInTheDocument();
-    await user.click(within(inspectorDrawer).getByRole('button', { name: 'Close Inspector' }));
-    await waitFor(() =>
-      expect(screen.queryByRole('dialog', { name: 'Inspector' })).not.toBeInTheDocument(),
-    );
-
     cleanup();
     setViewport(900);
     render(() => <App />);
     expect(screen.queryByRole('button', { name: 'Open navigation' })).not.toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Workbench views' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open Inspector' })).toBeInTheDocument();
+    expect(screen.queryByTestId('inspector')).not.toBeInTheDocument();
 
     cleanup();
     setViewport(1024);
     render(() => <App />);
     expect(screen.queryByRole('button', { name: 'Open navigation' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Open Inspector' })).not.toBeInTheDocument();
-    expect(screen.getByTestId('inspector')).toBeInTheDocument();
+    expect(screen.queryByTestId('inspector')).not.toBeInTheDocument();
   });
 });
 

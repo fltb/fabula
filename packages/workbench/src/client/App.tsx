@@ -36,14 +36,12 @@ import type {
   SceneMapViewV1,
   SourceStudioDocumentDescriptorV1,
   SourceStudioStateV1,
-  WorkbenchGraphNodeV1,
   WorkbenchGraphProjectionV1,
   WorkbenchProjectFeatureV1,
   WorkbenchRouteSelectorV1,
 } from '../contracts/index.js';
 import { AgentChat, agentViewLabel } from './AgentChat';
 import type { AgentChatClient } from './agent-chat-client.js';
-import { describeCoordinate, describeOrigin } from './graph-view-model';
 import { PublicationView } from './PublicationView';
 import {
   loadWorkbenchPreferences,
@@ -123,7 +121,6 @@ export interface AppProps {
   /** Live Host event-stream state; false renders the disconnect banner + red status dot. */
   readonly eventConnected?: boolean;
   readonly initialNavigatorCollapsed?: boolean;
-  readonly initialInspectorPinned?: boolean;
   readonly initialOperationCenterExpanded?: boolean;
   /**
    * View change notification. The parameter is widened to `string` so the
@@ -286,15 +283,6 @@ export interface NavigatorProps {
   readonly onViewChange: (view: WorkbenchViewId) => void;
 }
 
-export interface InspectorProps {
-  readonly pinned: boolean;
-  readonly onPinToggle: () => void;
-  /** Canvas node selected on the Graph / Route surface; null = nothing selected. */
-  readonly selectedNodeId?: string | null;
-  /** Canonical graph projection used to extract the selected node's detail. */
-  readonly graphProjection?: WorkbenchGraphProjectionV1 | null;
-}
-
 export interface OperationCenterProps {
   readonly expanded: boolean;
   readonly operations?: readonly AuthoringOperationReceiptV1[];
@@ -344,8 +332,6 @@ interface WorkspaceProps {
     request: BrowserAuthoringDocumentDeleteRequestV1,
   ) => void | Promise<void>;
   readonly onGraphRouteChange?: (selector: WorkbenchRouteSelectorV1) => void;
-  /** Surfaces a canvas node selection for the Inspector detail panel. */
-  readonly onNodeSelect?: (nodeId: string) => void;
   /** View change forwarding for the Agent chat artifact chips (string views). */
   readonly onViewChange?: (view: string) => void;
   /** Open the admin Provider settings from the agent-unavailable banner. */
@@ -568,7 +554,6 @@ export function Workspace(props: WorkspaceProps) {
           <GraphRoute
             projection={props.graphProjection ?? null}
             onRouteChange={props.onGraphRouteChange}
-            onNodeSelect={props.onNodeSelect}
           />
         </Show>
         <Show when={props.hostStatus === 'ready' && props.activeView === 'source-studio'}>
@@ -672,142 +657,6 @@ export function Workspace(props: WorkspaceProps) {
         </Show>
       </Show>
     </main>
-  );
-}
-
-/** Resolve the selected canvas node across both canonical domains by exact id. */
-function selectedGraphNode(
-  projection: WorkbenchGraphProjectionV1 | null | undefined,
-  nodeId: string | null | undefined,
-): { readonly node: WorkbenchGraphNodeV1; readonly domain: 'story' | 'discourse' } | null {
-  if (projection === null || projection === undefined) return null;
-  if (nodeId === null || nodeId === undefined) return null;
-  const story = projection.story.nodes.find((node) => node.id === nodeId);
-  if (story !== undefined) return { node: story, domain: 'story' };
-  const discourse = projection.discourse.nodes.find((node) => node.id === nodeId);
-  return discourse === undefined ? null : { node: discourse, domain: 'discourse' };
-}
-
-/** Canonical node taxonomy: entity (initial), event, or thread (discourse). */
-type InspectorNodeKind = 'entity' | 'event' | 'thread';
-
-function inspectorNodeKind(node: WorkbenchGraphNodeV1): InspectorNodeKind {
-  if (node.origin.type === 'event') return 'event';
-  if (node.origin.type === 'discourse') return 'thread';
-  return 'entity';
-}
-
-const INSPECTOR_KIND_LABEL: Readonly<Record<InspectorNodeKind, string>> = {
-  entity: 'Entity node',
-  event: 'Event node',
-  thread: 'Thread node',
-};
-
-export function Inspector(props: InspectorProps) {
-  const selection = () => selectedGraphNode(props.graphProjection, props.selectedNodeId);
-  return (
-    <aside
-      class={`inspector-region${props.pinned ? ' is-pinned' : ' is-unpinned'}`}
-      aria-label="Inspector"
-      data-pinned={props.pinned}
-      data-testid="inspector"
-    >
-      <div class="region-heading">
-        <div>
-          <p class="region-kicker">Selection</p>
-          <h2>Inspector</h2>
-        </div>
-        <button
-          class="text-button"
-          type="button"
-          aria-pressed={props.pinned}
-          aria-label={props.pinned ? 'Unpin Inspector' : 'Pin Inspector'}
-          onClick={props.onPinToggle}
-        >
-          <span aria-hidden="true">{props.pinned ? '●' : '○'}</span>
-          {props.pinned ? 'Pinned' : 'Pin'}
-        </button>
-      </div>
-
-      <Show
-        when={selection()}
-        fallback={
-          <div class="inspector-empty">
-            <div class="empty-mark" aria-hidden="true">
-              ＋
-            </div>
-            <h3>Nothing selected</h3>
-            <p>Select a node on the Graph / Route canvas to inspect its canonical detail.</p>
-          </div>
-        }
-      >
-        {(current) => {
-          const node = current().node;
-          const origin = node.origin;
-          const kind = inspectorNodeKind(node);
-          return (
-            <div class="inspector-selection" data-testid="inspector-selection">
-              <span class={`badge badge-${kind}`}>{INSPECTOR_KIND_LABEL[kind]}</span>
-              <dl class="inspector-detail">
-                <div>
-                  <dt>Node id</dt>
-                  <dd>
-                    <code>{node.id}</code>
-                  </dd>
-                </div>
-                <div>
-                  <dt>Domain</dt>
-                  <dd>{current().domain}</dd>
-                </div>
-                <div>
-                  <dt>Coordinate</dt>
-                  <dd>{describeCoordinate(node.coordinate)}</dd>
-                </div>
-                <div>
-                  <dt>Branch scope</dt>
-                  <dd>
-                    <code>{node.branchScope}</code>
-                  </dd>
-                </div>
-                {origin.type === 'event' && (
-                  <>
-                    <div>
-                      <dt>Event</dt>
-                      <dd>
-                        <code>{origin.eventId}</code>
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Status</dt>
-                      <dd>{origin.source}</dd>
-                    </div>
-                  </>
-                )}
-                {origin.type === 'discourse' && (
-                  <>
-                    <div>
-                      <dt>Thread entry</dt>
-                      <dd>
-                        <code>{origin.entryId}</code>
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Scene</dt>
-                      <dd>{origin.sceneId}</dd>
-                    </div>
-                    <div>
-                      <dt>Branch</dt>
-                      <dd>{origin.branch}</dd>
-                    </div>
-                  </>
-                )}
-              </dl>
-              <p class="inspector-note">{describeOrigin(origin)}</p>
-            </div>
-          );
-        }}
-      </Show>
-    </aside>
   );
 }
 
@@ -941,10 +790,8 @@ interface TopbarProps {
   readonly connected: boolean;
   readonly layoutMode: WorkbenchLayoutMode;
   readonly navigatorOpen: boolean;
-  readonly inspectorOpen: boolean;
   readonly agentOpen: boolean;
   readonly onNavigatorToggle: () => void;
-  readonly onInspectorToggle: () => void;
   readonly onAgentToggle: () => void;
 }
 
@@ -1001,15 +848,6 @@ function Topbar(props: TopbarProps) {
               ☰
             </button>
           </Show>
-          <button
-            class="icon-button"
-            type="button"
-            aria-label="Open Inspector"
-            aria-expanded={props.inspectorOpen}
-            onClick={props.onInspectorToggle}
-          >
-            ⓘ
-          </button>
         </fieldset>
       </Show>
     </header>
@@ -1049,15 +887,13 @@ export function WorkbenchShell(props: AppProps = {}) {
   const [navigatorCollapsed, setNavigatorCollapsed] = createSignal(
     props.initialNavigatorCollapsed ?? stored.navigatorCollapsed,
   );
-  const [inspectorPinned, setInspectorPinned] = createSignal(
-    props.initialInspectorPinned ?? stored.inspectorPinned,
-  );
+
   const [operationCenterExpanded, setOperationCenterExpanded] = createSignal(
     props.initialOperationCenterExpanded ?? stored.operationCenterExpanded,
   );
   const [layoutMode, setLayoutMode] = createSignal<WorkbenchLayoutMode>('desktop');
   const [navigatorDrawerOpen, setNavigatorDrawerOpen] = createSignal(false);
-  const [inspectorDrawerOpen, setInspectorDrawerOpen] = createSignal(false);
+
   onMount(() => {
     const updateLayout = () => {
       const width = window.innerWidth;
@@ -1068,7 +904,6 @@ export function WorkbenchShell(props: AppProps = {}) {
     onCleanup(() => window.removeEventListener('resize', updateLayout));
   });
   const [selectedSourceDocumentId, setSelectedSourceDocumentId] = createSignal<string | null>(null);
-  const [selectedNodeId, setSelectedNodeId] = createSignal<string | null>(null);
 
   const selectSourceDocument = (descriptor: SourceStudioDocumentDescriptorV1): void => {
     setSelectedSourceDocumentId(descriptor.documentId);
@@ -1094,7 +929,7 @@ export function WorkbenchShell(props: AppProps = {}) {
     saveWorkbenchPreferences({
       version: stored.version,
       navigatorCollapsed: navigatorCollapsed(),
-      inspectorPinned: inspectorPinned(),
+
       operationCenterExpanded: operationCenterExpanded(),
       selectedNavigationView: activeView(),
       ...patch,
@@ -1114,12 +949,6 @@ export function WorkbenchShell(props: AppProps = {}) {
     persistPreferences({ navigatorCollapsed: collapsed });
   };
 
-  const toggleInspector = () => {
-    const pinned = !inspectorPinned();
-    setInspectorPinned(pinned);
-    persistPreferences({ inspectorPinned: pinned });
-  };
-
   const toggleOperationCenter = () => {
     const expanded = !operationCenterExpanded();
     setOperationCenterExpanded(expanded);
@@ -1127,7 +956,6 @@ export function WorkbenchShell(props: AppProps = {}) {
   };
 
   const toggleNavigatorDrawer = () => setNavigatorDrawerOpen((open) => !open);
-  const toggleInspectorDrawer = () => setInspectorDrawerOpen((open) => !open);
 
   return (
     <div
@@ -1144,10 +972,8 @@ export function WorkbenchShell(props: AppProps = {}) {
         connected={props.eventConnected ?? true}
         layoutMode={layoutMode()}
         navigatorOpen={navigatorDrawerOpen()}
-        inspectorOpen={inspectorDrawerOpen()}
-        agentOpen={agentOpen()}
         onNavigatorToggle={toggleNavigatorDrawer}
-        onInspectorToggle={toggleInspectorDrawer}
+        agentOpen={agentOpen()}
         onAgentToggle={() => setAgentOpen((open) => !open)}
       />
       <Show when={props.eventConnected === false}>
@@ -1196,7 +1022,6 @@ export function WorkbenchShell(props: AppProps = {}) {
             onMoveDocument={props.onMoveDocument}
             onDeleteDocument={props.onDeleteDocument}
             onGraphRouteChange={props.onGraphRouteChange}
-            onNodeSelect={setSelectedNodeId}
             onViewChange={props.onViewChange}
             onOpenSettings={props.onOpenSettings}
             selectedSourceDocumentId={selectedSourceDocumentId()}
@@ -1244,14 +1069,7 @@ export function WorkbenchShell(props: AppProps = {}) {
             onExpandedToggle={toggleOperationCenter}
           />
         </div>
-        <Show when={layoutMode() === 'desktop'}>
-          <Inspector
-            pinned={inspectorPinned()}
-            onPinToggle={toggleInspector}
-            selectedNodeId={selectedNodeId()}
-            graphProjection={props.graphProjection}
-          />
-        </Show>
+
         <Show when={agentOpen()}>
           <aside class="agent-drawer" data-testid="agent-shelf" aria-label="Agent">
             <Show
@@ -1288,20 +1106,6 @@ export function WorkbenchShell(props: AppProps = {}) {
         </button>
       </Show>
 
-      <Show when={layoutMode() === 'tablet'}>
-        <ResponsiveDrawer
-          open={inspectorDrawerOpen()}
-          label="Inspector"
-          onClose={() => setInspectorDrawerOpen(false)}
-        >
-          <Inspector
-            pinned={inspectorPinned()}
-            onPinToggle={toggleInspector}
-            selectedNodeId={selectedNodeId()}
-            graphProjection={props.graphProjection}
-          />
-        </ResponsiveDrawer>
-      </Show>
       <Show when={layoutMode() === 'mobile'}>
         <ResponsiveDrawer
           open={navigatorDrawerOpen()}
@@ -1314,18 +1118,6 @@ export function WorkbenchShell(props: AppProps = {}) {
             collapsed={false}
             onCollapseToggle={() => setNavigatorDrawerOpen(false)}
             onViewChange={chooseView}
-          />
-        </ResponsiveDrawer>
-        <ResponsiveDrawer
-          open={inspectorDrawerOpen()}
-          label="Inspector"
-          onClose={() => setInspectorDrawerOpen(false)}
-        >
-          <Inspector
-            pinned={inspectorPinned()}
-            onPinToggle={toggleInspector}
-            selectedNodeId={selectedNodeId()}
-            graphProjection={props.graphProjection}
           />
         </ResponsiveDrawer>
       </Show>

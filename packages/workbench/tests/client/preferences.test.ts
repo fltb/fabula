@@ -13,7 +13,6 @@ import {
 const VALID_PAYLOAD = {
   version: 1,
   navigatorCollapsed: false,
-  inspectorPinned: true,
   operationCenterExpanded: false,
   selectedNavigationView: 'project-home',
 } as const;
@@ -76,7 +75,6 @@ describe('workbench client preferences', () => {
     const { storage, writes } = memoryStorage();
     const custom = snapshot({
       navigatorCollapsed: true,
-      inspectorPinned: false,
       operationCenterExpanded: true,
       selectedNavigationView: 'source-studio',
     });
@@ -89,7 +87,6 @@ describe('workbench client preferences', () => {
     expect(Object.isFrozen(loaded)).toBe(true);
     const stored = JSON.parse(writes[0]?.value) as Record<string, unknown>;
     expect(Object.keys(stored).sort()).toEqual([
-      'inspectorPinned',
       'navigatorCollapsed',
       'operationCenterExpanded',
       'selectedNavigationView',
@@ -140,7 +137,7 @@ describe('workbench client preferences', () => {
 
   it('rejects wrong types for every boolean flag and the navigation view', () => {
     for (const bad of ['true', 1, 0, null, {}, []]) {
-      for (const key of ['navigatorCollapsed', 'inspectorPinned', 'operationCenterExpanded']) {
+      for (const key of ['navigatorCollapsed', 'operationCenterExpanded']) {
         expect(
           parseWorkbenchPreferences(JSON.stringify({ ...VALID_PAYLOAD, [key]: bad })),
         ).toBeNull();

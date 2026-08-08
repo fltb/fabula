@@ -15,7 +15,7 @@
  */
 
 import type { JSX } from 'solid-js';
-import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
+import { createEffect, createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import { SolidMarkdown } from 'solid-markdown';
 import type {
   AgentChatConversationViewV1,
@@ -239,6 +239,8 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
   const [streamingRun, setStreamingRun] = createSignal<string | null>(null);
   const [open, setOpen] = createSignal(props.defaultOpen ?? true);
   let activeRunId: string | null = null;
+  let agentChatInput: HTMLTextAreaElement | undefined;
+  let chipsScroll: HTMLDivElement | undefined;
   let stopProgress: (() => void) | null = null;
   let loadToken = 0;
   const [historyState, setHistoryState] = createSignal<'loading' | 'empty' | 'populated' | 'error'>(
@@ -303,10 +305,21 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
       setHistoryState('populated');
       dismissTour();
       await openConversation(created);
+      agentChatInput?.focus();
     } catch (cause) {
       reportError(cause);
     }
   };
+
+  createEffect(() => {
+    const activeId = conversation()?.conversationId;
+    if (activeId === undefined) return;
+    const chip = chipsScroll?.querySelector<HTMLElement>(
+      `[data-testid="agent-conversation-${activeId}"]`,
+    );
+    // jsdom has no scrollIntoView; guard for both absence and non-matching chips.
+    chip?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  });
 
   onMount(() => {
     void props.client
@@ -613,30 +626,30 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
 
         <fieldset class="agent-conversation-chips" aria-label="Conversations">
           <span class="agent-conversations-label">会话</span>
-          <Show
-            when={conversations().length > 0}
-            fallback={<span class="text-xs text-[var(--wb-text-muted)]">暂无会话</span>}
-          >
-            <For each={conversations()}>
-              {(entry) => (
-                <button
-                  class="agent-conversation-chip"
-                  classList={{
-                    'is-active': conversation()?.conversationId === entry.conversationId,
-                  }}
-                  type="button"
-                  data-testid={`agent-conversation-${entry.conversationId}`}
-                  onClick={() => void openConversation(entry)}
-                >
-                  <span class="agent-conversation-title">
-                    {entry.title ?? entry.conversationId}
-                  </span>
-                </button>
-              )}
-            </For>
-          </Show>
+          <div class="agent-chips-scroll" ref={chipsScroll} data-testid="agent-chips-scroll">
+            <Show
+              when={conversations().length > 0}
+              fallback={<span class="text-xs text-[var(--wb-text-muted)]">暂无会话</span>}
+            >
+              <For each={conversations()}>
+                {(entry) => (
+                  <button
+                    class="agent-conversation-chip"
+                    classList={{
+                      'is-active': conversation()?.conversationId === entry.conversationId,
+                    }}
+                    type="button"
+                    data-testid={`agent-conversation-${entry.conversationId}`}
+                    onClick={() => void openConversation(entry)}
+                  >
+                    <span class="agent-conversation-title">{entry.title ?? '新会话'}</span>
+                  </button>
+                )}
+              </For>
+            </Show>
+          </div>
           <button
-            class="text-button"
+            class="text-button agent-chips-new"
             type="button"
             data-testid="agent-chat-new-conversation"
             onClick={() => void createConversation()}
@@ -847,6 +860,7 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
             Message the Agent
           </label>
           <textarea
+            ref={agentChatInput}
             id="agent-chat-input"
             rows={3}
             value={draft()}

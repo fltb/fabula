@@ -47,8 +47,6 @@ export interface WorkbenchPreferencesV1 {
   readonly version: typeof WORKBENCH_PREFERENCES_VERSION;
   /** Navigator panel collapsed state. */
   readonly navigatorCollapsed: boolean;
-  /** Inspector panel pinned state. */
-  readonly inspectorPinned: boolean;
   /** Operation Center expanded state. */
   readonly operationCenterExpanded: boolean;
   /** Selected navigation view. */
@@ -59,7 +57,6 @@ export interface WorkbenchPreferencesV1 {
 export const DEFAULT_WORKBENCH_PREFERENCES: WorkbenchPreferencesV1 = Object.freeze({
   version: WORKBENCH_PREFERENCES_VERSION,
   navigatorCollapsed: false,
-  inspectorPinned: true,
   operationCenterExpanded: false,
   selectedNavigationView: 'project-home',
 });
@@ -86,7 +83,6 @@ const NAVIGATION_VIEWS: readonly WorkbenchNavigationView[] = [
 const KNOWN_PREFERENCE_KEYS: Record<string, true> = {
   version: true,
   navigatorCollapsed: true,
-  inspectorPinned: true,
   operationCenterExpanded: true,
   selectedNavigationView: true,
 };
@@ -123,9 +119,6 @@ function isWorkbenchPreferencesV1(candidate: unknown): candidate is WorkbenchPre
     return false;
   }
   if (!('navigatorCollapsed' in candidate) || typeof candidate.navigatorCollapsed !== 'boolean') {
-    return false;
-  }
-  if (!('inspectorPinned' in candidate) || typeof candidate.inspectorPinned !== 'boolean') {
     return false;
   }
   if (
@@ -170,7 +163,6 @@ export function parseWorkbenchPreferences(raw: string): WorkbenchPreferencesV1 |
   return Object.freeze({
     version: WORKBENCH_PREFERENCES_VERSION,
     navigatorCollapsed: candidate.navigatorCollapsed,
-    inspectorPinned: candidate.inspectorPinned,
     operationCenterExpanded: candidate.operationCenterExpanded,
     selectedNavigationView: candidate.selectedNavigationView,
   });
@@ -224,7 +216,6 @@ export function saveWorkbenchPreferences(
       JSON.stringify({
         version: preferences.version,
         navigatorCollapsed: preferences.navigatorCollapsed,
-        inspectorPinned: preferences.inspectorPinned,
         operationCenterExpanded: preferences.operationCenterExpanded,
         selectedNavigationView: preferences.selectedNavigationView,
       }),

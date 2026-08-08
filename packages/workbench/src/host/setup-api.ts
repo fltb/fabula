@@ -15,7 +15,8 @@
 
 import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { createMinimalProjectSource } from '@novalistically/core';
 import type { Handler } from 'hono';
 import YAML from 'yaml';
 import {
@@ -352,11 +353,12 @@ function isLoopback(mode: HostListenerMode): boolean {
 }
 
 /**
- * Best-effort managed project skeleton: `nova.yaml` (minimal compile-able
- * fields) plus an empty `definitions/` directory under the Host-managed
- * root. Callers ignore failures — the registration already succeeded and a
- * skeleton write must never fail the wizard response; the author fills the
- * project from the workbench afterwards.
+ * Best-effort managed project skeleton under the Host-managed root, built
+ * from the core `createMinimalProjectSource` factory (the single schema-
+ * unified authority for a compile-able fresh project). Callers ignore
+ * failures — the registration already succeeded and a skeleton write must
+ * never fail the wizard response; the author fills the project from the
+ * workbench afterwards.
  */
 export async function writeProjectSkeleton(
   hostHome: string,
@@ -364,13 +366,11 @@ export async function writeProjectSkeleton(
   displayName: string,
 ): Promise<void> {
   const root = join(hostHome, 'projects', projectId);
-  await mkdir(root, { recursive: true });
-  await mkdir(join(root, 'definitions'), { recursive: true });
-  await writeFile(
-    join(root, 'nova.yaml'),
-    YAML.stringify({ project: projectId, title: displayName, defaultModel: 'mock' }),
-    'utf8',
-  );
+  for (const file of createMinimalProjectSource(projectId, displayName, '作者')) {
+    const absolutePath = join(root, file.path);
+    await mkdir(dirname(absolutePath), { recursive: true });
+    await writeFile(absolutePath, file.content, 'utf8');
+  }
 }
 
 /**

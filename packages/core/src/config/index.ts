@@ -10,3 +10,5 @@ export {
 } from './defaults.js';
 export type { ConfigLayer } from './loader.js';
 export { ConfigLoader, resolveConfig } from './loader.js';
+export type { ProjectSkeletonFile } from './project-skeleton.js';
+export { createMinimalProjectSource } from './project-skeleton.js';

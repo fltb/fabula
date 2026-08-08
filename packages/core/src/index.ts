@@ -18,6 +18,8 @@ export {
   showEntity,
   validateNovel,
 } from './api.js';
+export type { ProjectSkeletonFile } from './config/project-skeleton.ts';
+export { createMinimalProjectSource } from './config/project-skeleton.ts';
 export { compareFact, resolveTemporalContext } from './entity/index.js';
 export { NovalisticallyError, sanitizeError } from './errors.js';
 

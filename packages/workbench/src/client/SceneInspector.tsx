@@ -182,13 +182,13 @@ function SceneInspectorBody(props: {
           <h3>{row()?.title ?? detail().eventId}</h3>
         </div>
         <div class="scene-inspector-chips">
-          <Show when={row() !== null && row()?.sceneType.length > 0}>
+          <Show when={(row()?.sceneType?.length ?? 0) > 0}>
             <span class="scene-chip">{row()?.sceneType}</span>
           </Show>
           <Show when={detail().discourse.discourseMode !== null}>
             <span class="scene-chip scene-chip-discourse">{detail().discourse.discourseMode}</span>
           </Show>
-          <Show when={row() !== null && row()?.storyTime.length > 0}>
+          <Show when={(row()?.storyTime?.length ?? 0) > 0}>
             <span class="scene-chip">{row()?.storyTime}</span>
           </Show>
           <Show when={row() !== null}>

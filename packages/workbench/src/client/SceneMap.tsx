@@ -448,7 +448,7 @@ export function SceneMap(props: SceneMapProps) {
         <div class="scene-map-layout">
           <div class="scene-map-main">
             <Show
-              when={props.map?.chapters.length > 0}
+              when={(props.map?.chapters?.length ?? 0) > 0}
               fallback={
                 <section class="screen-empty" aria-live="polite">
                   <h3>No scenes compiled</h3>
@@ -686,9 +686,9 @@ export function SceneMap(props: SceneMapProps) {
 
               <Show
                 when={
-                  props.map?.strips.threadProgress.length +
-                    props.map?.strips.emotionalValence.length +
-                    props.map?.strips.greyLines.length >
+                  (props.map?.strips.threadProgress?.length ?? 0) +
+                    (props.map?.strips.emotionalValence?.length ?? 0) +
+                    (props.map?.strips.greyLines?.length ?? 0) >
                   0
                 }
               >
@@ -723,7 +723,7 @@ export function SceneMap(props: SceneMapProps) {
                     )}
                   </For>
 
-                  <Show when={props.map?.strips.emotionalValence.length > 0}>
+                  <Show when={(props.map?.strips.emotionalValence?.length ?? 0) > 0}>
                     <div class="scene-strip">
                       <div class="scene-strip-head">
                         <h4>情感弧线</h4>

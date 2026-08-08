@@ -31,6 +31,7 @@ describe('Core public runtime contract', () => {
       'compareFact',
       'compileProject',
       'computeSnapshotStateHash',
+      'createMinimalProjectSource',
       'detectConflicts',
       'extractReferenceChunks',
       'getProjectStatus',

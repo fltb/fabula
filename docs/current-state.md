@@ -1,7 +1,7 @@
 # 当前系统状态（源码核验）
 
-**时间**：2026-08-08 CST
-**当前实现检查点**：`main` 当前工作树（Workbench 产品收敛 Stage 1–9 已交付 + 2026-08-08 Author Mode 改造已交付：`kind` 仅剩 `'pi'`、托管根 `$WORKBENCH_HOME/projects/<id>`、3 步 Setup 向导（owner 可免密）、项目导入（拷贝）、Settings LLM 面板（pi-ai 预设 + 高级参数）、场景卡表单编辑（Yjs 写回）、UI 中文化；门禁状态诚实记录见下表——Node 26 下五包 typecheck 通过、bench 包受 b90d472 orphan 影响，Node 24 下 argon2 相关测试不可运行）
+**时间**：2026-08-09 CST
+**当前实现检查点**：`main` 当前工作树（2026-08-08 Workbench 产品收敛 Stage 1–9 + Author Mode 改造已交付；2026-08-09 完成浏览器端 Tailwind v4 + Kobalte UI 重构，并通过前端作者体验审计——审计发现 2 个真 bug（adoption 契约漂移、agent 工具结果摘要截断）与多项作者体验缺口，见下方 2026-08-09 记录与[审计报告](./audits/frontend-author-experience-audit-2026-08-09.md)；门禁状态诚实记录见下表——Node 26 下五包 typecheck 通过、bench 包受 b90d472 orphan 影响，Node 24 下 argon2 相关测试不可运行）
 **权威顺序**：当前源码、package manifests、可复现门禁结果；本页优先于历史计划、阶段报告和归档设计。
 
 > 本页描述已经由源码或门禁证明的现状，不把设计目标、未接线类型或历史测量当作已交付能力。历史文档应保留其当时的证据与日期，并链接到本页，而不应改写历史。
@@ -9,6 +9,7 @@
 | 门禁 | 结果 |
 |---|---|
 | `npm run typecheck`（Node 26 / fnm 26.5.0，收敛会话记录） | core / node-host / cli / workbench-protocol / workbench 五包 `tsc -b` 通过；**bench 包不 clean（源码核验）**：b90d472 遗留的 closed-loop orphan 仍在——`packages/bench/src/closed-loop-runner.ts` 导入从未提交的 `./closed-loop.js`（按 NodeNext 解析即 TS2307），且该文件未从 `index.ts` 导出（孤儿文件，无调用方）；`dist/closed-loop.d.ts` 是陈旧构建产物 |
+| **2026-08-09 UI 重构后核验**（fnm v26.7.0，全量重跑） | 客户端 **187/187 通过（25 文件）**（重构前 175/175）；`tsc -p packages/workbench/tsconfig.client.json --noEmit` 干净；`npm run lint` exit 0（仅剩 biome.json schema 2.5.5 vs CLI 2.5.7 既有 info）；浏览器 1600/1000/700 三宽度 shell 布局断言通过、9 视图走查零 console 错误。Host 侧代码本次未动，2026-08-08 的 Host 744/744 记录保持 |
 | Node 26 环境（2026-08-08 全量验证，fnm v26.7.0） | **全仓库测试全绿**：workbench host 744/744、client 175/175、core+node-host+protocol+cli 2924/2924（合计 3,843）。argon2 测试（`auth-password` / `auth-service` / `setup-api` / `launch` / `parity`）在 Node 26 全部通过。端到端（本轮新增核验）：`WORKBENCH_CONTROL_FD3=disabled` 直跑 `dist/host/host/main.js`，setup owner（空密码）→ project → provider → credential → finish 全流程 200 且 `projects/demo/nova.yaml` 骨架 + `config/workbench.yaml` 落盘；`POST /api/v1/projects/import`（拷贝、排除 `.git/.nova/output`、重复 409）；admin provider upsert 携带 `reasoning/contextWindow/maxTokens/headers` 四字段 round-trip；浏览器 3 步向导（Owner/Project/Provider）+ 工作区路径预览 `/tmp/.../projects/demo`。**bench 包 typecheck 仍不 clean**（b90d472 closed-loop 孤儿，见上行） |
 | 2026-08-06 基线（收敛前，供参考） | `npm test` 根 3,197 + Host 716 + Client 156、`typecheck:dead-code`、`typecheck:e2e`、`build`、`bundle-check`、`check:public-api`（六包全部登记）、`test:e2e` 23/23、`lint` 0 errors / 0 warnings——均为收敛前记录，收敛后未全量重跑 |
 
@@ -44,6 +45,17 @@
 - **场景卡编辑器**：`SceneDetailViewV1` 新增 `eventYaml`/`eventDocumentId`（detail 路由从 working 层 materialize）；SceneMap 行内「编辑」表单（标题/正文 sceneBrief+beats/情绪/时间/场景类型），保存 = 解析现有 YAML → 只合并这 6 个字段 → 重序列化 → 经 Yjs `getText('prose')` 写回（`replaceWorkingDocumentText`，触发现有提交门）。Source Studio 保留。
 - **UI 中文化**：AgentChat 欢迎卡/工具 receipts（nova_render→渲染 等映射表）、ReviewHub（发布检查项、按钮/空态）、PublicationView、RuntimeStates（登录/项目选择）、SceneMap/Inspector（已收下/已过期、收下这版、技术详情折叠区）中文化；wire 契约（API 路径/错误码/`nova_*` 工具名）未动。
 - **门禁**：host 744/744、client 175/175、core+node-host+protocol+cli 2924/2924（合计 3,843）全绿；五包 typecheck 干净；`npm run build`（types + esbuild 包）成功且 pi-ai 目录独立成 chunk；lint 仅剩 bench 孤儿与未触碰文件的既有漂移。
+
+## 2026-08-09 前端作者体验审计 + UI 重构记录
+
+完整证据链见 [`docs/audits/frontend-author-experience-audit-2026-08-09.md`](./audits/frontend-author-experience-audit-2026-08-09.md)（源码核验 + dev 环境实测）。审计结论：
+
+- **UI 重构（已交付并核验）**：浏览器端全部视图类转 Tailwind v4 工具类 + Kobalte 无头组件（`styles.css` 2640→107 行，仅 `@import` + `@theme`（30 个 `--color-*` 语义别名）+ `:root` token + 3 条基础规则；`ui/primitives.tsx` 与 `ui/controls.tsx` 为共享源）。客户端 **187/187**、tsc 干净、lint exit 0、三宽度浏览器断言通过（见门禁表 2026-08-09 行）。
+- **真 bug ① adoption 契约漂移**：`sceneRevisionEnvelopeV1Schema`（strict）与当前写入方漂移——revisionId 带 `scene_revision_` 前缀不过 `uuidSchema`，`releaseDecision` 携带 `gateId/releasePolicy/warningFingerprints` 三键被 strict 拒绝。**任何项目任何已渲染 revision 走 adoption preview 必 503**（dev 实测：`GET /scene-adoption?eventId=E001&revisionId=scene_revision_…` → 503 `SCENE_ADOPTION_UNAVAILABLE / The stored scene revision is invalid.`）；客户端再把 5xx 碾成「The Workbench Host returned an unexpected error.」。修复方向：修 schema 或修写入方（`render-service.ts:687,716`、`node-host/src/runtime.ts:98`），并让客户端透传 Host 的 code/message。
+- **真 bug ② agent 工具结果摘要截断**：run loop 的 `resultSummaryOf()` 把所有 MCP 工具结果（含 `nova_status`）截断为 `ok:<16hex sha256>`（`run-service.ts:224-235,413-421`），模型永远看不到 status 的可读字段（validation/ISS/nextActions/guidance）。修复方向：对 agent 会话放宽摘要（仍保持 secret-free）或把 status 可读字段注入上下文。
+- **作者体验缺口（非 bug，产品决策项）**：① SourceStudio 是 authoring 协议控制台，VCS/CRDT/哈希概念直接暴露给作者；② GraphRoute 全英文、零解释文案、节点只有 id；③ 「情绪」数据来自作者手写的事件 YAML `emotionalValence`（schema 字段，非 LLM），UI 用原始字段名做标签（「emotionalValence 全书序列」）；④ 发布页无正文预览且发布目录不随 SSE/切视图刷新（下载按钮与空列表在源码中不可能共存，有测试锁定）；⑤ 写作与 agent 共用单一 provider profile，无独立 agent-model 字段，agent 路径还忽略 advanced 字段（reasoning/contextWindow/maxTokens/headers），SettingsView 硬编码 `'default'` profile。
+
+以上 ② 项 bug 与 ⑤ 项缺口均**未修复**，仅记录根因；修复需另行评审实施。
 
 
 ## 包与依赖边界

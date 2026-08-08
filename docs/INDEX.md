@@ -7,6 +7,7 @@ Novalistically 是一个叙事工程系统：结构化 YAML 定义 → 事件溯
 源码核验的现状基线见 **[当前系统状态](./current-state.md)**。current implementation checkpoints and their verification scope are stated there; current source wins over historical plans and design docs.
 - **[Dream of Red Chamber fixture manifest](../fixtures/dream-of-red-chamber/fixture-manifest.json)** — 当前 authored fixture 的可复现清单；执行 `npm run count:drc -- fixtures/dream-of-red-chamber --check` 核验四章 E01–E36。80 章 corpus source 是独立 acquisition artifact。
 - **[Agent-first 工作流审计 2026-08-05](./audits/original-requirements-agent-workflow-audit-2026-08-05.md)** — `docs/archive/PROJECT.md` 原始 Agent-first 要求的符合度源码核验（撰写时点快照，总体判定：部分满足）。审计列出的接线缺口（assembly/review/plugin/status guidance/working validate/内置 Agent）已在 2026-08-06 完整交付中关闭，当前状态以 [current-state 接线边界表](./current-state.md#当前产品接线边界agent-first-工作流)为准。
+- **[前端作者体验审计 2026-08-09](./audits/frontend-author-experience-audit-2026-08-09.md)** — 作者视角 7 项前端问题的源码核验 + dev 实测（adoption 契约漂移 503、agent 工具结果摘要截断两处真 bug；文稿/图谱/情绪/发布/模型分离五处体验缺口），附 2026-08-09 UI 重构核验（client 187/187、lint exit 0）。修复项未实施，根因以该审计为准。
 
 ## 我想...
 

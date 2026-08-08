@@ -611,51 +611,41 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
           </p>
         </Show>
 
-        <div class="agent-chat-layout flex items-start gap-[var(--wb-space-3)]">
-          <aside class="agent-conversation-list w-64 shrink-0" aria-label="Conversations">
-            <div class="flex flex-wrap items-center justify-between gap-[var(--wb-space-2)]">
-              <h3>Conversations</h3>
-              <button
-                class="text-button"
-                type="button"
-                data-testid="agent-chat-new-conversation"
-                onClick={() => void createConversation()}
-              >
-                + 新会话
-              </button>
-            </div>
-            <Show
-              when={conversations().length > 0}
-              fallback={<p class="text-xs text-[var(--wb-text-muted)]">暂无会话</p>}
-            >
-              <ul class="agent-conversation-items max-h-[60vh] overflow-y-auto">
-                <For each={conversations()}>
-                  {(entry) => (
-                    <li>
-                      <button
-                        class="agent-conversation-item"
-                        classList={{
-                          'is-active': conversation()?.conversationId === entry.conversationId,
-                        }}
-                        type="button"
-                        data-testid={`agent-conversation-${entry.conversationId}`}
-                        onClick={() => void openConversation(entry)}
-                      >
-                        <span class="agent-conversation-title">
-                          {entry.title ?? entry.conversationId}
-                        </span>
-                        <span class="text-xs text-[var(--wb-text-muted)]">
-                          {new Date(entry.updatedAt).toLocaleString()}
-                        </span>
-                      </button>
-                    </li>
-                  )}
-                </For>
-              </ul>
-            </Show>
-          </aside>
+        <div class="agent-conversation-chips" aria-label="Conversations">
+          <span class="agent-conversations-label">会话</span>
+          <Show
+            when={conversations().length > 0}
+            fallback={<span class="text-xs text-[var(--wb-text-muted)]">暂无会话</span>}
+          >
+            <For each={conversations()}>
+              {(entry) => (
+                <button
+                  class="agent-conversation-chip"
+                  classList={{
+                    'is-active': conversation()?.conversationId === entry.conversationId,
+                  }}
+                  type="button"
+                  data-testid={`agent-conversation-${entry.conversationId}`}
+                  onClick={() => void openConversation(entry)}
+                >
+                  <span class="agent-conversation-title">
+                    {entry.title ?? entry.conversationId}
+                  </span>
+                </button>
+              )}
+            </For>
+          </Show>
+          <button
+            class="text-button"
+            type="button"
+            data-testid="agent-chat-new-conversation"
+            onClick={() => void createConversation()}
+          >
+            + 新会话
+          </button>
+        </div>
 
-          <div class="agent-chat-main min-w-0 flex-1">
+          <div class="agent-chat-scroll" data-testid="agent-chat-scroll">
             <div class="agent-chat-messages" data-testid="agent-chat-messages">
               <Show
                 when={messages().length > 0}
@@ -851,56 +841,54 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
                 </ul>
               </div>
             </Show>
-
-            <form
-              class="agent-chat-composer"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void send();
+          </div>
+          <form
+            class="agent-chat-composer"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void send();
+            }}
+          >
+            <label class="sr-only" for="agent-chat-input">
+              Message the Agent
+            </label>
+            <textarea
+              id="agent-chat-input"
+              rows={3}
+              value={draft()}
+              onInput={(event) => setDraft(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+                  event.preventDefault();
+                  void send();
+                }
               }}
-            >
-              <label class="sr-only" for="agent-chat-input">
-                Message the Agent
-              </label>
-              <textarea
-                id="agent-chat-input"
-                rows={3}
-                value={draft()}
-                onInput={(event) => setDraft(event.currentTarget.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
-                    event.preventDefault();
-                    void send();
-                  }
-                }}
-                placeholder="描述要运行的写作任务…（Enter 发送，Shift+Enter 换行）"
-                disabled={sending()}
-                data-testid="agent-chat-input"
-              />
-              <div class="flex gap-[var(--wb-space-2)]">
-                <Show when={streamingRun() !== null}>
-                  <button
-                    class="text-button"
-                    type="button"
-                    data-testid="agent-chat-cancel"
-                    onClick={() => void cancelCurrent()}
-                  >
-                    Cancel
-                  </button>
-                </Show>
+              placeholder="描述要运行的写作任务…（Enter 发送，Shift+Enter 换行）"
+              disabled={sending()}
+              data-testid="agent-chat-input"
+            />
+            <div class="flex gap-[var(--wb-space-2)]">
+              <Show when={streamingRun() !== null}>
                 <button
                   class="text-button"
-                  type="submit"
-                  disabled={sending() || draft().trim().length === 0}
-                  data-testid="agent-chat-send"
+                  type="button"
+                  data-testid="agent-chat-cancel"
+                  onClick={() => void cancelCurrent()}
                 >
-                  {sending() ? 'Sending…' : 'Send'}
+                  Cancel
                 </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </Show>
+              </Show>
+              <button
+                class="text-button"
+                type="submit"
+                disabled={sending() || draft().trim().length === 0}
+                data-testid="agent-chat-send"
+              >
+                {sending() ? 'Sending…' : 'Send'}
+              </button>
+            </div>
+          </form>
+        </Show>
     </section>
   );
 }

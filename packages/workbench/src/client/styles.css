@@ -1511,18 +1511,28 @@ h3 {
 /* ── Agent Chat ────────────────────────────────────────────────── */
 
 .agent-chat {
-  display: grid;
-  gap: var(--wb-space-5);
-  max-width: 72rem;
-  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--wb-space-3);
+  min-height: 0;
+  height: 100%;
+}
+
+.agent-chat-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .agent-chat-heading {
   display: flex;
+  flex-shrink: 0;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--wb-space-3);
 }
+
+
 
 .agent-chat-error {
   margin: 0;
@@ -1618,44 +1628,48 @@ h3 {
   background: var(--wb-accent);
 }
 
-.agent-conversation-list {
-  padding: var(--wb-space-3);
-  background: var(--wb-surface);
-  border: 0.0625rem solid var(--wb-border);
-  border-radius: var(--wb-radius-md);
+.agent-conversation-chips {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--wb-space-2);
+  overflow-x: auto;
+  padding-bottom: var(--wb-space-1);
 }
 
-.agent-conversation-items {
-  display: grid;
-  gap: var(--wb-space-1);
-  margin: var(--wb-space-3) 0 0;
-  padding: 0;
-  list-style: none;
+.agent-conversations-label {
+  flex-shrink: 0;
+  color: var(--wb-muted);
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-.agent-conversation-item {
-  display: grid;
-  gap: var(--wb-space-1);
-  width: 100%;
-  padding: var(--wb-space-2) var(--wb-space-3);
+.agent-conversation-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--wb-space-2);
+  flex-shrink: 0;
+  max-width: 13rem;
+  padding: var(--wb-space-1) var(--wb-space-3);
   color: var(--wb-ink);
-  text-align: left;
-  background: transparent;
-  border: 0.0625rem solid transparent;
-  border-radius: var(--wb-radius-sm);
+  background: var(--wb-surface-muted);
+  border: 0.0625rem solid var(--wb-border);
+  border-radius: 999px;
   cursor: pointer;
   transition:
     background 160ms ease,
     border-color 160ms ease;
 }
 
-.agent-conversation-item:hover {
-  background: var(--wb-surface-muted);
+.agent-conversation-chip:hover {
+  border-color: var(--wb-accent-soft);
 }
 
-.agent-conversation-item.is-active {
+.agent-conversation-chip.is-active {
   background: var(--wb-accent-wash);
-  border-color: var(--wb-empty-border);
+  border-color: var(--wb-accent-soft);
 }
 
 .agent-conversation-title {
@@ -1902,23 +1916,15 @@ h3 {
   max-width: none;
   min-width: 0;
   min-height: 0;
-  gap: var(--wb-space-3);
+  gap: var(--wb-space-2);
   padding: var(--wb-space-4);
-  overflow-y: auto;
 }
 
-/* Narrow drawer: stack the conversation list above the message surface
-   instead of the wide two-column layout used on a full page. */
-.agent-drawer .agent-chat-layout {
-  flex-direction: column;
-}
-
-.agent-drawer .agent-conversation-list {
-  width: 100%;
-}
-
-.agent-drawer .agent-conversation-items {
-  max-height: 11rem;
+/* The composer is pinned to the drawer bottom: the scroll region above it
+   takes the remaining height, so the input never scrolls out of view. */
+.agent-drawer .agent-chat-composer {
+  flex-shrink: 0;
+  margin-top: auto;
 }
 
 .agent-drawer-guidance {

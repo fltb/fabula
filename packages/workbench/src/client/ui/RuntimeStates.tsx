@@ -272,6 +272,20 @@ export function ProjectPicker(props: ProjectPickerProps): JSX.Element {
         <p class="mt-[var(--wb-space-3)] text-sm leading-relaxed text-[var(--wb-muted)]">
           选择或创建一个项目开始写作
         </p>
+        <Show when={!isEmpty() && !blockingHealth()}>
+          <div class="mt-[var(--wb-space-4)] flex flex-wrap items-center justify-end gap-[var(--wb-space-3)]">
+            <Show when={props.onImportProject}>
+              <button class={QUIET_BUTTON} type="button" onClick={props.onImportProject}>
+                导入现有项目
+              </button>
+            </Show>
+            <Show when={props.onCreateProject}>
+              <button class={PRIMARY_BUTTON} type="button" onClick={props.onCreateProject}>
+                新建项目
+              </button>
+            </Show>
+          </div>
+        </Show>
         <Show
           when={!blockingHealth()}
           fallback={

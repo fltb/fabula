@@ -1886,10 +1886,11 @@ h3 {
 }
 
 /* Floating variant for pages without the workspace grid (project overview):
-   fixed to the right edge below the top bar instead of a grid column. */
+   fixed to the right edge, full height — the overview has no top bar, so
+   there is no top offset to respect. */
 .agent-drawer-floating {
   position: fixed;
-  top: var(--wb-topbar-height, 3.5rem);
+  top: 0;
   right: 0;
   bottom: 0;
   width: min(23.75rem, 100vw);

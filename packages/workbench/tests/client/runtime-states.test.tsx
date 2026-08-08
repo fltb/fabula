@@ -81,6 +81,40 @@ describe('runtime state views', () => {
     expect(onImportProject).toHaveBeenCalledTimes(1);
   });
 
+  it('offers create/import actions above a non-empty catalog', () => {
+    const onCreateProject = vi.fn();
+    const onImportProject = vi.fn();
+    render(() => (
+      <ProjectPicker
+        projects={[project()]}
+        onSelect={() => undefined}
+        onCreateProject={onCreateProject}
+        onImportProject={onImportProject}
+      />
+    ));
+    expect(screen.queryByText('还没有项目')).not.toBeInTheDocument();
+    const createButton = screen.getByRole('button', { name: '新建项目' });
+    const importButton = screen.getByRole('button', { name: '导入现有项目' });
+    createButton.click();
+    importButton.click();
+    expect(onCreateProject).toHaveBeenCalledTimes(1);
+    expect(onImportProject).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the toolbar while the catalog is pending or empty', () => {
+    render(() => (
+      <ProjectPicker
+        projects={[project()]}
+        pending
+        onSelect={() => undefined}
+        onCreateProject={() => undefined}
+        onImportProject={() => undefined}
+      />
+    ));
+    expect(screen.queryByRole('button', { name: '新建项目' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '导入现有项目' })).not.toBeInTheDocument();
+  });
+
   it('hides the create/import affordances when no handlers are provided', () => {
     render(() => <ProjectPicker projects={[]} onSelect={() => undefined} />);
     expect(screen.getByRole('heading', { name: '还没有项目' })).toBeInTheDocument();

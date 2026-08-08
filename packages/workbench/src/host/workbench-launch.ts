@@ -1511,10 +1511,11 @@ export async function startWorkbench(
       ...(referencesEnabled ? (['references'] as const) : []),
       ...(agentChatEnabled ? (['agent-chat'] as const) : []),
     ];
-    const browser: HostServerOptions['browser'] =
-      configuredProjects.length === 0
-        ? undefined
-        : {
+    // Always assembled: read routes (session, projects, capabilities) must
+    // exist even with zero configured projects, so an author entering the
+    // empty workspace can query the session and create the first project.
+    // Every port is per-projectId and degrades to null/empty when absent.
+    const browser: HostServerOptions['browser'] = {
             access: projectAccess,
             principal,
             authorization,
@@ -2190,6 +2191,17 @@ export async function startWorkbench(
       } catch {
         return json({ error: 'bootstrap_unavailable' }, 409);
       }
+    });
+    // Loopback device trust: passwordless owners cannot log in interactively
+    // (dummy unverifiable hash), so a local process may mint a fresh session.
+    // Registered only for pure loopback bindings; LAN/unix never expose it.
+    hostServer.registerPublicAuthPostRoute('/api/v1/auth/loopback', async (c) => {
+      if (config.lan === true || config.unixSocket !== undefined) {
+        return json({ error: 'loopback_only' }, 403);
+      }
+      const result = await auth.loopbackSession();
+      if (result === null) return json({ error: 'passwordless_owner_required' }, 403);
+      return sessionResponse(result.session.sessionId, result.session.userId);
     });
     if (assetsRoot !== null) {
       const root = assetsRoot;

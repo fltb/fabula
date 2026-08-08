@@ -780,7 +780,7 @@ class HostListenerImpl implements HostListener {
   }
 
   registerPublicAuthPostRoute(path: string, handler: Handler<HostListenerEnv>): void {
-    if (!/^\/api\/v1\/auth\/(?:login|bootstrap)$/.test(path)) {
+    if (!/^\/api\/v1\/auth\/(?:login|bootstrap|loopback)$/.test(path)) {
       throw new HostListenerError(
         `public auth route must be /api/v1/auth/login or /api/v1/auth/bootstrap; got ${JSON.stringify(path)}`,
       );

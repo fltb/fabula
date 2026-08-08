@@ -537,6 +537,10 @@ describe('startWorkbench setup runtime', () => {
       expect(health.status).toBe(200);
       const status = await fetch(`${handle.endpoint}/status`);
       expect(status.status).toBe(200);
+      // The browser read surface (session, projects) is assembled even with
+      // zero configured projects: 401 (missing session) not 404 (unregistered).
+      const session = await fetch(`${handle.endpoint}/api/v1/session`);
+      expect(session.status).toBe(401);
     } finally {
       await handle.close();
     }

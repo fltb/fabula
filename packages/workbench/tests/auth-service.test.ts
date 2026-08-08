@@ -54,6 +54,23 @@ describe('LocalAuthService over the real persistence worker', () => {
     );
   });
 
+  it('loopbackSession stays closed without a passwordless owner', async () => {
+    await expect(service.loopbackSession()).resolves.toBeNull();
+    await service.bootstrapOwner({ password: 'owner-password', displayName: 'Owner' });
+    // A real-password owner must log in interactively; no loopback mint.
+    await expect(service.loopbackSession()).resolves.toBeNull();
+  });
+
+  it('loopbackSession mints a fresh session for a passwordless owner', async () => {
+    const owner = await service.bootstrapOwner({ password: '', displayName: 'Owner' });
+    const result = await service.loopbackSession();
+    expect(result).not.toBeNull();
+    if (result === null) throw new Error('expected a loopback session');
+    expect(result.user.userId).toBe(owner.user.userId);
+    expect(result.session.userId).toBe(owner.user.userId);
+    expect(result.session.sessionId).not.toBe(owner.session.sessionId);
+  });
+
   it('returns a uniform failure for unknown users and wrong passwords', async () => {
     const owner = await service.bootstrapOwner({ password: 'owner-password' });
     const unknown = await service.authenticate({ userId: 'does-not-exist', password: 'anything' });

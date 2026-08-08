@@ -189,6 +189,25 @@ export class LocalAuthService {
   }
 
   /**
+   * Loopback device trust for passwordless owners. An owner whose hash is the
+   * dummy (unverifiable) sentinel cannot log in interactively, so a local
+   * process on the loopback listener may mint a fresh owner session instead.
+   * Owners with a real password must authenticate normally; the launch only
+   * registers this endpoint for pure loopback bindings (never LAN/unix).
+   * Returns null when there is no owner or the owner has a real password.
+   */
+  async loopbackSession(): Promise<BootstrapResult | null> {
+    const state = await this.getAuthState();
+    if (!state.ownerExists) return null;
+    const owner = await this.#persistence.loadOwner();
+    if (owner === null || owner.passwordHash?.hashBase64 !== DUMMY_PASSWORD_HASH.hashBase64) {
+      return null;
+    }
+    const session = await this.#persistence.createSession(this.#newSession(owner));
+    return { user: owner, session };
+  }
+
+  /**
    * Authenticates a user and creates a NEW session on success (multi-session
    * support: every successful login is its own session). Failures are uniform
    * regardless of whether the user exists, and every failed verification is

@@ -142,7 +142,10 @@ const restartHost = () => {
   }
   host.kill('SIGTERM');
 };
-const vite = spawn('npx', ['vite', '--config', 'vite.config.ts'], {
+// Spawn vite under node directly (no `npx` shim): the shim process would
+// orphan vite on SIGTERM in some environments, and finish()'s SIGKILL could
+// never reach the grandchild, leaving the dev port occupied after shutdown.
+const vite = spawn(process.execPath, [resolve(repoRoot, 'node_modules/vite/bin/vite.js'), '--config', 'vite.config.ts'], {
   cwd: root,
   env,
   stdio: 'inherit',

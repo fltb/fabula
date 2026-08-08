@@ -27,6 +27,7 @@ import { createSetupClient, type SetupClient } from './setup-client.js';
 export const AUTH_ENDPOINTS = Object.freeze({
   login: '/api/v1/auth/login',
   bootstrap: '/api/v1/auth/bootstrap',
+  loopback: '/api/v1/auth/loopback',
 } as const);
 
 export type RuntimeState =
@@ -87,6 +88,8 @@ export interface AuthClient {
   readonly setSessionId: (sessionId: string | null) => void;
   login(input: LoginInput): Promise<BrowserSessionPrincipalV1>;
   bootstrap(input: BootstrapInput): Promise<BrowserSessionPrincipalV1>;
+  /** Loopback device trust: null when no passwordless owner is present. */
+  loopback(): Promise<BrowserSessionPrincipalV1 | null>;
   getSession(): Promise<BrowserSessionPrincipalV1>;
   signOut(): void;
 }
@@ -280,6 +283,16 @@ export function createRuntimeClient(
           if (error.status === 401) sessionId = null;
           throw fromBrowserError(error);
         }
+        throw error;
+      }
+    },
+    async loopback() {
+      try {
+        const next = await postAuth(execute, prefix, AUTH_ENDPOINTS.loopback, {});
+        sessionId = next;
+        return await read.getSession();
+      } catch (error) {
+        if (error instanceof RuntimeApiError && error.status === 403) return null;
         throw error;
       }
     },

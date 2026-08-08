@@ -1,6 +1,6 @@
 import { Navigate, Route, Router, useLocation, useNavigate } from '@solidjs/router';
 import type { JSX } from 'solid-js';
-import { createSignal, Match, onCleanup, onMount, Show, Switch } from 'solid-js';
+import { createEffect, createSignal, Match, onCleanup, onMount, Show, Switch } from 'solid-js';
 import { render } from 'solid-js/web';
 import type {
   BrowserAuthoringDocumentCreateRequestV1,
@@ -178,6 +178,23 @@ function RuntimeRouter(props: RuntimeRouterProps) {
     <LoginForm pending={startup() === 'loading'} error={startupError()} onSubmit={login} />
   );
 
+  // Loopback device trust: a passwordless owner (dummy hash) cannot log in
+  // interactively, so the login view silently tries the loopback session
+  // endpoint once; null (owner has a password, or non-loopback binding)
+  // leaves the form visible.
+  createEffect(() => {
+    if (startup() !== 'ready' || props.client.auth.hasSession()) return;
+    if (location.pathname !== '/login') return;
+    void props.client.auth
+      .loopback()
+      .then((principal) => {
+        if (principal === null) return;
+        setPrincipal(principal);
+        navigate('/projects', { replace: true });
+      })
+      .catch(() => {});
+  });
+
   const workspaceRoute = () => {
     const encodedProjectId = location.pathname.slice('/workspace/'.length);
     try {
@@ -261,7 +278,7 @@ function RuntimeRouter(props: RuntimeRouterProps) {
         </Show>
       </Match>
       <Match when={location.pathname === '/setup'}>
-        <Show when={startup() === 'setup'} fallback={<Navigate href="/" replace />}>
+        <Show when={startup() === 'setup'} fallback={<Navigate href="/" />}>
           {setupRoute()}
         </Show>
       </Match>

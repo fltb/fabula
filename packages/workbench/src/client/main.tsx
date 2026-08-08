@@ -84,6 +84,7 @@ function RuntimeRouter(props: RuntimeRouterProps) {
   onMount(() => {
     void (async () => {
       try {
+        const status = await props.client.setup.getStatus();
         if (requiresSetup(status)) {
           setStartup('setup');
         } else {
@@ -141,6 +142,7 @@ function RuntimeRouter(props: RuntimeRouterProps) {
     // is a visible retry affordance while the Host remains authoritative.
     void (async () => {
       try {
+        const status = await props.client.setup.getStatus();
         setStartup(requiresSetup(status) ? 'setup' : 'ready');
       } catch (error) {
         setStartupError(runtimeErrorMessage(error));
@@ -258,7 +260,11 @@ function RuntimeRouter(props: RuntimeRouterProps) {
           </Show>
         </Show>
       </Match>
-      <Match when={location.pathname === '/setup'}>{setupRoute()}</Match>
+      <Match when={location.pathname === '/setup'}>
+        <Show when={startup() === 'setup'} fallback={<Navigate href="/" replace />}>
+          {setupRoute()}
+        </Show>
+      </Match>
       <Match when={location.pathname === '/login'}>{loginRoute()}</Match>
       <Match when={location.pathname === '/projects'}>{projectsRoute()}</Match>
       <Match when={location.pathname.startsWith('/workspace/')}>{workspaceRoute()}</Match>

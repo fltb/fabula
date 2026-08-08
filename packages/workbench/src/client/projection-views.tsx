@@ -18,6 +18,8 @@ import {
   nextRouteSelector,
 } from './graph-view-model';
 import { LogicFlowGraph, type LogicFlowGraphControls } from './logicflow-graph';
+import { TABS_CONTENT, TABS_LIST, TABS_ROOT, TABS_TRIGGER } from './ui/controls';
+import { KICKER, ScreenEmpty, ScreenNote, TEXT_BUTTON } from './ui/primitives';
 
 export interface ProjectHomeProps {
   readonly overview: BrowserProjectOverviewV1 | null;
@@ -29,66 +31,78 @@ export function ProjectHome(props: ProjectHomeProps) {
     <Show
       when={props.overview}
       fallback={
-        <section class="screen-empty" aria-live="polite">
-          <h2>No project projection</h2>
-          <p>Open an authenticated project in the Host to load its accepted projection.</p>
-        </section>
+        <ScreenEmpty
+          title="No project projection"
+          body="Open an authenticated project in the Host to load its accepted projection."
+        />
       }
     >
       {(overview) => {
         const projection = () => overview().projection;
         return (
-          <section class="project-home" aria-labelledby="project-home-heading">
+          <section aria-labelledby="project-home-heading">
             <header>
-              <p class="region-kicker">Accepted project</p>
+              <p class={KICKER}>Accepted project</p>
               <h2 id="project-home-heading">{overview().metadata.displayName}</h2>
-              <p class="project-identity">{overview().projectId}</p>
+              <p>{overview().projectId}</p>
             </header>
             <Show
               when={projection()}
               fallback={
-                <p class="screen-note">
+                <ScreenNote>
                   The Host has no accepted source projection for this open project yet.
-                </p>
+                </ScreenNote>
               }
             >
               {(accepted) => (
-                <dl class="projection-metrics">
-                  <div>
-                    <dt>Documents</dt>
-                    <dd>{accepted().documents}</dd>
+                <dl class="my-4 grid grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] gap-3">
+                  <div class="grid gap-1 rounded-[0.375rem] bg-surface-muted p-3">
+                    <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
+                      Documents
+                    </dt>
+                    <dd class="m-0 text-lg font-[750]">{accepted().documents}</dd>
                   </div>
-                  <div>
-                    <dt>Scenes</dt>
-                    <dd>{accepted().events}</dd>
+                  <div class="grid gap-1 rounded-[0.375rem] bg-surface-muted p-3">
+                    <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
+                      Scenes
+                    </dt>
+                    <dd class="m-0 text-lg font-[750]">{accepted().events}</dd>
                   </div>
-                  <div>
-                    <dt>Rendered</dt>
-                    <dd>{accepted().rendered}</dd>
+                  <div class="grid gap-1 rounded-[0.375rem] bg-surface-muted p-3">
+                    <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
+                      Rendered
+                    </dt>
+                    <dd class="m-0 text-lg font-[750]">{accepted().rendered}</dd>
                   </div>
-                  <div>
-                    <dt>Blocked</dt>
-                    <dd>{accepted().blocked}</dd>
+                  <div class="grid gap-1 rounded-[0.375rem] bg-surface-muted p-3">
+                    <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
+                      Blocked
+                    </dt>
+                    <dd class="m-0 text-lg font-[750]">{accepted().blocked}</dd>
                   </div>
-                  <div>
-                    <dt>Warnings</dt>
-                    <dd>{accepted().warningCount}</dd>
+                  <div class="grid gap-1 rounded-[0.375rem] bg-surface-muted p-3">
+                    <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
+                      Warnings
+                    </dt>
+                    <dd class="m-0 text-lg font-[750]">{accepted().warningCount}</dd>
                   </div>
-                  <div>
-                    <dt>Errors</dt>
-                    <dd>{accepted().errorCount}</dd>
+                  <div class="grid gap-1 rounded-[0.375rem] bg-surface-muted p-3">
+                    <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
+                      Errors
+                    </dt>
+                    <dd class="m-0 text-lg font-[750]">{accepted().errorCount}</dd>
                   </div>
                 </dl>
               )}
             </Show>
-            <p class="screen-note">
+            <ScreenNote>
               {overview().activity.busy
                 ? 'The Host has an active operation.'
                 : 'No Host operation is active.'}{' '}
               {overview().activity.hasHumanPresence
                 ? 'Human collaboration is present.'
                 : 'No human collaboration is present.'}
-            </p>
+            </ScreenNote>
           </section>
         );
       }}
@@ -124,15 +138,19 @@ interface GraphDomainPanelProps {
 function GraphDomainPanel(props: GraphDomainPanelProps) {
   const label = () => domainLabel(props.domain);
   return (
-    <div class="graph-domain-panel">
-      <div class="graph-toolbar" role="toolbar" aria-label={`${label()} graph viewport`}>
-        <span class="graph-toolbar-note">
+    <div class="grid gap-3">
+      <div
+        class="flex flex-wrap items-center justify-between gap-3"
+        role="toolbar"
+        aria-label={`${label()} graph viewport`}
+      >
+        <span class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
           {label()} · {props.view.nodes.length} nodes · {props.view.edges.length} edges
         </span>
-        <span class="graph-toolbar-actions">
+        <span class="inline-flex gap-2">
           <button
             type="button"
-            class="text-button"
+            class={TEXT_BUTTON}
             disabled={!props.controls}
             onClick={() => props.controls?.fitView()}
           >
@@ -140,7 +158,7 @@ function GraphDomainPanel(props: GraphDomainPanelProps) {
           </button>
           <button
             type="button"
-            class="text-button"
+            class={TEXT_BUTTON}
             disabled={!props.controls}
             onClick={() => props.controls?.zoomIn()}
           >
@@ -148,7 +166,7 @@ function GraphDomainPanel(props: GraphDomainPanelProps) {
           </button>
           <button
             type="button"
-            class="text-button"
+            class={TEXT_BUTTON}
             disabled={!props.controls}
             onClick={() => props.controls?.zoomOut()}
           >
@@ -156,7 +174,7 @@ function GraphDomainPanel(props: GraphDomainPanelProps) {
           </button>
           <button
             type="button"
-            class="text-button"
+            class={TEXT_BUTTON}
             disabled={!props.controls}
             onClick={() => props.controls?.resetZoom()}
           >
@@ -164,9 +182,9 @@ function GraphDomainPanel(props: GraphDomainPanelProps) {
           </button>
         </span>
       </div>
-      <Show when={props.model} fallback={<p class="screen-note">No {label()} layout.</p>}>
+      <Show when={props.model} fallback={<ScreenNote>No {label()} layout.</ScreenNote>}>
         {(model) => (
-          <div class="graph-canvas-frame">
+          <div class="relative h-[34rem] overflow-hidden rounded-[0.625rem] border border-line bg-surface max-[40rem]:h-[22rem]">
             <LogicFlowGraph
               model={model()}
               label={`${label()} graph canvas`}
@@ -177,7 +195,7 @@ function GraphDomainPanel(props: GraphDomainPanelProps) {
         )}
       </Show>
       <p
-        class="graph-status"
+        class="m-0 text-[0.8125rem] text-muted"
         role="status"
         aria-live="polite"
         aria-label={
@@ -188,55 +206,72 @@ function GraphDomainPanel(props: GraphDomainPanelProps) {
           ? `Selected node: ${props.selectedNode}`
           : 'No node selected. Use the structured summary below for keyboard access.'}
       </p>
-      <details class="graph-access-summary">
-        <summary>Structured {label()} summary</summary>
-        <dl class="projection-metrics">
-          <div>
-            <dt>Nodes</dt>
-            <dd>{props.view.nodes.length}</dd>
+      <details class="rounded-[0.625rem] border border-line bg-surface p-4">
+        <summary class="cursor-pointer text-[0.8125rem] font-extrabold">
+          Structured {label()} summary
+        </summary>
+        <dl class="mt-3 mb-4 grid grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] gap-3">
+          <div class="grid gap-1 rounded-[0.375rem] bg-surface-muted p-3">
+            <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
+              Nodes
+            </dt>
+            <dd class="m-0 text-lg font-[750]">{props.view.nodes.length}</dd>
           </div>
-          <div>
-            <dt>Edges</dt>
-            <dd>{props.view.edges.length}</dd>
+          <div class="grid gap-1 rounded-[0.375rem] bg-surface-muted p-3">
+            <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
+              Edges
+            </dt>
+            <dd class="m-0 text-lg font-[750]">{props.view.edges.length}</dd>
           </div>
-          <div>
-            <dt>Outputs</dt>
-            <dd>{props.view.outputs.length}</dd>
+          <div class="grid gap-1 rounded-[0.375rem] bg-surface-muted p-3">
+            <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
+              Outputs
+            </dt>
+            <dd class="m-0 text-lg font-[750]">{props.view.outputs.length}</dd>
           </div>
-          <div>
-            <dt>Reads</dt>
-            <dd>{props.view.reads.length}</dd>
+          <div class="grid gap-1 rounded-[0.375rem] bg-surface-muted p-3">
+            <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
+              Reads
+            </dt>
+            <dd class="m-0 text-lg font-[750]">{props.view.reads.length}</dd>
           </div>
         </dl>
-        <h4>Nodes</h4>
-        <ul class="graph-node-list">
+        <h4 class="mt-4 mb-2 text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
+          Nodes
+        </h4>
+        <ul class="m-0 pl-5">
           <For each={props.view.nodes}>
             {(node) => (
-              <li>
-                <code>{node.id}</code>
-                <span>{describeCoordinate(node.coordinate)}</span>
-                <span>{describeOrigin(node.origin)}</span>
+              <li class="my-1 text-[0.8125rem] leading-[1.5] text-ink-soft">
+                <code class="text-xs">{node.id}</code>
+                <span class="ml-2 text-muted">{describeCoordinate(node.coordinate)}</span>
+                <span class="ml-2 text-muted">{describeOrigin(node.origin)}</span>
               </li>
             )}
           </For>
         </ul>
-        <h4>Edges</h4>
-        <ul class="graph-edge-list">
+        <h4 class="mt-4 mb-2 text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
+          Edges
+        </h4>
+        <ul class="m-0 pl-5">
           <For each={props.view.edges}>
             {(edge) => (
-              <li>
-                <code>{edge.predecessor}</code> → <code>{edge.dependent}</code>
-                <span>{edge.edgeClass}</span>
+              <li class="my-1 text-[0.8125rem] leading-[1.5] text-ink-soft">
+                <code class="text-xs">{edge.predecessor}</code> →{' '}
+                <code class="text-xs">{edge.dependent}</code>
+                <span class="ml-2 text-muted">{edge.edgeClass}</span>
               </li>
             )}
           </For>
         </ul>
         <Show when={props.domain === 'discourse'}>
-          <h4>Reader order</h4>
-          <ol class="scene-sequence">
+          <h4 class="mt-4 mb-2 text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
+            Reader order
+          </h4>
+          <ol class="m-0 pl-5">
             <For each={props.view.sceneSequence}>
               {(scene) => (
-                <li>
+                <li class="my-1 text-[0.8125rem] leading-[1.5] text-ink-soft">
                   {scene.sceneId} · chapter {scene.chapter}
                 </li>
               )}
@@ -290,43 +325,52 @@ export function GraphRoute(props: GraphRouteProps) {
     <Show
       when={props.projection}
       fallback={
-        <section class="screen-empty" aria-live="polite">
-          <h2>No canonical graph projection</h2>
-          <p>
-            Select an authenticated project route to load compiler-owned nodes and reader order.
-          </p>
-        </section>
+        <ScreenEmpty
+          title="No canonical graph projection"
+          body="Select an authenticated project route to load compiler-owned nodes and reader order."
+        />
       }
     >
       {(projection) => (
-        <section class="graph-route" aria-labelledby="graph-route-heading">
-          <header>
-            <p class="region-kicker">Canonical route</p>
+        <section class="mx-auto grid max-w-[60rem] gap-6" aria-labelledby="graph-route-heading">
+          <header class="grid gap-1">
+            <p class={KICKER}>Canonical route</p>
             <h2 id="graph-route-heading">Story and discourse graph</h2>
-            <p class="screen-note">
-              Scope: <code>{projection().route.branchScope}</code> · Discourse:{' '}
-              <code>{projection().route.discourseBranch}</code>
-            </p>
+            <ScreenNote>
+              Scope: <code class="text-xs">{projection().route.branchScope}</code> · Discourse:{' '}
+              <code class="text-xs">{projection().route.discourseBranch}</code>
+            </ScreenNote>
           </header>
 
-          <section class="graph-route-selector" aria-labelledby="route-selector-heading">
-            <header class="region-heading">
+          <section
+            class="grid gap-4 rounded-[0.625rem] border border-line bg-surface p-5 shadow-[var(--wb-shadow-panel)]"
+            aria-labelledby="route-selector-heading"
+          >
+            <header class="flex items-start justify-between gap-3">
               <div>
-                <p class="region-kicker">Selected branch</p>
+                <p class={KICKER}>Selected branch</p>
                 <h3 id="route-selector-heading">Route choices</h3>
               </div>
               <Show when={props.fetchingRoute}>
-                <span class="graph-fetching" role="status" aria-label="Reloading projection">
+                <span
+                  class="inline-flex w-max items-center gap-2 rounded-full border border-loading-border bg-loading-surface px-3 py-2 text-[0.6875rem] font-bold leading-none tracking-[0.04em] text-warning"
+                  role="status"
+                  aria-label="Reloading projection"
+                >
                   Reloading projection…
                 </span>
               </Show>
             </header>
             <Show when={projection().route.branchPath.decisions.length > 0}>
-              <ol class="route-decision-trail" aria-label="Selected route decisions">
+              <ol
+                class="m-0 flex list-none flex-wrap gap-2 p-0"
+                aria-label="Selected route decisions"
+              >
                 <For each={projection().route.branchPath.decisions}>
                   {(decision) => (
-                    <li>
-                      <code>{decision.atEventId}</code> → <code>{decision.choiceId}</code>
+                    <li class="rounded-[0.375rem] bg-surface-muted px-2 py-1 text-xs text-ink-soft">
+                      <code class="text-[0.6875rem]">{decision.atEventId}</code> →{' '}
+                      <code class="text-[0.6875rem]">{decision.choiceId}</code>
                     </li>
                   )}
                 </For>
@@ -335,22 +379,24 @@ export function GraphRoute(props: GraphRouteProps) {
             <Show
               when={isRouteLeaf(projection().route)}
               fallback={
-                <ul class="route-choice-list">
+                <ul class="m-0 grid list-none gap-3 p-0">
                   <For each={projection().route.choices}>
                     {(choice) => (
                       <li>
                         <button
                           type="button"
-                          class="route-choice"
+                          class="grid w-full cursor-pointer gap-1 rounded-[0.375rem] border border-line bg-surface px-4 py-3 text-left text-ink transition-[background,border-color] duration-[160ms] enabled:hover:border-line-strong enabled:hover:bg-surface-muted disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-muted"
                           disabled={!props.onRouteChange || props.fetchingRoute}
                           onClick={() => chooseRoute(choice)}
                           aria-label={`Choose ${choice.label}`}
                         >
-                          <span class="route-choice-label">{choice.label}</span>
-                          <span class="route-choice-meta">
+                          <span class="text-sm font-[750]">{choice.label}</span>
+                          <span class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
                             {choice.eventId} → {choice.targetEventId}
                           </span>
-                          <span class="route-choice-description">{choice.description}</span>
+                          <span class="text-[0.8125rem] leading-[1.5] text-ink-soft">
+                            {choice.description}
+                          </span>
                         </button>
                       </li>
                     )}
@@ -358,17 +404,17 @@ export function GraphRoute(props: GraphRouteProps) {
                 </ul>
               }
             >
-              <p class="screen-note">
+              <ScreenNote>
                 This route is a leaf — the canonical compiler exposes no further choices.
-              </p>
+              </ScreenNote>
             </Show>
             <Show when={!props.onRouteChange && projection().route.choices.length > 0}>
-              <p class="screen-note">Route switching is not connected in this workspace yet.</p>
+              <ScreenNote>Route switching is not connected in this workspace yet.</ScreenNote>
             </Show>
             <Show when={props.onRouteChange && projection().route.branchPath.decisions.length > 0}>
               <button
                 type="button"
-                class="text-button"
+                class={TEXT_BUTTON}
                 disabled={props.fetchingRoute}
                 onClick={resetRoute}
               >
@@ -378,19 +424,19 @@ export function GraphRoute(props: GraphRouteProps) {
           </section>
 
           <Tabs
-            class="graph-domain-tabs-root"
+            class={TABS_ROOT}
             value={activeDomain()}
             onChange={(value) => setActiveDomain(value as WorkbenchGraphDomainV1)}
           >
-            <Tabs.List class="graph-domain-tabs" aria-label="Graph domain">
-              <Tabs.Trigger class="graph-domain-tab" value="story">
+            <Tabs.List class={TABS_LIST} aria-label="Graph domain">
+              <Tabs.Trigger class={TABS_TRIGGER} value="story">
                 Story
               </Tabs.Trigger>
-              <Tabs.Trigger class="graph-domain-tab" value="discourse">
+              <Tabs.Trigger class={TABS_TRIGGER} value="discourse">
                 Discourse
               </Tabs.Trigger>
             </Tabs.List>
-            <Tabs.Content value="story">
+            <Tabs.Content class={TABS_CONTENT} value="story">
               <Show when={activeDomain() === 'story'}>
                 <GraphDomainPanel
                   domain="story"
@@ -403,7 +449,7 @@ export function GraphRoute(props: GraphRouteProps) {
                 />
               </Show>
             </Tabs.Content>
-            <Tabs.Content value="discourse">
+            <Tabs.Content class={TABS_CONTENT} value="discourse">
               <Show when={activeDomain() === 'discourse'}>
                 <GraphDomainPanel
                   domain="discourse"

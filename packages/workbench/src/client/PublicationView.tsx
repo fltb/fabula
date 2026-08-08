@@ -10,6 +10,15 @@ import type {
   ProjectAccessRole,
 } from '../contracts/index.js';
 import { BrowserPublicationApiError } from './browser-publication-api.js';
+import {
+  BUTTON,
+  BUTTON_GHOST,
+  BUTTON_PRIMARY,
+  Diagnostic,
+  KICKER,
+  ScreenEmpty,
+  ScreenNote,
+} from './ui/primitives';
 
 export interface PublicationViewProps {
   /** Project identity for publish requests; null when no project is open. */
@@ -141,73 +150,96 @@ function PublicationCard(props: {
 
   return (
     <li
-      class="publication-card"
+      class="grid gap-4 rounded-[0.625rem] border border-line bg-surface p-5 shadow-[var(--wb-shadow-panel)]"
       data-publication-id={record().publicationId}
       data-status={record().status}
       data-kind={record().kind}
     >
-      <div class="publication-heading">
-        <span class="publication-kind" data-kind={record().kind}>
+      <div class="flex flex-wrap items-center gap-2">
+        <span
+          class="rounded-full bg-surface-deep px-2 py-1 text-[0.625rem] font-extrabold uppercase leading-[1.2] tracking-[0.06em] text-focus"
+          data-kind={record().kind}
+        >
           {record().kind}
         </span>
-        <span class="publication-status" data-status={record().status}>
+        <span
+          class="rounded-full bg-ready-surface px-2 py-1 text-[0.625rem] font-extrabold uppercase leading-[1.2] tracking-[0.06em] text-success"
+          classList={{ 'bg-loading-surface text-warning': record().status === 'stale' }}
+          data-status={record().status}
+        >
           {record().status}
         </span>
-        <code class="publication-id">{record().publicationId}</code>
+        <code class="text-[0.6875rem] text-muted">{record().publicationId}</code>
       </div>
-      <dl class="publication-meta">
-        <div>
-          <dt>文件</dt>
-          <dd>
+      <dl class="m-0 grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-2">
+        <div class="grid gap-1 rounded-[0.375rem] bg-surface-muted px-3 py-2">
+          <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">文件</dt>
+          <dd class="m-0 text-[0.8125rem] [overflow-wrap:anywhere]">
             <code>{record().relativeOutputPath}</code>
           </dd>
         </div>
-        <div>
-          <dt>成书哈希</dt>
-          <dd>
+        <div class="grid gap-1 rounded-[0.375rem] bg-surface-muted px-3 py-2">
+          <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
+            成书哈希
+          </dt>
+          <dd class="m-0 text-[0.8125rem] [overflow-wrap:anywhere]">
             <code title={record().novelHash}>{shortHash(record().novelHash)}</code>
           </dd>
         </div>
-        <div>
-          <dt>源哈希</dt>
-          <dd>
+        <div class="grid gap-1 rounded-[0.375rem] bg-surface-muted px-3 py-2">
+          <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
+            源哈希
+          </dt>
+          <dd class="m-0 text-[0.8125rem] [overflow-wrap:anywhere]">
             <code title={record().sourceHash}>{shortHash(record().sourceHash)}</code>
           </dd>
         </div>
-        <div>
-          <dt>范围哈希</dt>
-          <dd>
+        <div class="grid gap-1 rounded-[0.375rem] bg-surface-muted px-3 py-2">
+          <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
+            范围哈希
+          </dt>
+          <dd class="m-0 text-[0.8125rem] [overflow-wrap:anywhere]">
             <code title={record().scopeHash}>{shortHash(record().scopeHash)}</code>
           </dd>
         </div>
-        <div>
-          <dt>场景数</dt>
-          <dd>{record().sceneCount}</dd>
+        <div class="grid gap-1 rounded-[0.375rem] bg-surface-muted px-3 py-2">
+          <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
+            场景数
+          </dt>
+          <dd class="m-0 text-[0.8125rem] [overflow-wrap:anywhere]">{record().sceneCount}</dd>
         </div>
-        <div>
-          <dt>字数</dt>
-          <dd>{record().wordCount}</dd>
+        <div class="grid gap-1 rounded-[0.375rem] bg-surface-muted px-3 py-2">
+          <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">字数</dt>
+          <dd class="m-0 text-[0.8125rem] [overflow-wrap:anywhere]">{record().wordCount}</dd>
         </div>
-        <div>
-          <dt>字节</dt>
-          <dd>{record().byteLength}</dd>
+        <div class="grid gap-1 rounded-[0.375rem] bg-surface-muted px-3 py-2">
+          <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">字节</dt>
+          <dd class="m-0 text-[0.8125rem] [overflow-wrap:anywhere]">{record().byteLength}</dd>
         </div>
-        <div>
-          <dt>修订数</dt>
-          <dd>{record().revisionIds.length}</dd>
+        <div class="grid gap-1 rounded-[0.375rem] bg-surface-muted px-3 py-2">
+          <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
+            修订数
+          </dt>
+          <dd class="m-0 text-[0.8125rem] [overflow-wrap:anywhere]">
+            {record().revisionIds.length}
+          </dd>
         </div>
-        <div>
-          <dt>更新时间</dt>
-          <dd>{record().updatedAt}</dd>
+        <div class="grid gap-1 rounded-[0.375rem] bg-surface-muted px-3 py-2">
+          <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
+            更新时间
+          </dt>
+          <dd class="m-0 text-[0.8125rem] [overflow-wrap:anywhere]">{record().updatedAt}</dd>
         </div>
       </dl>
       <Show when={record().staleReasons.length > 0}>
-        <section class="publication-stale" aria-label="过期原因">
-          <h4>过期原因</h4>
-          <ul>
+        <section class="grid gap-2" aria-label="过期原因">
+          <h4 class="m-0 text-[0.6875rem] font-extrabold uppercase tracking-[0.08em] text-warning">
+            过期原因
+          </h4>
+          <ul class="m-0 grid list-none gap-1 p-0">
             <For each={record().staleReasons}>
               {(reason) => (
-                <li data-stale-reason={reason}>
+                <li class="text-xs text-muted" data-stale-reason={reason}>
                   <code>{reason}</code>
                 </li>
               )}
@@ -217,7 +249,7 @@ function PublicationCard(props: {
       </Show>
       <Show when={props.onRead !== undefined}>
         <button
-          class="btn"
+          class={BUTTON}
           type="button"
           disabled={downloading()}
           data-testid={`publication-download-${record().publicationId}`}
@@ -301,15 +333,15 @@ export function PublicationView(props: PublicationViewProps) {
   };
 
   return (
-    <section class="publication-view" aria-labelledby="publication-heading">
-      <header class="publication-header">
+    <section class="mx-auto grid max-w-[60rem] gap-6" aria-labelledby="publication-heading">
+      <header class="flex items-start justify-between gap-3">
         <div>
-          <p class="region-kicker">成书输出</p>
+          <p class={KICKER}>成书输出</p>
           <h2 id="publication-heading">发布产物</h2>
         </div>
         <Show when={props.onRefresh !== undefined}>
           <button
-            class="btn"
+            class={BUTTON}
             type="button"
             data-testid="publication-refresh"
             onClick={() => void props.onRefresh?.()}
@@ -320,22 +352,14 @@ export function PublicationView(props: PublicationViewProps) {
       </header>
 
       <Show when={mutationError() !== null}>
-        <p
-          class="diagnostic diagnostic-error"
-          role="alert"
-          data-testid="publication-mutation-error"
-        >
-          {mutationError()}
-        </p>
+        <div role="alert" data-testid="publication-mutation-error">
+          <Diagnostic severity="error">{mutationError()}</Diagnostic>
+        </div>
       </Show>
       <Show when={publishSuccess()}>
-        <p
-          class="diagnostic diagnostic-success"
-          role="status"
-          data-testid="publication-publish-success"
-        >
-          发布请求已接受 — 正在排队装配成书文件。
-        </p>
+        <div role="status" data-testid="publication-publish-success">
+          <Diagnostic severity="success">发布请求已接受 — 正在排队装配成书文件。</Diagnostic>
+        </div>
       </Show>
 
       <Show
@@ -344,35 +368,35 @@ export function PublicationView(props: PublicationViewProps) {
           <Show
             when={props.publicationsError !== null && props.publicationsError !== undefined}
             fallback={
-              <section class="screen-empty" aria-live="polite">
-                <h3>暂无发布数据</h3>
-                <p>打开已认证的项目以加载其发布记录。</p>
-              </section>
+              <ScreenEmpty title="暂无发布数据" body="打开已认证的项目以加载其发布记录。" />
             }
           >
-            <section class="screen-empty" aria-live="polite" data-testid="publication-load-error">
-              <h3>发布目录加载失败</h3>
-              <p>{props.publicationsError}</p>
-              <Show when={props.onRefresh !== undefined}>
-                <button
-                  class="btn"
-                  type="button"
-                  data-testid="publication-load-retry"
-                  onClick={() => void props.onRefresh?.()}
-                >
-                  重试
-                </button>
-              </Show>
-            </section>
+            <div data-testid="publication-load-error">
+              <ScreenEmpty title="发布目录加载失败" body={props.publicationsError ?? undefined}>
+                <Show when={props.onRefresh !== undefined}>
+                  <button
+                    class={BUTTON}
+                    type="button"
+                    data-testid="publication-load-retry"
+                    onClick={() => void props.onRefresh?.()}
+                  >
+                    重试
+                  </button>
+                </Show>
+              </ScreenEmpty>
+            </div>
           </Show>
         }
       >
         {(catalog) => (
-          <section class="publication-list-section" aria-labelledby="publication-list-heading">
-            <div class="publication-section-heading">
+          <section aria-labelledby="publication-list-heading">
+            <div class="flex flex-wrap items-center justify-between gap-3">
               <h3 id="publication-list-heading">
                 发布记录{' '}
-                <span class="publication-count" data-testid="publication-count">
+                <span
+                  class="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-accent-wash px-1 text-[0.6875rem] font-extrabold text-accent-deep"
+                  data-testid="publication-count"
+                >
                   {catalog().publications.length}
                 </span>
               </h3>
@@ -381,7 +405,7 @@ export function PublicationView(props: PublicationViewProps) {
                   when={publishOpen()}
                   fallback={
                     <button
-                      class="btn btn-primary"
+                      class={`${BUTTON} ${BUTTON_PRIMARY}`}
                       type="button"
                       data-testid="publication-publish-open"
                       onClick={() => setPublishOpen(true)}
@@ -391,13 +415,14 @@ export function PublicationView(props: PublicationViewProps) {
                   }
                 >
                   <form
-                    class="publication-publish-form"
+                    class="grid gap-2 rounded-[0.625rem] border border-line bg-surface-muted p-4"
                     onSubmit={(event) => {
                       event.preventDefault();
                       publish();
                     }}
                   >
                     <input
+                      class="rounded-[0.375rem] border border-line bg-surface px-3 py-2 text-ink [font:inherit] focus-visible:outline-3 focus-visible:outline-focus focus-visible:outline-offset-2"
                       aria-label="分支名"
                       placeholder="分支名（可选）"
                       value={branchName()}
@@ -405,6 +430,7 @@ export function PublicationView(props: PublicationViewProps) {
                       data-testid="publication-branch-name"
                     />
                     <input
+                      class="rounded-[0.375rem] border border-line bg-surface px-3 py-2 text-ink [font:inherit] focus-visible:outline-3 focus-visible:outline-focus focus-visible:outline-offset-2"
                       aria-label="相对输出路径"
                       placeholder="相对输出路径（如 output/novel.md）"
                       value={relativePath()}
@@ -412,6 +438,7 @@ export function PublicationView(props: PublicationViewProps) {
                       data-testid="publication-relative-path"
                     />
                     <input
+                      class="rounded-[0.375rem] border border-line bg-surface px-3 py-2 text-ink [font:inherit] focus-visible:outline-3 focus-visible:outline-focus focus-visible:outline-offset-2"
                       aria-label="标题"
                       placeholder="标题（可选）"
                       value={title()}
@@ -419,14 +446,14 @@ export function PublicationView(props: PublicationViewProps) {
                       data-testid="publication-title"
                     />
                     <button
-                      class="btn btn-primary"
+                      class={`${BUTTON} ${BUTTON_PRIMARY}`}
                       type="submit"
                       data-testid="publication-publish-save"
                     >
                       发布
                     </button>
                     <button
-                      class="btn btn-ghost"
+                      class={`${BUTTON} ${BUTTON_GHOST}`}
                       type="button"
                       onClick={() => setPublishOpen(false)}
                     >
@@ -438,9 +465,9 @@ export function PublicationView(props: PublicationViewProps) {
             </div>
             <Show
               when={catalog().publications.length > 0}
-              fallback={<p class="screen-note">还没有发布产物。发布已接受的章节以生成成书文件。</p>}
+              fallback={<ScreenNote>还没有发布产物。发布已接受的章节以生成成书文件。</ScreenNote>}
             >
-              <ul class="publication-list" aria-label="发布记录">
+              <ul class="m-0 grid list-none gap-4 p-0" aria-label="发布记录">
                 <For each={catalog().publications}>
                   {(record) => (
                     <PublicationCard

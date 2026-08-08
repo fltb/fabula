@@ -7,6 +7,7 @@ import type {
   SceneDetailViewV1,
   SceneSummaryRowV1,
 } from '../contracts/index.js';
+import { BUTTON, BUTTON_PRIMARY, KICKER } from './ui/primitives';
 
 export interface SceneInspectorProps {
   /** Display metadata of the selected row; the detail DTO carries no title/sceneType. */
@@ -34,6 +35,23 @@ function shortHash(value: string | null | undefined): string {
   if (value === null || value === undefined || value.length === 0) return '—';
   return value.length <= 8 ? value : `${value.slice(0, 8)}…`;
 }
+
+/** Replaces `.scene-chip` (+ the `.scene-chip-discourse` tint). */
+const SCENE_CHIP =
+  'inline-flex w-max items-center gap-1 whitespace-nowrap rounded-full border border-line bg-surface px-2 py-1 text-[0.625rem] font-extrabold leading-[1.3] tracking-[0.03em] text-ink-soft';
+
+/** Replaces `.scene-inspector-card` (+ `mx-3 mb-3` when nested in technical details). */
+const SCENE_CARD = 'grid gap-2 rounded-[0.625rem] border border-line bg-surface p-3';
+
+/** Replaces `.scene-adopt-badge`; the status tint is appended at use. */
+const ADOPT_BADGE =
+  'rounded-full border border-line px-1.5 py-px font-mono text-[0.5625rem] leading-[1.3] text-muted';
+
+/** Replaces `.scene-adopt-badge-adopted_current` / `-adopted_stale`. */
+const ADOPT_BADGE_TONE: Readonly<Record<string, string>> = {
+  adopted_current: 'text-success bg-ready-surface border-ready-border',
+  adopted_stale: 'text-warning bg-loading-surface border-loading-border',
+};
 
 function roleRank(role: ProjectAccessRole | null | undefined): number {
   if (role === null || role === undefined) return 0;
@@ -122,18 +140,23 @@ function narrativeHints(diff: DiffResult): string[] {
 
 function EmptyInspector(props: { readonly detailError?: string | null }) {
   return (
-    <div class="scene-inspector-empty" aria-live="polite">
+    <div
+      class="grid gap-2 rounded-[0.625rem] border border-dashed border-line-strong bg-surface p-5"
+      aria-live="polite"
+    >
       <Show
         when={props.detailError}
         fallback={
           <>
-            <h3>未选择场景</h3>
-            <p>在场景地图中选择一个场景行以查看其编译契约。</p>
+            <h3 class="m-0 text-sm">未选择场景</h3>
+            <p class="m-0 text-xs leading-[1.55] text-muted">
+              在场景地图中选择一个场景行以查看其编译契约。
+            </p>
           </>
         }
       >
-        <h3>场景详情加载失败</h3>
-        <p>{props.detailError}</p>
+        <h3 class="m-0 text-sm">场景详情加载失败</h3>
+        <p class="m-0 text-xs leading-[1.55] text-muted">{props.detailError}</p>
       </Show>
     </div>
   );
@@ -175,63 +198,69 @@ function SceneInspectorBody(props: {
 
   return (
     <>
-      <div class="scene-inspector-head">
-        <p class="region-kicker">场景详情</p>
-        <div class="scene-inspector-title">
-          <span class="scene-inspector-id">{detail().eventId}</span>
-          <h3>{row()?.title ?? detail().eventId}</h3>
+      <div class="grid gap-1">
+        <p class={KICKER}>场景详情</p>
+        <div class="flex flex-wrap items-baseline gap-2">
+          <span class="font-mono text-sm font-extrabold text-accent-deep">{detail().eventId}</span>
+          <h3 class="m-0 text-[0.9375rem]">{row()?.title ?? detail().eventId}</h3>
         </div>
-        <div class="scene-inspector-chips">
+        <div class="flex flex-wrap gap-1">
           <Show when={(row()?.sceneType?.length ?? 0) > 0}>
-            <span class="scene-chip">{row()?.sceneType}</span>
+            <span class={SCENE_CHIP}>{row()?.sceneType}</span>
           </Show>
           <Show when={detail().discourse.discourseMode !== null}>
-            <span class="scene-chip scene-chip-discourse">{detail().discourse.discourseMode}</span>
+            <span class={`${SCENE_CHIP} text-focus`}>{detail().discourse.discourseMode}</span>
           </Show>
           <Show when={(row()?.storyTime?.length ?? 0) > 0}>
-            <span class="scene-chip">{row()?.storyTime}</span>
+            <span class={SCENE_CHIP}>{row()?.storyTime}</span>
           </Show>
           <Show when={row() !== null}>
-            <span class="scene-chip">
+            <span class={SCENE_CHIP}>
               CH.{row()?.coordinate.chapter} · #{row()?.coordinate.narrativeOrder}
             </span>
           </Show>
         </div>
       </div>
 
-      <section class="scene-inspector-card" aria-label="渲染状态">
-        <div class="scene-inspector-card-head">
-          <h4>渲染状态</h4>
+      <section class={SCENE_CARD} aria-label="渲染状态">
+        <div class="flex items-center justify-between gap-2">
+          <h4 class="m-0 text-[0.6875rem] uppercase tracking-[0.06em] text-muted">渲染状态</h4>
           <span
-            class={`scene-adopt-badge scene-adopt-badge-${detail().renderStatus}`}
+            class={`${ADOPT_BADGE} ${ADOPT_BADGE_TONE[detail().renderStatus] ?? ''}`}
             data-status={detail().renderStatus}
           >
             {renderStatusLabel()}
           </span>
         </div>
         <Show when={detail().stale}>
-          <p class="scene-inspector-warning">
+          <p class="m-0 rounded-[0.375rem] border border-loading-border bg-loading-surface p-2 text-[0.6875rem] leading-[1.5] text-warning">
             该场景的上下文指纹已变化（frontmatter sceneHash ≠ 当前编译
             sceneHash）。重新渲染不会静默覆盖手改散文。
           </p>
         </Show>
-        <dl class="scene-inspector-meta">
-          <div>
-            <dt>sceneHash</dt>
-            <dd title={detail().hashes.sceneHash ?? undefined}>
+        <dl class="m-0 grid gap-1">
+          <div class="grid grid-cols-[8rem_minmax(0,1fr)] gap-2">
+            <dt class="text-[0.625rem] font-extrabold text-muted">sceneHash</dt>
+            <dd
+              class="m-0 font-mono text-[0.6875rem] [overflow-wrap:anywhere]"
+              title={detail().hashes.sceneHash ?? undefined}
+            >
               {shortHash(detail().hashes.sceneHash)}
             </dd>
           </div>
-          <div>
-            <dt>proseHash</dt>
-            <dd title={detail().hashes.proseHash ?? undefined}>
+          <div class="grid grid-cols-[8rem_minmax(0,1fr)] gap-2">
+            <dt class="text-[0.625rem] font-extrabold text-muted">proseHash</dt>
+            <dd
+              class="m-0 font-mono text-[0.6875rem] [overflow-wrap:anywhere]"
+              title={detail().hashes.proseHash ?? undefined}
+            >
               {shortHash(detail().hashes.proseHash)}
             </dd>
           </div>
         </dl>
-        <div class="scene-inspector-actions">
+        <div class="flex flex-wrap gap-2">
           <button
-            class="btn btn-primary"
+            class={`${BUTTON} ${BUTTON_PRIMARY}`}
             type="button"
             disabled={!canRender() || props.renderBusy === true}
             onClick={() => props.onRenderScene?.(detail().eventId)}
@@ -240,7 +269,7 @@ function SceneInspectorBody(props: {
           </button>
           <Show when={detail().renderStatus === 'unadopted'}>
             <button
-              class="btn"
+              class={BUTTON}
               type="button"
               disabled={!canAdopt() || props.renderBusy === true}
               onClick={() => {
@@ -253,38 +282,55 @@ function SceneInspectorBody(props: {
           </Show>
         </div>
         <Show when={detail().renderStatus === 'unadopted' && adoptionCandidate() === null}>
-          <p class="scene-inspector-note">
+          <p class="m-0 text-[0.6875rem] leading-[1.5] text-muted">
             渲染该场景以产生 released revision 后再采纳；若已存在 released
             revision，选中行后会显示采纳预览。
           </p>
         </Show>
         <Show when={props.renderError !== null && props.renderError !== undefined}>
-          <p class="scene-inspector-error" aria-live="polite">
+          <p
+            class="m-0 rounded-[0.375rem] border border-error-border bg-error-surface p-2 text-[0.6875rem] leading-[1.5] text-danger"
+            aria-live="polite"
+          >
             {props.renderError}
           </p>
         </Show>
         <Show when={props.renderNotice !== null && props.renderNotice !== undefined}>
-          <p class="scene-inspector-note" aria-live="polite">
+          <p class="m-0 text-[0.6875rem] leading-[1.5] text-muted" aria-live="polite">
             {props.renderNotice}
           </p>
         </Show>
       </section>
 
-      <section class="scene-inspector-card" aria-label="WorldState diff">
-        <div class="scene-inspector-card-head">
-          <h4>WorldState 差异</h4>
-          <span class="scene-inspector-count">{detail().diff.changed.length} 处变化</span>
+      <section class={SCENE_CARD} aria-label="WorldState diff">
+        <div class="flex items-center justify-between gap-2">
+          <h4 class="m-0 text-[0.6875rem] uppercase tracking-[0.06em] text-muted">
+            WorldState 差异
+          </h4>
+          <span class="font-mono text-[0.625rem] text-muted">
+            {detail().diff.changed.length} 处变化
+          </span>
         </div>
         <Show
           when={detail().diff.changed.length > 0}
-          fallback={<p class="scene-inspector-note">该场景没有 world-state 变化。</p>}
+          fallback={
+            <p class="m-0 text-[0.6875rem] leading-[1.5] text-muted">
+              该场景没有 world-state 变化。
+            </p>
+          }
         >
-          <table class="scene-diff">
+          <table class="w-full border-collapse font-mono text-[0.6875rem]">
             <thead>
               <tr>
-                <th>实体</th>
-                <th>属性</th>
-                <th>变化</th>
+                <th class="border-b border-line px-2 py-1 text-left text-[0.5625rem] uppercase tracking-[0.06em] text-muted">
+                  实体
+                </th>
+                <th class="border-b border-line px-2 py-1 text-left text-[0.5625rem] uppercase tracking-[0.06em] text-muted">
+                  属性
+                </th>
+                <th class="border-b border-line px-2 py-1 text-left text-[0.5625rem] uppercase tracking-[0.06em] text-muted">
+                  变化
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -292,29 +338,33 @@ function SceneInspectorBody(props: {
                 {(key) => (
                   <For each={diffRows(key, detail().diff)}>
                     {(attributeRow) => (
-                      <tr class="scene-diff-row">
-                        <td class="scene-diff-ent">{attributeRow.entityId}</td>
-                        <td class="scene-diff-attr">{attributeRow.attribute}</td>
-                        <td class="scene-diff-change">
+                      <tr>
+                        <td class="border-b border-dashed border-line px-2 py-1 align-top [overflow-wrap:anywhere] font-bold">
+                          {attributeRow.entityId}
+                        </td>
+                        <td class="border-b border-dashed border-line px-2 py-1 align-top [overflow-wrap:anywhere] text-muted">
+                          {attributeRow.attribute}
+                        </td>
+                        <td class="border-b border-dashed border-line px-2 py-1 align-top [overflow-wrap:anywhere]">
                           <Show
                             when={attributeRow.before !== null}
                             fallback={
-                              <span class="scene-diff-after">
+                              <span class="font-bold text-success">
                                 + {formatValue(attributeRow.after)}
                               </span>
                             }
                           >
-                            <span class="scene-diff-before">
+                            <span class="text-danger opacity-75 line-through">
                               {formatValue(attributeRow.before)}
                             </span>
                             <Show when={attributeRow.after !== null}>
-                              <span class="scene-diff-arrow">→</span>
-                              <span class="scene-diff-after">
+                              <span class="px-1 text-muted">→</span>
+                              <span class="font-bold text-success">
                                 {formatValue(attributeRow.after)}
                               </span>
                             </Show>
                             <Show when={attributeRow.after === null}>
-                              <span class="scene-diff-removed"> (移除)</span>
+                              <span class="italic text-danger"> (移除)</span>
                             </Show>
                           </Show>
                         </td>
@@ -327,40 +377,52 @@ function SceneInspectorBody(props: {
           </table>
         </Show>
         <Show when={hints().length > 0}>
-          <div class="scene-narrative-hint" role="note" aria-label="叙述提示">
-            <span class="scene-narrative-tag">narrativeHint</span>
-            <ul>
+          <div
+            class="mt-2 grid gap-1 rounded-[0.375rem] border border-loading-border bg-loading-surface p-2"
+            role="note"
+            aria-label="叙述提示"
+          >
+            <span class="w-max text-[0.5625rem] font-extrabold uppercase tracking-[0.06em] text-warning">
+              narrativeHint
+            </span>
+            <ul class="m-0 space-y-1 pl-[1.1rem] text-[0.6875rem] leading-[1.5] text-ink-soft">
               <For each={hints()}>{(hint) => <li>{hint}</li>}</For>
             </ul>
           </div>
         </Show>
       </section>
 
-      <section class="scene-inspector-card" aria-label="实体状态">
-        <div class="scene-inspector-card-head">
-          <h4>实体状态</h4>
-          <span class="scene-inspector-count">{detail().entities.length}</span>
+      <section class={SCENE_CARD} aria-label="实体状态">
+        <div class="flex items-center justify-between gap-2">
+          <h4 class="m-0 text-[0.6875rem] uppercase tracking-[0.06em] text-muted">实体状态</h4>
+          <span class="font-mono text-[0.625rem] text-muted">{detail().entities.length}</span>
         </div>
         <Show
           when={detail().entities.length > 0}
-          fallback={<p class="scene-inspector-note">该场景没有受影响的实体。</p>}
+          fallback={
+            <p class="m-0 text-[0.6875rem] leading-[1.5] text-muted">该场景没有受影响的实体。</p>
+          }
         >
-          <ul class="scene-entity-list">
+          <ul class="m-0 grid list-none gap-1 p-0">
             <For each={detail().entities}>
               {(entity) => (
-                <li class="scene-entity">
-                  <details>
-                    <summary>
-                      <span class="scene-entity-kind">{entity.kind}</span>
-                      <span class="scene-entity-id">{entity.id}</span>
-                      <span class="scene-entity-name">{entity.name}</span>
+                <li>
+                  <details class="rounded-[0.375rem] border border-line bg-surface">
+                    <summary class="flex cursor-pointer items-baseline gap-2 px-2 py-1 text-[0.6875rem]">
+                      <span class="rounded-full bg-surface-deep px-1.5 text-[0.5625rem] font-extrabold text-focus">
+                        {entity.kind}
+                      </span>
+                      <span class="font-mono font-bold">{entity.id}</span>
+                      <span class="text-muted">{entity.name}</span>
                     </summary>
-                    <dl class="scene-entity-state">
+                    <dl class="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 border-t border-dashed border-line p-2 text-[0.625rem]">
                       <For each={Object.entries(entity.state)}>
                         {([attribute, value]) => (
                           <>
-                            <dt>{attribute}</dt>
-                            <dd>{formatValue(value)}</dd>
+                            <dt class="font-mono text-muted">{attribute}</dt>
+                            <dd class="m-0 font-mono [overflow-wrap:anywhere]">
+                              {formatValue(value)}
+                            </dd>
                           </>
                         )}
                       </For>
@@ -373,33 +435,43 @@ function SceneInspectorBody(props: {
         </Show>
       </section>
 
-      <section class="scene-inspector-card" aria-label="Discourse 投影">
-        <div class="scene-inspector-card-head">
-          <h4>Discourse 投影</h4>
-          <span class="scene-inspector-count">已规划</span>
+      <section class={SCENE_CARD} aria-label="Discourse 投影">
+        <div class="flex items-center justify-between gap-2">
+          <h4 class="m-0 text-[0.6875rem] uppercase tracking-[0.06em] text-muted">
+            Discourse 投影
+          </h4>
+          <span class="font-mono text-[0.625rem] text-muted">已规划</span>
         </div>
-        <dl class="scene-inspector-meta">
-          <div>
-            <dt>ledger</dt>
-            <dd>{detail().discourse.ledgerId ?? '—'}</dd>
+        <dl class="m-0 grid gap-1">
+          <div class="grid grid-cols-[8rem_minmax(0,1fr)] gap-2">
+            <dt class="text-[0.625rem] font-extrabold text-muted">ledger</dt>
+            <dd class="m-0 font-mono text-[0.6875rem] [overflow-wrap:anywhere]">
+              {detail().discourse.ledgerId ?? '—'}
+            </dd>
           </div>
-          <div>
-            <dt>discourseMode</dt>
-            <dd>{detail().discourse.discourseMode ?? '—'}</dd>
+          <div class="grid grid-cols-[8rem_minmax(0,1fr)] gap-2">
+            <dt class="text-[0.625rem] font-extrabold text-muted">discourseMode</dt>
+            <dd class="m-0 font-mono text-[0.6875rem] [overflow-wrap:anywhere]">
+              {detail().discourse.discourseMode ?? '—'}
+            </dd>
           </div>
-          <div>
-            <dt>discoursePosition</dt>
-            <dd>{detail().discourse.discoursePosition ?? '—'}</dd>
+          <div class="grid grid-cols-[8rem_minmax(0,1fr)] gap-2">
+            <dt class="text-[0.625rem] font-extrabold text-muted">discoursePosition</dt>
+            <dd class="m-0 font-mono text-[0.6875rem] [overflow-wrap:anywhere]">
+              {detail().discourse.discoursePosition ?? '—'}
+            </dd>
           </div>
         </dl>
         <Show when={detail().discourse.assertions.length > 0}>
-          <ul class="scene-assertion-list">
+          <ul class="m-0 grid list-none gap-1 p-0">
             <For each={detail().discourse.assertions}>
               {(assertion) => (
-                <li>
-                  <span class="scene-assertion-id">{assertion.assertionId}</span>
-                  <span class="scene-assertion-action">{assertion.action}</span>
-                  <span class="scene-assertion-pos">pos {assertion.discoursePosition}</span>
+                <li class="flex items-baseline gap-2 text-[0.6875rem]">
+                  <span class="font-mono text-muted">{assertion.assertionId}</span>
+                  <span class="font-bold">{assertion.action}</span>
+                  <span class="ml-auto font-mono text-muted">
+                    pos {assertion.discoursePosition}
+                  </span>
                 </li>
               )}
             </For>
@@ -407,23 +479,27 @@ function SceneInspectorBody(props: {
         </Show>
       </section>
 
-      <section class="scene-inspector-card" aria-label="因果图位置">
-        <div class="scene-inspector-card-head">
-          <h4>因果图位置</h4>
-          <span class="scene-inspector-count">{detail().graphEdges.length}</span>
+      <section class={SCENE_CARD} aria-label="因果图位置">
+        <div class="flex items-center justify-between gap-2">
+          <h4 class="m-0 text-[0.6875rem] uppercase tracking-[0.06em] text-muted">因果图位置</h4>
+          <span class="font-mono text-[0.625rem] text-muted">{detail().graphEdges.length}</span>
         </div>
         <Show
           when={detail().graphEdges.length > 0}
-          fallback={<p class="scene-inspector-note">该场景没有已投影的图边。</p>}
+          fallback={
+            <p class="m-0 text-[0.6875rem] leading-[1.5] text-muted">该场景没有已投影的图边。</p>
+          }
         >
-          <ul class="scene-edge-list">
+          <ul class="m-0 grid list-none gap-1 p-0">
             <For each={detail().graphEdges}>
               {(edge) => (
-                <li class="scene-edge">
-                  <span class="scene-edge-class">{edge.edgeClass}</span>
-                  <span class="scene-edge-from">{edge.predecessor}</span>
-                  <span class="scene-edge-arrow">→</span>
-                  <span class="scene-edge-to">{edge.dependent}</span>
+                <li class="flex flex-wrap items-baseline gap-2 text-[0.6875rem]">
+                  <span class="rounded-full bg-accent-wash px-1.5 text-[0.5625rem] font-extrabold text-accent-deep">
+                    {edge.edgeClass}
+                  </span>
+                  <span class="font-mono">{edge.predecessor}</span>
+                  <span class="text-muted">→</span>
+                  <span class="font-mono">{edge.dependent}</span>
                 </li>
               )}
             </For>
@@ -431,52 +507,79 @@ function SceneInspectorBody(props: {
         </Show>
       </section>
 
-      <details class="scene-technical-details" open={false}>
-        <summary>技术详情</summary>
-        <section class="scene-inspector-card" aria-label="CompiledSceneContract 哈希">
-          <div class="scene-inspector-card-head">
-            <h4>CompiledSceneContract</h4>
+      <details class="mt-3 rounded-[0.375rem] border border-line bg-surface-muted" open={false}>
+        <summary class="cursor-pointer select-none px-3 py-2 text-[0.6875rem] font-extrabold uppercase tracking-[0.06em] text-muted">
+          技术详情
+        </summary>
+        <section class={`${SCENE_CARD} mx-3 mb-3`} aria-label="CompiledSceneContract 哈希">
+          <div class="flex items-center justify-between gap-2">
+            <h4 class="m-0 text-[0.6875rem] uppercase tracking-[0.06em] text-muted">
+              CompiledSceneContract
+            </h4>
           </div>
-          <dl class="scene-hash-list">
-            <div>
-              <dt>stateBefore</dt>
-              <dd title={detail().hashes.stateBeforeHash}>
+          <dl class="m-0 grid gap-1">
+            <div class="grid grid-cols-[8rem_minmax(0,1fr)] gap-2">
+              <dt class="text-[0.625rem] font-extrabold text-muted">stateBefore</dt>
+              <dd
+                class="m-0 font-mono text-[0.6875rem] [overflow-wrap:anywhere]"
+                title={detail().hashes.stateBeforeHash}
+              >
                 {shortHash(detail().hashes.stateBeforeHash)}
               </dd>
             </div>
-            <div>
-              <dt>stateAfter</dt>
-              <dd title={detail().hashes.stateAfterHash}>
+            <div class="grid grid-cols-[8rem_minmax(0,1fr)] gap-2">
+              <dt class="text-[0.625rem] font-extrabold text-muted">stateAfter</dt>
+              <dd
+                class="m-0 font-mono text-[0.6875rem] [overflow-wrap:anywhere]"
+                title={detail().hashes.stateAfterHash}
+              >
                 {shortHash(detail().hashes.stateAfterHash)}
               </dd>
             </div>
-            <div>
-              <dt>worldHash</dt>
-              <dd title={detail().hashes.worldStateHash}>
+            <div class="grid grid-cols-[8rem_minmax(0,1fr)] gap-2">
+              <dt class="text-[0.625rem] font-extrabold text-muted">worldHash</dt>
+              <dd
+                class="m-0 font-mono text-[0.6875rem] [overflow-wrap:anywhere]"
+                title={detail().hashes.worldStateHash}
+              >
                 {shortHash(detail().hashes.worldStateHash)}
               </dd>
             </div>
-            <div>
-              <dt>knowledgeHash</dt>
-              <dd title={detail().hashes.knowledgeStateHash}>
+            <div class="grid grid-cols-[8rem_minmax(0,1fr)] gap-2">
+              <dt class="text-[0.625rem] font-extrabold text-muted">knowledgeHash</dt>
+              <dd
+                class="m-0 font-mono text-[0.6875rem] [overflow-wrap:anywhere]"
+                title={detail().hashes.knowledgeStateHash}
+              >
                 {shortHash(detail().hashes.knowledgeStateHash)}
               </dd>
             </div>
-            <div>
-              <dt>narratorProfile</dt>
-              <dd title={detail().hashes.narratorProfileHash}>
+            <div class="grid grid-cols-[8rem_minmax(0,1fr)] gap-2">
+              <dt class="text-[0.625rem] font-extrabold text-muted">narratorProfile</dt>
+              <dd
+                class="m-0 font-mono text-[0.6875rem] [overflow-wrap:anywhere]"
+                title={detail().hashes.narratorProfileHash}
+              >
                 {shortHash(detail().hashes.narratorProfileHash)}
               </dd>
             </div>
-            <div>
-              <dt>discourseHash</dt>
-              <dd title={detail().hashes.discourseHash}>
+            <div class="grid grid-cols-[8rem_minmax(0,1fr)] gap-2">
+              <dt class="text-[0.625rem] font-extrabold text-muted">discourseHash</dt>
+              <dd
+                class="m-0 font-mono text-[0.6875rem] [overflow-wrap:anywhere]"
+                title={detail().hashes.discourseHash}
+              >
                 {shortHash(detail().hashes.discourseHash)}
               </dd>
             </div>
-            <div>
-              <dt>source</dt>
-              <dd title={detail().hashes.sourceHash}>{shortHash(detail().hashes.sourceHash)}</dd>
+            <div class="grid grid-cols-[8rem_minmax(0,1fr)] gap-2">
+              <dt class="text-[0.625rem] font-extrabold text-muted">source</dt>
+              <dd
+                class="m-0 font-mono text-[0.6875rem] [overflow-wrap:anywhere]"
+                title={detail().hashes.sourceHash}
+              >
+                {shortHash(detail().hashes.sourceHash)}
+              </dd>
             </div>
           </dl>
         </section>
@@ -494,13 +597,19 @@ export function SceneInspector(props: SceneInspectorProps) {
   const detail = props.detail;
   if (detail === null || detail === undefined) {
     return (
-      <aside class="scene-inspector" aria-label="场景详情">
+      <aside
+        class="sticky top-[calc(var(--wb-topbar-height)+0.75rem)] grid min-w-0 gap-4 max-[64rem]:static"
+        aria-label="场景详情"
+      >
         <EmptyInspector detailError={props.detailError} />
       </aside>
     );
   }
   return (
-    <aside class="scene-inspector" aria-label="场景详情">
+    <aside
+      class="sticky top-[calc(var(--wb-topbar-height)+0.75rem)] grid min-w-0 gap-4 max-[64rem]:static"
+      aria-label="场景详情"
+    >
       <SceneInspectorBody
         row={props.row}
         detail={detail}

@@ -143,7 +143,7 @@ export function LogicFlowGraph(props: LogicFlowGraphProps) {
   return (
     <section
       ref={container}
-      class="graph-canvas"
+      class="h-full w-full"
       aria-label={props.label}
       data-domain={props.model.domain}
     />

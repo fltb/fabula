@@ -10,6 +10,7 @@ import type {
   SceneThreadProgressPointV1,
 } from '../contracts/index.js';
 import { SceneInspector } from './SceneInspector';
+import { BUTTON, BUTTON_GHOST, BUTTON_PRIMARY, KICKER, ScreenEmpty } from './ui/primitives';
 import { replaceWorkingDocumentText } from './yjs-editor.js';
 
 export interface SceneMapProps {
@@ -184,38 +185,59 @@ function stripText(value: string | null | undefined): string {
   return value.length <= 40 ? value : `${value.slice(0, 40)}…`;
 }
 
-/** Thread-lifecycle tone classes for the thread strips. */
-function threadTone(status: string | null | undefined): string {
-  if (status === 'blocked' || status === 'abandoned' || status === 'retired') return ' high';
-  if (status === 'planned') return ' low';
-  if (status === 'completed') return ' milestone';
-  return '';
-}
+/** Row node dot base classes; each row appends exactly one tone class. */
+const NODE_DOT =
+  "relative pl-4 before:absolute before:left-0 before:top-[0.85rem] before:size-[0.625rem] before:rounded-full before:border-[0.125rem] before:border-surface before:box-content before:content-['']";
+
+/** Row node dot tone colors (the base dot has no color of its own). */
+const NODE_DOT_TONE: Record<RowRenderTone, string> = {
+  released: 'before:bg-success',
+  draft: 'before:bg-warning',
+  blocked: 'before:bg-danger',
+};
+
+/** Scene-chip base; each chip appends exactly one text color class. */
+const SCENE_CHIP =
+  'inline-flex w-max items-center gap-1 whitespace-nowrap rounded-full border border-line bg-surface px-2 py-1 text-[0.625rem] font-extrabold leading-[1.3] tracking-[0.03em]';
+
+/** Strip cell base classes. */
+const STRIP_CELL =
+  'min-w-[7.5rem] flex-[1_0_7.5rem] rounded-[0.375rem] border border-line border-t-2 border-t-accent-deep bg-surface px-2 py-1 text-center text-[0.625rem]';
+
+/** Strip cell value line base classes. */
+const STRIP_VAL = 'mt-0.5 block text-[0.625rem] font-bold break-words';
+
+/** Thread-lifecycle border tones for the thread strip cells. */
+const THREAD_CELL_TONE: Record<string, string> = {
+  blocked: ' border-danger! border-t-danger',
+  abandoned: ' border-danger! border-t-danger',
+  retired: ' border-danger! border-t-danger',
+  completed: ' border-success border-t-success',
+};
+
+/** Thread-lifecycle value tones for the thread strip cells. */
+const THREAD_VAL_TONE: Record<string, string> = {
+  blocked: ' text-danger',
+  abandoned: ' text-danger',
+  retired: ' text-danger',
+  planned: ' text-success',
+};
 
 function SceneMapEmpty(props: {
   readonly mapError?: string | null;
   readonly onRefresh?: () => void;
 }) {
   return (
-    <section class="screen-empty" aria-live="polite">
-      <Show
-        when={props.mapError}
-        fallback={
-          <>
-            <h3>暂无场景地图投影</h3>
-            <p>在 Host 中打开已认证的项目以加载章节分组的场景地图。</p>
-          </>
-        }
-      >
-        <h3>场景地图加载失败</h3>
-        <p>{props.mapError}</p>
-        <Show when={props.onRefresh !== undefined}>
-          <button class="btn" type="button" onClick={() => props.onRefresh?.()}>
-            重试
-          </button>
-        </Show>
+    <ScreenEmpty
+      title={props.mapError ? '场景地图加载失败' : '暂无场景地图投影'}
+      body={props.mapError || '在 Host 中打开已认证的项目以加载章节分组的场景地图。'}
+    >
+      <Show when={Boolean(props.mapError) && props.onRefresh !== undefined}>
+        <button class={BUTTON} type="button" onClick={() => props.onRefresh?.()}>
+          重试
+        </button>
       </Show>
-    </section>
+    </ScreenEmpty>
   );
 }
 
@@ -425,19 +447,21 @@ export function SceneMap(props: SceneMapProps) {
   };
 
   return (
-    <section class="scene-map" aria-labelledby="scene-map-heading">
-      <header class="scene-map-header">
+    <section class="mx-auto grid max-w-[78rem] gap-6" aria-labelledby="scene-map-heading">
+      <header class="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p class="region-kicker">场景地图 · 章节分组场景建模总览</p>
-          <h2 id="scene-map-heading">{props.projectId ?? '场景地图'}</h2>
+          <p class={KICKER}>场景地图 · 章节分组场景建模总览</p>
+          <h2 class="m-0" id="scene-map-heading">
+            {props.projectId ?? '场景地图'}
+          </h2>
         </div>
-        <div class="scene-map-chips">
-          <span class="scene-chip">
+        <div class="flex flex-wrap gap-2">
+          <span class={`${SCENE_CHIP} text-ink-soft`}>
             {props.map?.chapters.length ?? 0} 章 / {allScenes().length} 场
           </span>
-          <span class="scene-chip scene-chip-green">{toneCounts().released} 已发布</span>
-          <span class="scene-chip scene-chip-amber">{toneCounts().draft} 草稿</span>
-          <span class="scene-chip scene-chip-red">{toneCounts().blocked} 未渲染</span>
+          <span class={`${SCENE_CHIP} text-success`}>{toneCounts().released} 已发布</span>
+          <span class={`${SCENE_CHIP} text-warning`}>{toneCounts().draft} 草稿</span>
+          <span class={`${SCENE_CHIP} text-danger`}>{toneCounts().blocked} 未渲染</span>
         </div>
       </header>
 
@@ -445,44 +469,48 @@ export function SceneMap(props: SceneMapProps) {
         when={props.map !== null && props.map !== undefined}
         fallback={<SceneMapEmpty mapError={props.mapError} onRefresh={props.onRefresh} />}
       >
-        <div class="scene-map-layout">
-          <div class="scene-map-main">
+        <div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
+          <div class="grid min-w-0 gap-5">
             <Show
               when={(props.map?.chapters?.length ?? 0) > 0}
               fallback={
-                <section class="screen-empty" aria-live="polite">
-                  <h3>暂无已编译场景</h3>
-                  <p>已接受的源尚未编译出章节或场景。</p>
-                </section>
+                <ScreenEmpty title="暂无已编译场景" body="已接受的源尚未编译出章节或场景。" />
               }
             >
               <For each={props.map?.chapters}>
                 {(chapter) => (
-                  <section class="scene-chapter" aria-labelledby={`chapter-${chapter.chapterId}`}>
-                    <header class="scene-chapter-head">
-                      <span class="scene-chapter-id">CH.{chapter.chapter}</span>
-                      <span class="scene-chapter-title" id={`chapter-${chapter.chapterId}`}>
+                  <section
+                    class="overflow-hidden rounded-[0.625rem] border border-line bg-surface shadow-[var(--wb-shadow-panel)]"
+                    aria-labelledby={`chapter-${chapter.chapterId}`}
+                  >
+                    <header class="flex items-baseline gap-3 border-b border-line bg-surface-muted px-4 py-3">
+                      <span class="whitespace-nowrap font-mono text-[0.8125rem] font-extrabold text-accent-deep">
+                        CH.{chapter.chapter}
+                      </span>
+                      <span class="text-sm font-bold" id={`chapter-${chapter.chapterId}`}>
                         {chapter.title}
                       </span>
-                      <span class="scene-chapter-meta">
+                      <span class="ml-auto whitespace-nowrap font-mono text-[0.6875rem] text-muted">
                         {chapterEventRange(chapter)} · {chapter.scenes.length} 场 · 计划{' '}
                         {chapter.plannedScenes}
                       </span>
                     </header>
                     <Show when={chapter.summary.length > 0}>
-                      <p class="scene-chapter-summary">{chapter.summary}</p>
+                      <p class="m-0 border-b border-line px-4 py-2 text-xs leading-[1.55] text-muted">
+                        {chapter.summary}
+                      </p>
                     </Show>
-                    <ol class="scene-timeline">
+                    <ol class="m-0 grid list-none gap-2 px-4 py-3">
                       <For each={chapter.scenes}>
                         {(scene) => {
                           const tone = rowTone(scene);
                           const selected = selectedEventId() === scene.eventId;
                           return (
                             <li
-                              class={`scene-node scene-node-${tone}${selected ? ' scene-node-selected' : ''}`}
+                              class={`${NODE_DOT} ${NODE_DOT_TONE[tone]}${selected ? ' before:shadow-[0_0_0_0.1875rem_var(--wb-accent-wash)]' : ''}`}
                             >
                               <div
-                                class="scene-row"
+                                class="cursor-pointer rounded-[0.375rem] border border-line bg-surface hover:border-line-strong hover:bg-surface-muted aria-selected:border-accent aria-selected:shadow-[inset_0_0_0_0.0625rem_var(--wb-accent)]"
                                 role="option"
                                 tabIndex={0}
                                 aria-selected={selected}
@@ -495,26 +523,36 @@ export function SceneMap(props: SceneMapProps) {
                                   }
                                 }}
                               >
-                                <div class="scene-row-main">
-                                  <span class="scene-id">{scene.eventId}</span>
-                                  <div class="scene-row-body">
-                                    <div class="scene-title">{scene.title}</div>
-                                    <div class="scene-sub">
+                                <div class="flex items-start gap-3 px-3 py-2">
+                                  <span class="min-w-8 pt-0.5 font-mono text-[0.6875rem] font-extrabold text-accent-deep">
+                                    {scene.eventId}
+                                  </span>
+                                  <div class="min-w-0 flex-1">
+                                    <div class="text-[0.8125rem] font-bold leading-[1.35]">
+                                      {scene.title}
+                                    </div>
+                                    <div class="mt-0.5 text-[0.6875rem] text-muted">
                                       {scene.sceneType}
                                       {scene.discourseMode !== null
                                         ? ` · ${scene.discourseMode}`
                                         : ''}{' '}
                                       · {scene.storyTime}
                                     </div>
-                                    <div class="scene-badges">
-                                      <span class="scene-badge scene-badge-changed">
+                                    <div class="mt-1 flex flex-wrap gap-1">
+                                      <span class="whitespace-nowrap rounded-full border border-line px-1.5 py-px font-mono text-[0.5625rem] leading-[1.3] text-muted text-success border-ready-border">
                                         {scene.changedCount} 处变更
                                       </span>
-                                      <span class="scene-badge scene-badge-intro">
+                                      <span class="whitespace-nowrap rounded-full border border-line px-1.5 py-px font-mono text-[0.5625rem] leading-[1.3] text-muted text-warning border-loading-border">
                                         {scene.introCount} 次引入
                                       </span>
                                       <span
-                                        class={`scene-badge scene-badge-adopt scene-badge-adopt-${scene.renderStatus}`}
+                                        classList={{
+                                          'whitespace-nowrap rounded-full border border-line px-1.5 py-px font-mono text-[0.5625rem] leading-[1.3] text-muted': true,
+                                          'text-success border-ready-border bg-ready-surface':
+                                            scene.renderStatus === 'adopted_current',
+                                          'text-warning border-loading-border bg-loading-surface':
+                                            scene.renderStatus === 'adopted_stale',
+                                        }}
                                         title={
                                           scene.renderStatus === 'adopted_stale'
                                             ? 'frontmatter sceneHash 与当前编译 sceneHash 不一致'
@@ -525,27 +563,30 @@ export function SceneMap(props: SceneMapProps) {
                                       </span>
                                     </div>
                                   </div>
-                                  <div class="scene-row-right">
+                                  <div class="ml-auto min-w-[9.5rem] text-right">
                                     <div
-                                      class="scene-hash-chain"
+                                      class="break-words font-mono text-[0.625rem] text-muted"
                                       title={`adoptedSceneHash=${scene.adoptedSceneHash ?? '—'} · currentSceneHash=${scene.currentSceneHash ?? '—'} · proseHash=${scene.proseHash ?? '—'} · revision=${scene.revisionId ?? '—'}`}
                                     >
-                                      <span class="scene-hash-label">哈希</span>{' '}
+                                      <span class="text-muted">哈希</span>{' '}
                                       {shortHash(scene.adoptedSceneHash)}
-                                      <span class="scene-hash-arrow">→</span>
+                                      <span class="text-muted">→</span>
                                       {shortHash(scene.currentSceneHash)}
                                     </div>
                                     <div
-                                      class="scene-render-state"
+                                      class="mt-1 inline-flex items-center gap-1 text-[0.625rem] font-bold data-[tone=released]:text-success data-[tone=draft]:text-warning data-[tone=blocked]:text-danger"
                                       data-tone={tone}
                                       title={RENDER_TONE_TITLE[tone]}
                                     >
-                                      <span class="scene-render-dot" aria-hidden="true" />
+                                      <span
+                                        class="inline-block size-2 rounded-full bg-current"
+                                        aria-hidden="true"
+                                      />
                                       {RENDER_TONE_LABEL[tone]}
                                     </div>
                                     <button
                                       type="button"
-                                      class="btn btn-ghost scene-edit-toggle"
+                                      class={`${BUTTON} ${BUTTON_GHOST} mt-2 px-2! py-0.5! text-[0.6875rem]`}
                                       aria-label={`编辑 ${scene.eventId}`}
                                       onClick={(event) => {
                                         event.stopPropagation();
@@ -560,13 +601,14 @@ export function SceneMap(props: SceneMapProps) {
                               <Show when={editingEventId() === scene.eventId ? editDraft() : null}>
                                 {(draft) => (
                                   <section
-                                    class="scene-edit-form"
+                                    class="mt-2 rounded-[0.375rem] border border-line bg-surface-muted p-3"
                                     aria-label={`编辑场景 ${scene.eventId}`}
                                   >
-                                    <div class="scene-edit-grid">
-                                      <label class="scene-edit-field">
+                                    <div class="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(10rem,1fr))]">
+                                      <label class="flex flex-col gap-1 text-xs text-ink-soft">
                                         <span>标题</span>
                                         <input
+                                          class="w-full rounded-[0.375rem] border border-line bg-surface px-2 py-1.5 text-ink"
                                           type="text"
                                           value={draft().title}
                                           onInput={(event) =>
@@ -575,9 +617,10 @@ export function SceneMap(props: SceneMapProps) {
                                           aria-label={`标题 ${scene.eventId}`}
                                         />
                                       </label>
-                                      <label class="scene-edit-field scene-edit-field-wide">
+                                      <label class="col-span-full flex flex-col gap-1 text-xs text-ink-soft">
                                         <span>正文（sceneBrief + beats）</span>
                                         <textarea
+                                          class="w-full rounded-[0.375rem] border border-line bg-surface px-2 py-1.5 text-ink"
                                           rows={6}
                                           value={draft().body}
                                           onInput={(event) =>
@@ -587,9 +630,10 @@ export function SceneMap(props: SceneMapProps) {
                                           placeholder="第一段为场景概述；以 - 开头的行作为 beats。"
                                         />
                                       </label>
-                                      <label class="scene-edit-field">
+                                      <label class="flex flex-col gap-1 text-xs text-ink-soft">
                                         <span>情绪</span>
                                         <select
+                                          class="w-full rounded-[0.375rem] border border-line bg-surface px-2 py-1.5 text-ink"
                                           onInput={(event) =>
                                             updateDraft({ valence: event.currentTarget.value })
                                           }
@@ -606,9 +650,10 @@ export function SceneMap(props: SceneMapProps) {
                                           ))}
                                         </select>
                                       </label>
-                                      <label class="scene-edit-field">
+                                      <label class="flex flex-col gap-1 text-xs text-ink-soft">
                                         <span>时间</span>
                                         <select
+                                          class="w-full rounded-[0.375rem] border border-line bg-surface px-2 py-1.5 text-ink"
                                           onInput={(event) =>
                                             updateDraft({ storyTime: event.currentTarget.value })
                                           }
@@ -625,9 +670,10 @@ export function SceneMap(props: SceneMapProps) {
                                           ))}
                                         </select>
                                       </label>
-                                      <label class="scene-edit-field">
+                                      <label class="flex flex-col gap-1 text-xs text-ink-soft">
                                         <span>场景类型</span>
                                         <select
+                                          class="w-full rounded-[0.375rem] border border-line bg-surface px-2 py-1.5 text-ink"
                                           onInput={(event) =>
                                             updateDraft({ sceneType: event.currentTarget.value })
                                           }
@@ -644,10 +690,10 @@ export function SceneMap(props: SceneMapProps) {
                                         </select>
                                       </label>
                                     </div>
-                                    <div class="scene-edit-actions">
+                                    <div class="mt-3 flex gap-2">
                                       <button
                                         type="button"
-                                        class="btn btn-primary"
+                                        class={`${BUTTON} ${BUTTON_PRIMARY}`}
                                         disabled={editBusy()}
                                         onClick={() => void saveEdit(scene.eventId)}
                                       >
@@ -655,7 +701,7 @@ export function SceneMap(props: SceneMapProps) {
                                       </button>
                                       <button
                                         type="button"
-                                        class="btn"
+                                        class={BUTTON}
                                         disabled={editBusy()}
                                         onClick={cancelEdit}
                                       >
@@ -663,12 +709,12 @@ export function SceneMap(props: SceneMapProps) {
                                       </button>
                                     </div>
                                     <Show when={editSaved()}>
-                                      <p class="scene-edit-note" role="status">
+                                      <p class="mt-2 text-xs text-success" role="status">
                                         已写入工作区（尚未提交；可在 Source Studio 提交生效）。
                                       </p>
                                     </Show>
                                     <Show when={editError() !== null}>
-                                      <p class="scene-edit-error" role="alert">
+                                      <p class="mt-2 text-xs text-danger" role="alert">
                                         {editError()}
                                       </p>
                                     </Show>
@@ -692,26 +738,30 @@ export function SceneMap(props: SceneMapProps) {
                   0
                 }
               >
-                <section class="scene-strips" aria-labelledby="scene-strips-heading">
-                  <h3 id="scene-strips-heading">跨章节条带</h3>
+                <section class="grid gap-4" aria-labelledby="scene-strips-heading">
+                  <h3 class="m-0 text-sm" id="scene-strips-heading">
+                    跨章节条带
+                  </h3>
                   <For each={threadGroups()}>
                     {(group) => (
-                      <div class="scene-strip">
-                        <div class="scene-strip-head">
-                          <h4>{group.thread}</h4>
-                          <span class="scene-strip-desc">跨章节线程推进</span>
+                      <div class="grid gap-2">
+                        <div class="flex items-baseline gap-3">
+                          <h4 class="m-0 text-[0.8125rem]">{group.thread}</h4>
+                          <span class="text-[0.6875rem] text-muted">跨章节线程推进</span>
                         </div>
-                        <div class="scene-strip-track">
+                        <div class="flex items-stretch gap-1 overflow-x-auto pb-1">
                           <For each={group.points}>
                             {(point) => (
                               <div
-                                class={`scene-strip-cell scene-strip-ch-group${threadTone(point.status)}`}
+                                class={`${STRIP_CELL}${THREAD_CELL_TONE[point.status ?? ''] ?? ''}`}
                                 title={`${point.thread} · ${point.runId} · ${point.status ?? ''} ${point.phase ?? ''} ${point.advancement ?? ''}`}
                               >
-                                <span class="scene-strip-ev">
+                                <span class="block font-mono text-[0.5625rem] text-muted">
                                   CH.{chapterByEventId().get(point.eventId) ?? '—'}
                                 </span>
-                                <span class="scene-strip-val">
+                                <span
+                                  class={`${STRIP_VAL}${THREAD_VAL_TONE[point.status ?? ''] ?? ''}`}
+                                >
                                   {point.eventId}{' '}
                                   {stripText(point.advancement ?? point.phase ?? point.status)}
                                 </span>
@@ -724,28 +774,30 @@ export function SceneMap(props: SceneMapProps) {
                   </For>
 
                   <Show when={(props.map?.strips.emotionalValence?.length ?? 0) > 0}>
-                    <div class="scene-strip">
-                      <div class="scene-strip-head">
-                        <h4>情感弧线</h4>
-                        <span class="scene-strip-desc">emotionalValence 全书序列</span>
+                    <div class="grid gap-2">
+                      <div class="flex items-baseline gap-3">
+                        <h4 class="m-0 text-[0.8125rem]">情感弧线</h4>
+                        <span class="text-[0.6875rem] text-muted">emotionalValence 全书序列</span>
                       </div>
-                      <div class="scene-strip-track">
+                      <div class="flex items-stretch gap-1 overflow-x-auto pb-1">
                         <For each={props.map?.strips.emotionalValence}>
                           {(point) => (
                             <div
-                              class={`scene-strip-cell scene-strip-ch-group${
-                                /high/.test(point.valence)
-                                  ? ' high'
-                                  : /low/.test(point.valence)
-                                    ? ' low'
-                                    : ''
-                              }`}
+                              class={`${STRIP_CELL}${/high/.test(point.valence) ? ' border-danger! border-t-danger' : ''}`}
                               title={point.valence}
                             >
-                              <span class="scene-strip-ev">
+                              <span class="block font-mono text-[0.5625rem] text-muted">
                                 CH.{chapterByEventId().get(point.eventId) ?? '—'}
                               </span>
-                              <span class="scene-strip-val">
+                              <span
+                                class={`${STRIP_VAL}${
+                                  /high/.test(point.valence)
+                                    ? ' text-danger'
+                                    : /low/.test(point.valence)
+                                      ? ' text-success'
+                                      : ''
+                                }`}
+                              >
                                 {point.eventId} · {point.valence}
                               </span>
                             </div>
@@ -757,24 +809,21 @@ export function SceneMap(props: SceneMapProps) {
 
                   <For each={props.map?.strips.greyLines}>
                     {(series) => (
-                      <div class="scene-strip">
-                        <div class="scene-strip-head">
-                          <h4>
+                      <div class="grid gap-2">
+                        <div class="flex items-baseline gap-3">
+                          <h4 class="m-0 text-[0.8125rem]">
                             {series.greyLineId} · {series.imagery}
                           </h4>
-                          <span class="scene-strip-desc">灰线跨场景累积</span>
+                          <span class="text-[0.6875rem] text-muted">灰线跨场景累积</span>
                         </div>
-                        <div class="scene-strip-track">
+                        <div class="flex items-stretch gap-1 overflow-x-auto pb-1">
                           <For each={series.appearances}>
                             {(appearance) => (
-                              <div
-                                class="scene-strip-cell scene-strip-ch-group"
-                                title={appearance.semanticAccumulation}
-                              >
-                                <span class="scene-strip-ev">
+                              <div class={STRIP_CELL} title={appearance.semanticAccumulation}>
+                                <span class="block font-mono text-[0.5625rem] text-muted">
                                   CH.{chapterByEventId().get(appearance.eventId) ?? '—'}
                                 </span>
-                                <span class="scene-strip-val">
+                                <span class={STRIP_VAL}>
                                   {appearance.eventId} {stripText(appearance.semanticAccumulation)}
                                 </span>
                               </div>
@@ -785,20 +834,24 @@ export function SceneMap(props: SceneMapProps) {
                     )}
                   </For>
 
-                  <div class="scene-legend">
+                  <div class="flex flex-wrap items-center gap-4 text-[0.6875rem] text-muted">
                     <span>
-                      <span class="scene-legend-dot scene-legend-released" /> 已发布
+                      <span class="mr-1 inline-block size-2 rounded-full bg-success align-baseline" />{' '}
+                      已发布
                     </span>
                     <span>
-                      <span class="scene-legend-dot scene-legend-draft" /> 草稿
+                      <span class="mr-1 inline-block size-2 rounded-full bg-warning align-baseline" />{' '}
+                      草稿
                     </span>
                     <span>
-                      <span class="scene-legend-dot scene-legend-blocked" /> 未渲染
+                      <span class="mr-1 inline-block size-2 rounded-full bg-danger align-baseline" />{' '}
+                      未渲染
                     </span>
                     <span>
-                      <span class="scene-legend-dot scene-legend-chapter" /> 章节边界
+                      <span class="mr-1 inline-block h-2 w-2.5 rounded-[0.125rem] bg-accent-deep align-baseline" />{' '}
+                      章节边界
                     </span>
-                    <span class="scene-legend-hint">点击场景行打开场景详情</span>
+                    <span class="text-muted">点击场景行打开场景详情</span>
                   </div>
                 </section>
               </Show>

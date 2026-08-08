@@ -405,13 +405,19 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
                       {presetError()}
                     </p>
                   </Show>
-                  <div class="settings-preset-grid" data-testid="setup-preset-grid">
+                  <div
+                    class="grid grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] gap-3"
+                    data-testid="setup-preset-grid"
+                  >
                     <For each={presets() ?? []}>
                       {(preset) => (
                         <button
                           type="button"
-                          class="settings-preset"
-                          classList={{ 'is-active': activePreset() === preset.id }}
+                          class="rounded-[0.625rem] border border-line bg-surface p-3 text-left text-[0.8125rem] text-ink hover:border-accent-soft hover:bg-accent-wash"
+                          classList={{
+                            'border-accent-soft bg-accent-wash shadow-[inset_0_0_0_0.0625rem_var(--wb-accent-deep)]':
+                              activePreset() === preset.id,
+                          }}
                           onClick={() => pickPreset(preset)}
                           title={preset.baseUrl}
                         >

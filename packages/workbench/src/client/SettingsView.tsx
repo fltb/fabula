@@ -2,6 +2,7 @@ import { createSignal, For, onMount, Show } from 'solid-js';
 import type { ProjectAccessRole } from '../contracts/index.js';
 import { type AdminClient, createAdminClient } from './admin/admin-client.js';
 import { type ProviderPreset, providerPresets } from './provider-presets.js';
+import { BUTTON, BUTTON_PRIMARY } from './ui/primitives';
 
 export interface SettingsViewProps {
   readonly projectId?: string | null;
@@ -12,6 +13,11 @@ export interface SettingsViewProps {
 }
 
 const DEFAULT_PROFILE_ID = 'default';
+const SETTINGS_FIELD_INPUT =
+  'px-3 py-2 text-ink bg-surface border border-line rounded-[0.375rem] focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-focus';
+const CARD =
+  'grid content-start gap-4 rounded-[0.625rem] border border-line bg-surface p-5 shadow-[var(--wb-shadow-panel)]';
+const CARD_TITLE = 'm-0 text-sm leading-[1.25]';
 
 function errorMessage(error: unknown): string {
   if (
@@ -167,15 +173,16 @@ export function SettingsView(props: SettingsViewProps) {
     setHeaderRows((rows) => (rows.length === 1 ? rows : rows.filter((_, i) => i !== index)));
 
   return (
-    <div class="settings-view" data-testid="settings-view">
-      <section class="card">
-        <h2 class="card-title">AI 写作服务</h2>
-        <p class="settings-copy">
+    <div class="grid gap-5 max-w-[44rem]" data-testid="settings-view">
+      <section class={CARD}>
+        <h2 class={CARD_TITLE}>AI 写作服务</h2>
+        <p class="m-0 text-[0.8125rem] leading-[1.5] text-ink-soft">
           选择一家供应商并填写 API 密钥，AI 写作功能就会使用它生成小说内容。
         </p>
-        <div class="settings-status" data-testid="settings-status">
+        <div class="flex items-center gap-2 text-[0.8125rem]" data-testid="settings-status">
           <span
-            class={configured() ? 'settings-status-dot is-configured' : 'settings-status-dot'}
+            class="size-2 rounded-full"
+            classList={{ 'bg-muted': !configured(), 'bg-[#2e9e5b]': configured() }}
           />
           {configured()
             ? `已配置（${configuredEndpoint() ?? '未知端点'} · ${configuredModel() ?? '未知模型'}）`
@@ -186,9 +193,9 @@ export function SettingsView(props: SettingsViewProps) {
       <Show
         when={isOwner()}
         fallback={
-          <section class="card">
-            <h2 class="card-title">LLM 设置</h2>
-            <p class="settings-copy">
+          <section class={CARD}>
+            <h2 class={CARD_TITLE}>LLM 设置</h2>
+            <p class="m-0 text-[0.8125rem] leading-[1.5] text-ink-soft">
               AI 服务设置仅所有者可修改。当前项目
               {configured()
                 ? `使用 ${configuredEndpoint() ?? '未知端点'} / ${configuredModel() ?? '未知模型'}。`
@@ -197,25 +204,34 @@ export function SettingsView(props: SettingsViewProps) {
           </section>
         }
       >
-        <section class="card">
-          <h2 class="card-title">选择供应商</h2>
+        <section class={CARD}>
+          <h2 class={CARD_TITLE}>选择供应商</h2>
           <Show when={presets() === null} fallback={null}>
-            <p class="settings-copy" data-testid="presets-loading">
+            <p
+              class="m-0 text-[0.8125rem] leading-[1.5] text-ink-soft"
+              data-testid="presets-loading"
+            >
               正在加载供应商预设…
             </p>
           </Show>
           <Show when={presetError() !== ''}>
-            <p class="settings-error" role="alert">
+            <p class="m-0 text-danger text-[0.8125rem]" role="alert">
               {presetError()}
             </p>
           </Show>
-          <div class="settings-preset-grid" data-testid="preset-grid">
+          <div
+            class="grid grid-cols-[repeat(auto-fit,minmax(7rem,1fr))] gap-3"
+            data-testid="preset-grid"
+          >
             <For each={presets() ?? []}>
               {(preset) => (
                 <button
                   type="button"
-                  class="settings-preset"
-                  classList={{ 'is-active': activePreset() === preset.id }}
+                  class="rounded-[0.625rem] border border-line bg-surface p-3 text-left text-[0.8125rem] text-ink hover:border-accent-soft hover:bg-accent-wash"
+                  classList={{
+                    'border-accent-soft bg-accent-wash shadow-[inset_0_0_0_0.0625rem_var(--wb-accent-deep)]':
+                      activePreset() === preset.id,
+                  }}
                   onClick={() => pickPreset(preset)}
                   title={preset.baseUrl}
                 >
@@ -225,15 +241,18 @@ export function SettingsView(props: SettingsViewProps) {
             </For>
           </div>
           <Show when={(presets()?.length ?? 0) === 0 && presetError() === '' && presets() !== null}>
-            <p class="settings-copy">没有可用的预设供应商，请手动填写下面的自定义连接。</p>
+            <p class="m-0 text-[0.8125rem] leading-[1.5] text-ink-soft">
+              没有可用的预设供应商，请手动填写下面的自定义连接。
+            </p>
           </Show>
         </section>
 
-        <section class="card">
-          <h2 class="card-title">连接设置</h2>
-          <label class="settings-field">
+        <section class={CARD}>
+          <h2 class={CARD_TITLE}>连接设置</h2>
+          <label class="grid gap-1 text-xs font-bold text-ink-soft">
             <span>接口地址（baseUrl）</span>
             <input
+              class={SETTINGS_FIELD_INPUT}
               data-testid="base-url-input"
               type="text"
               value={baseUrl()}
@@ -241,9 +260,10 @@ export function SettingsView(props: SettingsViewProps) {
               onInput={(event) => setBaseUrl(event.currentTarget.value)}
             />
           </label>
-          <label class="settings-field">
+          <label class="grid gap-1 text-xs font-bold text-ink-soft">
             <span>模型</span>
             <input
+              class={SETTINGS_FIELD_INPUT}
               data-testid="model-input"
               type="text"
               value={model()}
@@ -251,9 +271,10 @@ export function SettingsView(props: SettingsViewProps) {
               onInput={(event) => setModel(event.currentTarget.value)}
             />
           </label>
-          <label class="settings-field">
+          <label class="grid gap-1 text-xs font-bold text-ink-soft">
             <span>API 密钥</span>
             <input
+              class={SETTINGS_FIELD_INPUT}
               data-testid="api-key-input"
               type="password"
               value={apiKey()}
@@ -262,13 +283,18 @@ export function SettingsView(props: SettingsViewProps) {
               onInput={(event) => setApiKey(event.currentTarget.value)}
             />
           </label>
-          <div class="settings-actions">
-            <button type="button" class="btn btn-primary" disabled={busy()} onClick={save}>
+          <div class="flex gap-2">
+            <button
+              type="button"
+              class={`${BUTTON} ${BUTTON_PRIMARY}`}
+              disabled={busy()}
+              onClick={save}
+            >
               保存
             </button>
             <button
               type="button"
-              class="btn"
+              class={BUTTON}
               disabled={busy() || baseUrl().trim() === '' || model().trim() === ''}
               onClick={testCredential}
               data-testid="test-credential"
@@ -278,11 +304,13 @@ export function SettingsView(props: SettingsViewProps) {
           </div>
         </section>
 
-        <section class="card">
-          <details class="settings-advanced" data-testid="advanced-section">
-            <summary>高级参数（可选）</summary>
-            <div class="settings-advanced-body">
-              <label class="settings-field settings-field-inline">
+        <section class={CARD}>
+          <details data-testid="advanced-section">
+            <summary class="cursor-pointer text-ink-soft text-[0.8125rem] font-bold">
+              高级参数（可选）
+            </summary>
+            <div class="grid gap-3 mt-3">
+              <label class="flex items-center gap-2 text-xs font-bold text-ink-soft">
                 <input
                   data-testid="reasoning-input"
                   type="checkbox"
@@ -291,9 +319,10 @@ export function SettingsView(props: SettingsViewProps) {
                 />
                 <span>启用推理（reasoning）</span>
               </label>
-              <label class="settings-field">
+              <label class="grid gap-1 text-xs font-bold text-ink-soft">
                 <span>上下文窗口（contextWindow）</span>
                 <input
+                  class={SETTINGS_FIELD_INPUT}
                   data-testid="context-window-input"
                   type="number"
                   min="1"
@@ -302,9 +331,10 @@ export function SettingsView(props: SettingsViewProps) {
                   onInput={(event) => setContextWindow(event.currentTarget.value)}
                 />
               </label>
-              <label class="settings-field">
+              <label class="grid gap-1 text-xs font-bold text-ink-soft">
                 <span>最大输出（maxTokens）</span>
                 <input
+                  class={SETTINGS_FIELD_INPUT}
                   data-testid="max-tokens-input"
                   type="number"
                   min="1"
@@ -313,18 +343,20 @@ export function SettingsView(props: SettingsViewProps) {
                   onInput={(event) => setMaxTokens(event.currentTarget.value)}
                 />
               </label>
-              <div class="settings-headers">
-                <span class="settings-headers-label">自定义请求头（headers）</span>
+              <div class="grid gap-2">
+                <span class="text-ink-soft text-xs font-bold">自定义请求头（headers）</span>
                 <For each={headerRows()}>
                   {(row, index) => (
-                    <div class="settings-header-row">
+                    <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
                       <input
+                        class={SETTINGS_FIELD_INPUT}
                         type="text"
                         placeholder="Header-Name"
                         value={row.key}
                         onInput={(event) => updateHeader(index(), 'key', event.currentTarget.value)}
                       />
                       <input
+                        class={SETTINGS_FIELD_INPUT}
                         type="text"
                         placeholder="值"
                         value={row.value}
@@ -334,7 +366,7 @@ export function SettingsView(props: SettingsViewProps) {
                       />
                       <button
                         type="button"
-                        class="btn"
+                        class={BUTTON}
                         onClick={() => removeHeader(index())}
                         aria-label="删除此行"
                       >
@@ -343,7 +375,7 @@ export function SettingsView(props: SettingsViewProps) {
                     </div>
                   )}
                 </For>
-                <button type="button" class="btn" onClick={addHeader}>
+                <button type="button" class={BUTTON} onClick={addHeader}>
                   添加请求头
                 </button>
               </div>
@@ -353,12 +385,12 @@ export function SettingsView(props: SettingsViewProps) {
       </Show>
 
       <Show when={message() !== ''}>
-        <p class="settings-notice" role="status" data-testid="settings-message">
+        <p class="m-0 text-[#2e9e5b] text-[0.8125rem]" role="status" data-testid="settings-message">
           {message()}
         </p>
       </Show>
       <Show when={error() !== ''}>
-        <p class="settings-error" role="alert" data-testid="settings-error">
+        <p class="m-0 text-danger text-[0.8125rem]" role="alert" data-testid="settings-error">
           {error()}
         </p>
       </Show>

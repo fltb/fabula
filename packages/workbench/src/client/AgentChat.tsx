@@ -29,6 +29,7 @@ import type {
 import type { HostStatus } from './App.js';
 import type { AgentChatClient } from './agent-chat-client.js';
 import { BrowserAgentChatApiError } from './agent-chat-client.js';
+import { KICKER, TEXT_BUTTON } from './ui/primitives';
 
 interface ChatMessage {
   readonly id: string;
@@ -172,7 +173,10 @@ function AgentContextStrip(props: { readonly context: AgentViewContextV1 }): JSX
     return out;
   };
   return (
-    <p class="agent-context-strip" data-testid="agent-context-strip">
+    <p
+      class="m-0 rounded-[0.375rem] border border-line bg-surface-muted px-3 py-2 text-[0.8125rem] leading-[1.5] text-muted"
+      data-testid="agent-context-strip"
+    >
       {items().join(' · ')}
     </p>
   );
@@ -536,23 +540,24 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
   };
 
   return (
-    <section class="agent-chat" data-testid="agent-chat" aria-label="Agent 对话">
-      <div class="agent-chat-heading">
+    <section
+      class="flex h-full min-h-0 flex-col gap-2 p-4"
+      data-testid="agent-chat"
+      aria-label="Agent 对话"
+    >
+      <div class="flex shrink-0 items-start justify-between gap-3">
         <div>
-          <p class="region-kicker">Agent / 会话</p>
+          <p class={KICKER}>Agent / 会话</p>
           <h2>Agent 对话</h2>
         </div>
-        <div class="flex items-center gap-[var(--wb-space-3)]">
+        <div class="flex items-center gap-3">
           <Show when={conversation() !== null}>
-            <span
-              class="text-xs text-[var(--wb-text-muted)]"
-              data-testid="agent-chat-conversation-id"
-            >
+            <span class="text-xs text-muted" data-testid="agent-chat-conversation-id">
               {conversation()?.conversationId}
             </span>
           </Show>
           <button
-            class="icon-button"
+            class="grid size-9 shrink-0 place-items-center rounded-[0.375rem] border border-line text-base leading-none text-ink-soft transition-[color,background,border-color] duration-[160ms] hover:bg-surface-muted hover:text-ink"
             type="button"
             aria-label={open() ? '收起对话面板' : '展开对话面板'}
             aria-expanded={open()}
@@ -567,22 +572,27 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
       <Show when={open()}>
         <Show when={showTour()}>
           <aside
-            class="agent-onboarding-tour"
+            class="grid gap-3 rounded-[0.625rem] border border-line border-l-4 border-l-accent bg-surface p-4 text-ink"
             data-testid="agent-onboarding-tour"
             aria-label="首次使用引导"
           >
-            <div class="agent-onboarding-step">
-              <span class="agent-onboarding-index" aria-hidden="true">
+            <div class="grid grid-cols-[auto_1fr] items-start gap-3">
+              <span
+                class="min-w-9 rounded-[0.375rem] bg-accent-wash px-2 py-1 text-center text-xs font-extrabold text-accent-deep"
+                aria-hidden="true"
+              >
                 {tourStep() + 1}/{TOUR_STEPS.length}
               </span>
-              <div class="agent-onboarding-copy">
-                <h3 class="agent-onboarding-title">{TOUR_STEPS[tourStep()]?.title}</h3>
-                <p class="agent-onboarding-body">{TOUR_STEPS[tourStep()]?.body}</p>
+              <div class="grid gap-1">
+                <h3 class="m-0 text-[0.9375rem] font-bold">{TOUR_STEPS[tourStep()]?.title}</h3>
+                <p class="m-0 text-[0.8125rem] leading-[1.6] text-muted">
+                  {TOUR_STEPS[tourStep()]?.body}
+                </p>
               </div>
             </div>
-            <div class="agent-onboarding-actions">
+            <div class="flex justify-end gap-2">
               <button
-                class="text-button"
+                class={TEXT_BUTTON}
                 type="button"
                 data-testid="agent-tour-skip"
                 onClick={dismissTour}
@@ -590,7 +600,7 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
                 跳过
               </button>
               <button
-                class="text-button"
+                class={TEXT_BUTTON}
                 type="button"
                 data-testid="agent-tour-next"
                 onClick={nextTourStep}
@@ -598,12 +608,12 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
                 下一步
               </button>
             </div>
-            <div class="agent-onboarding-dots" aria-hidden="true">
+            <div class="flex gap-1" aria-hidden="true">
               <For each={TOUR_STEPS}>
                 {(_, index) => (
                   <span
-                    class="agent-onboarding-dot"
-                    classList={{ 'is-active': index() === tourStep() }}
+                    class="size-2 rounded-full bg-surface-muted transition-[background] duration-[160ms]"
+                    classList={{ 'bg-accent': index() === tourStep() }}
                   />
                 )}
               </For>
@@ -612,11 +622,15 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
         </Show>
 
         <Show when={agentUnavailable() || props.hostStatus === 'error'}>
-          <div class="agent-unavailable-banner" role="alert" data-testid="agent-unavailable-banner">
+          <div
+            class="m-0 flex flex-wrap items-center justify-between gap-2 rounded-[0.375rem] border border-loading-border bg-loading-surface px-4 py-3 text-[0.8125rem] text-warning"
+            role="alert"
+            data-testid="agent-unavailable-banner"
+          >
             <span>{AGENT_UNAVAILABLE_COPY}</span>
             <Show when={props.onOpenSettings !== undefined}>
               <button
-                class="text-button"
+                class={TEXT_BUTTON}
                 type="button"
                 data-testid="agent-open-settings"
                 onClick={() => props.onOpenSettings?.()}
@@ -628,37 +642,50 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
         </Show>
 
         <Show when={error() !== null}>
-          <p class="agent-chat-error" role="alert" data-testid="agent-chat-error">
+          <p
+            class="m-0 rounded-[0.375rem] border border-error-border bg-error-surface px-4 py-3 text-[0.8125rem] text-danger"
+            role="alert"
+            data-testid="agent-chat-error"
+          >
             {error()}
           </p>
         </Show>
 
-        <fieldset class="agent-conversation-chips" aria-label="会话列表">
-          <span class="agent-conversations-label">会话</span>
-          <div class="agent-chips-scroll" ref={chipsScroll} data-testid="agent-chips-scroll">
+        <fieldset class="flex shrink-0 items-center gap-2 pb-1" aria-label="会话列表">
+          <span class="shrink-0 text-[0.6875rem] font-extrabold uppercase tracking-[0.08em] text-muted">
+            会话
+          </span>
+          <div
+            class="flex min-w-0 items-center gap-2 overflow-x-auto [scrollbar-width:thin]"
+            ref={chipsScroll}
+            data-testid="agent-chips-scroll"
+          >
             <Show
               when={conversations().length > 0}
-              fallback={<span class="text-xs text-[var(--wb-text-muted)]">暂无会话</span>}
+              fallback={<span class="text-xs text-muted">暂无会话</span>}
             >
               <For each={conversations()}>
                 {(entry) => (
                   <button
-                    class="agent-conversation-chip"
+                    class="inline-flex max-w-[13rem] shrink-0 cursor-pointer items-center gap-2 rounded-full border border-line bg-surface-muted px-3 py-1 text-ink transition-[background,border-color] duration-[160ms] hover:border-accent-soft"
                     classList={{
-                      'is-active': conversation()?.conversationId === entry.conversationId,
+                      'bg-accent-wash border-accent-soft':
+                        conversation()?.conversationId === entry.conversationId,
                     }}
                     type="button"
                     data-testid={`agent-conversation-${entry.conversationId}`}
                     onClick={() => void openConversation(entry)}
                   >
-                    <span class="agent-conversation-title">{entry.title ?? '新会话'}</span>
+                    <span class="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[0.8125rem] font-bold">
+                      {entry.title ?? '新会话'}
+                    </span>
                   </button>
                 )}
               </For>
             </Show>
           </div>
           <button
-            class="text-button agent-chips-new"
+            class={`${TEXT_BUTTON} ml-auto shrink-0`}
             type="button"
             data-testid="agent-chat-new-conversation"
             onClick={() => void createConversation()}
@@ -667,28 +694,33 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
           </button>
         </fieldset>
 
-        <div class="agent-chat-scroll" data-testid="agent-chat-scroll">
-          <div class="agent-chat-messages" data-testid="agent-chat-messages">
+        <div class="min-h-0 flex-1 overflow-y-auto" data-testid="agent-chat-scroll">
+          <div class="grid gap-3" data-testid="agent-chat-messages">
             <Show
               when={messages().length > 0}
               fallback={
-                <div class="agent-chat-welcome" data-testid="agent-chat-welcome">
-                  <p class="agent-chat-welcome-title">不知道从哪开始？试试这些</p>
-                  <div class="grid gap-[var(--wb-space-2)]">
+                <div data-testid="agent-chat-welcome">
+                  <p>不知道从哪开始？试试这些</p>
+                  <div class="grid gap-2">
                     <For each={WELCOME_PROMPTS}>
                       {(example, index) => (
                         <button
-                          class="agent-chat-welcome-card"
+                          class="grid w-full cursor-pointer grid-cols-[auto_1fr] items-start gap-3 rounded-[0.375rem] border border-line bg-surface px-4 py-3 text-left text-ink transition-[background,border-color] duration-[160ms] hover:border-line-strong hover:bg-surface-muted"
                           type="button"
                           data-testid={`agent-chat-welcome-card-${index()}`}
                           onClick={() => setDraft(example.prompt)}
                         >
-                          <span class="agent-chat-welcome-glyph" aria-hidden="true">
+                          <span
+                            class="inline-flex size-8 items-center justify-center rounded-[0.375rem] bg-accent-wash text-base text-accent-deep"
+                            aria-hidden="true"
+                          >
                             {example.glyph}
                           </span>
-                          <span class="agent-chat-welcome-text">
-                            <span class="agent-chat-welcome-prompt">{example.prompt}</span>
-                            <span class="agent-chat-welcome-hint">{example.hint}</span>
+                          <span class="grid gap-1">
+                            <span class="text-sm font-bold">{example.prompt}</span>
+                            <span class="text-[0.8125rem] leading-[1.5] text-muted">
+                              {example.hint}
+                            </span>
                           </span>
                         </button>
                       )}
@@ -700,10 +732,20 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
               <For each={messages()}>
                 {(message) => (
                   <Show when={message.role !== 'tool_result'}>
-                    <article class={`agent-message agent-message-${message.role}`}>
-                      <span class="agent-message-role">{message.role}</span>
+                    <article
+                      class="grid max-w-[min(46rem,92%)] gap-2 rounded-[0.625rem] border border-line bg-surface px-4 py-3"
+                      classList={{
+                        'agent-message-assistant': message.role === 'assistant',
+                        'agent-message-user': message.role === 'user',
+                        'justify-self-end border-empty-border bg-accent-wash':
+                          message.role === 'user',
+                      }}
+                    >
+                      <span class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
+                        {message.role}
+                      </span>
                       {message.role === 'assistant' ? (
-                        <div class="agent-message-markdown">
+                        <div class="text-sm leading-[1.6]">
                           <SolidMarkdown children={message.content} />
                         </div>
                       ) : (
@@ -716,15 +758,15 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
                       >
                         {(failed) => (
                           <div
-                            class="agent-run-error-chip"
+                            class="mt-2 inline-flex items-center gap-2 rounded-[0.375rem] border border-error-border bg-error-surface px-2 py-1 text-[0.8125rem] text-danger"
                             role="alert"
                             data-testid={`agent-run-error-chip-${message.runId}`}
                           >
-                            <span class="agent-run-error-code" data-testid="agent-run-error-inline">
+                            <span class="font-mono" data-testid="agent-run-error-inline">
                               {failed().run.errorCode ?? '运行失败'}
                             </span>
                             <button
-                              class="text-button"
+                              class={TEXT_BUTTON}
                               type="button"
                               data-testid={`agent-retry-inline-${message.runId}`}
                               onClick={() => void retryRun(message.runId)}
@@ -742,16 +784,16 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
           </div>
 
           <Show when={runs().length > 0}>
-            <div class="agent-runs" data-testid="agent-chat-runs">
+            <div data-testid="agent-chat-runs">
               <h3>工具调用记录</h3>
-              <ul class="grid gap-[var(--wb-space-2)]">
+              <ul class="grid gap-2">
                 <For each={runs()}>
                   {(entry) => {
                     const chips = artifactChipsOf(entry);
                     return (
                       <li>
                         <details
-                          class="agent-run"
+                          class="rounded-[0.625rem] border border-line bg-surface px-4 py-3"
                           data-testid={`agent-run-${entry.run.runId}`}
                           open={
                             entry.run.status === 'queued' ||
@@ -759,18 +801,16 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
                             streamingRun() === entry.run.runId
                           }
                         >
-                          <summary class="flex flex-wrap items-center justify-between gap-[var(--wb-space-2)]">
-                            <span class="agent-run-label" data-testid="agent-run-status">
-                              {runLabel(entry.run)}
-                            </span>
-                            <span class="flex gap-[var(--wb-space-2)]">
+                          <summary class="flex cursor-pointer flex-wrap items-center justify-between gap-2 text-[0.8125rem] font-extrabold">
+                            <span data-testid="agent-run-status">{runLabel(entry.run)}</span>
+                            <span class="flex gap-2">
                               <Show
                                 when={
                                   entry.run.status === 'queued' || entry.run.status === 'running'
                                 }
                               >
                                 <button
-                                  class="text-button"
+                                  class={TEXT_BUTTON}
                                   type="button"
                                   data-testid={`agent-cancel-${entry.run.runId}`}
                                   onClick={() => void cancelRun(entry.run.runId)}
@@ -785,7 +825,7 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
                                 }
                               >
                                 <button
-                                  class="text-button"
+                                  class={TEXT_BUTTON}
                                   type="button"
                                   data-testid={`agent-retry-${entry.run.runId}`}
                                   onClick={() => void retryRun(entry.run.runId)}
@@ -794,37 +834,38 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
                                 </button>
                               </Show>
                               <Show when={streamingRun() === entry.run.runId}>
-                                <span class="agent-streaming" data-testid="agent-streaming">
-                                  生成中…
-                                </span>
+                                <span data-testid="agent-streaming">生成中…</span>
                               </Show>
                             </span>
                           </summary>
                           <Show when={entry.run.errorCode !== null}>
-                            <p
-                              class="text-xs text-[var(--wb-text-muted)]"
-                              data-testid="agent-run-error"
-                            >
+                            <p class="text-xs text-muted" data-testid="agent-run-error">
                               {entry.run.errorCode}
                             </p>
                           </Show>
                           <Show when={entry.toolCalls.length > 0}>
-                            <ul class="agent-tool-calls">
+                            <ul class="m-0 mt-3 grid list-none gap-1 p-0">
                               <For each={entry.toolCalls}>
                                 {(call) => (
                                   <li
+                                    class="flex flex-wrap items-center justify-between gap-2 rounded-[0.375rem] bg-surface-muted px-3 py-2 text-[0.8125rem]"
                                     data-testid={`agent-tool-call-${entry.run.runId}-${call.callIndex}`}
                                   >
-                                    <span class="agent-tool-call-name">
-                                      {toolActionName(call.toolName)}
-                                    </span>
-                                    <span class="agent-tool-call-status" data-status={call.status}>
+                                    <span class="font-[750]">{toolActionName(call.toolName)}</span>
+                                    <span
+                                      class="text-[0.6875rem] font-bold text-muted"
+                                      classList={{
+                                        'text-success': call.status === 'succeeded',
+                                        'text-danger': call.status === 'failed',
+                                      }}
+                                      data-status={call.status}
+                                    >
                                       {receiptLabel(call)}
                                     </span>
-                                    <span class="text-xs text-[var(--wb-text-muted)]">
+                                    <span class="text-xs text-muted">
                                       {new Date(call.createdAt).toLocaleTimeString()}
                                     </span>
-                                    <code class="agent-tool-call-hash">
+                                    <code class="font-mono">
                                       {call.sanitizedArgsHash.slice(0, 12)}
                                     </code>
                                   </li>
@@ -833,11 +874,11 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
                             </ul>
                           </Show>
                           <Show when={chips.length > 0}>
-                            <div class="agent-artifact-chips">
+                            <div class="mt-3 flex flex-wrap gap-2">
                               <For each={chips}>
                                 {(chip) => (
                                   <button
-                                    class="agent-artifact-chip"
+                                    class="cursor-pointer rounded-full border border-empty-border bg-accent-wash px-3 py-2 text-xs font-extrabold text-accent-deep hover:bg-accent-soft"
                                     type="button"
                                     title={chip.hint}
                                     data-testid={`agent-artifact-${chip.key}-${entry.run.runId}`}
@@ -859,7 +900,7 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
           </Show>
         </div>
         <form
-          class="agent-chat-composer"
+          class="mt-auto grid shrink-0 gap-2 rounded-[0.625rem] border border-line bg-surface p-4 shadow-[var(--wb-shadow-panel)]"
           onSubmit={(event) => {
             event.preventDefault();
             void send();
@@ -872,6 +913,7 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
             ref={agentChatInput}
             id="agent-chat-input"
             rows={3}
+            class="min-h-20 resize-y rounded-[0.375rem] border border-line bg-surface px-3 py-2 text-ink focus-visible:outline focus-visible:outline-3 focus-visible:outline-focus focus-visible:outline-offset-2"
             value={draft()}
             onInput={(event) => setDraft(event.currentTarget.value)}
             onKeyDown={(event) => {
@@ -884,10 +926,10 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
             disabled={sending()}
             data-testid="agent-chat-input"
           />
-          <div class="flex gap-[var(--wb-space-2)]">
+          <div class="flex gap-2">
             <Show when={streamingRun() !== null}>
               <button
-                class="text-button"
+                class={TEXT_BUTTON}
                 type="button"
                 data-testid="agent-chat-cancel"
                 onClick={() => void cancelCurrent()}
@@ -896,7 +938,7 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
               </button>
             </Show>
             <button
-              class="text-button"
+              class={TEXT_BUTTON}
               type="submit"
               disabled={sending() || draft().trim().length === 0}
               data-testid="agent-chat-send"

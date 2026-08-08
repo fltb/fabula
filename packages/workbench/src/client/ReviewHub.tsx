@@ -15,6 +15,7 @@ import type {
   ProjectAccessRole,
 } from '../contracts/index.js';
 import { BrowserReviewApiError } from './browser-review-api.js';
+import { Diagnostic, KICKER, ScreenEmpty, ScreenNote, TEXT_BUTTON } from './ui/primitives';
 
 export interface ReviewHubProps {
   /** Project identity for mutation requests; null when no project is open. */
@@ -98,7 +99,11 @@ function statusLabel(status: BrowserReviewCommentV1['status']): string {
 function SeverityBadge(props: { readonly severity: BrowserReviewSeverityV1 }) {
   return (
     <span
-      class={`review-severity review-severity-${props.severity}`}
+      class={`px-2 py-1 rounded-full text-[0.625rem] font-extrabold uppercase leading-[1.2] tracking-[0.06em] ${
+        props.severity === 'blocking'
+          ? 'bg-error-surface text-danger'
+          : 'bg-accent-wash text-accent-deep'
+      }`}
       data-severity={props.severity}
     >
       {props.severity}
@@ -140,38 +145,51 @@ function ReviewCommentCard(props: {
   };
 
   return (
-    <li class="review-comment" data-comment-id={comment().commentId} data-status={comment().status}>
-      <div class="review-comment-heading">
-        <span class="review-comment-status" data-status={comment().status}>
+    <li
+      class="grid gap-3 rounded-[0.625rem] border border-line bg-surface p-5 shadow-[var(--wb-shadow-panel)]"
+      data-comment-id={comment().commentId}
+      data-status={comment().status}
+    >
+      <div class="flex flex-wrap items-center gap-2">
+        <span
+          class="rounded-full bg-ready-surface px-2 py-1 text-[0.625rem] font-extrabold uppercase leading-[1.2] tracking-[0.06em] text-success"
+          data-status={comment().status}
+        >
           {statusLabel(comment().status)}
         </span>
         <SeverityBadge severity={comment().severity} />
-        <span class="review-comment-category">{comment().category}</span>
-        <code class="review-comment-id">{comment().commentId}</code>
+        <span>{comment().category}</span>
+        <code class="text-[0.6875rem] text-muted">{comment().commentId}</code>
       </div>
-      <p class="review-comment-content">{comment().content}</p>
-      <dl class="review-comment-meta">
-        <div>
-          <dt>场景事件</dt>
-          <dd>
+      <p class="m-0 text-sm leading-[1.6] text-ink-soft">{comment().content}</p>
+      <dl class="m-0 grid gap-2">
+        <div class="grid grid-cols-[8rem_minmax(0,1fr)] gap-2 rounded-[0.375rem] bg-surface-muted px-3 py-2 max-[40rem]:grid-cols-1">
+          <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
+            场景事件
+          </dt>
+          <dd class="m-0 break-words text-[0.8125rem]">
             <code>{comment().eventId}</code>
           </dd>
         </div>
-        <div>
-          <dt>创建时间</dt>
-          <dd>{comment().createdAt}</dd>
+        <div class="grid grid-cols-[8rem_minmax(0,1fr)] gap-2 rounded-[0.375rem] bg-surface-muted px-3 py-2 max-[40rem]:grid-cols-1">
+          <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
+            创建时间
+          </dt>
+          <dd class="m-0 break-words text-[0.8125rem]">{comment().createdAt}</dd>
         </div>
         <Show when={comment().supersedesId !== null}>
-          <div>
-            <dt>替代</dt>
-            <dd>
+          <div class="grid grid-cols-[8rem_minmax(0,1fr)] gap-2 rounded-[0.375rem] bg-surface-muted px-3 py-2 max-[40rem]:grid-cols-1">
+            <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
+              替代
+            </dt>
+            <dd class="m-0 break-words text-[0.8125rem]">
               <code>{comment().supersedesId}</code>
             </dd>
           </div>
         </Show>
       </dl>
       <Show when={comment().applications.length > 0}>
-        <section class="review-revision-linkage" aria-label="修订关联">
+        <section aria-label="修订关联">
           <h4>相关修订</h4>
           <ul>
             <For each={comment().applications}>
@@ -186,12 +204,12 @@ function ReviewCommentCard(props: {
         </section>
       </Show>
       <Show when={props.canUpdate}>
-        <div class="review-comment-actions">
+        <div class="flex flex-wrap gap-2">
           <Show
             when={comment().status === 'open' || comment().status === 'addressed'}
             fallback={
               <button
-                class="text-button"
+                class={TEXT_BUTTON}
                 type="button"
                 data-testid={`reopen-${comment().commentId}`}
                 onClick={() => sendStatusAction('reopen')}
@@ -201,7 +219,7 @@ function ReviewCommentCard(props: {
             }
           >
             <button
-              class="text-button"
+              class={TEXT_BUTTON}
               type="button"
               data-testid={`resolve-${comment().commentId}`}
               onClick={() => sendStatusAction('resolve')}
@@ -209,7 +227,7 @@ function ReviewCommentCard(props: {
               标记已解决
             </button>
             <button
-              class="text-button"
+              class={TEXT_BUTTON}
               type="button"
               data-testid={`wontfix-${comment().commentId}`}
               onClick={() => sendStatusAction('wontfix')}
@@ -218,7 +236,7 @@ function ReviewCommentCard(props: {
             </button>
             <Show when={comment().severity !== 'blocking'}>
               <button
-                class="text-button"
+                class={TEXT_BUTTON}
                 type="button"
                 data-testid={`escalate-${comment().commentId}`}
                 onClick={() => sendStatusAction('escalate')}
@@ -231,7 +249,7 @@ function ReviewCommentCard(props: {
             when={replaceOpen()}
             fallback={
               <button
-                class="text-button"
+                class={TEXT_BUTTON}
                 type="button"
                 data-testid={`replace-open-${comment().commentId}`}
                 onClick={() => setReplaceOpen(true)}
@@ -241,14 +259,14 @@ function ReviewCommentCard(props: {
             }
           >
             <input
-              class="review-replacement-input"
+              class="rounded-[0.375rem] border border-line bg-surface px-3 py-2 font-inherit text-ink"
               aria-label="替换意见内容"
               value={replacement()}
               onInput={(event) => setReplacement(event.currentTarget.value)}
               data-testid={`replace-text-${comment().commentId}`}
             />
             <button
-              class="text-button"
+              class={TEXT_BUTTON}
               type="button"
               disabled={replacement().trim().length === 0}
               data-testid={`replace-save-${comment().commentId}`}
@@ -257,7 +275,7 @@ function ReviewCommentCard(props: {
               保存
             </button>
             <button
-              class="text-button"
+              class={TEXT_BUTTON}
               type="button"
               onClick={() => {
                 setReplacement('');
@@ -298,45 +316,61 @@ function ReviewGateCard(props: {
   };
 
   return (
-    <li class="review-gate" data-gate-id={gate().gateId} data-status={gate().status}>
-      <div class="review-gate-heading">
-        <span class="review-gate-status" data-status={gate().status}>
+    <li
+      class="grid gap-3 rounded-[0.625rem] border border-line bg-surface p-5 shadow-[var(--wb-shadow-panel)]"
+      data-gate-id={gate().gateId}
+      data-status={gate().status}
+    >
+      <div class="flex flex-wrap items-center gap-2">
+        <span
+          class="rounded-full bg-ready-surface px-2 py-1 text-[0.625rem] font-extrabold uppercase leading-[1.2] tracking-[0.06em] text-success"
+          data-status={gate().status}
+        >
           {gate().status}
         </span>
-        <code class="review-gate-id">{gate().gateId}</code>
+        <code class="text-[0.6875rem] text-muted">{gate().gateId}</code>
       </div>
-      <dl class="review-comment-meta">
-        <div>
-          <dt>场景事件</dt>
-          <dd>
+      <dl class="m-0 grid gap-2">
+        <div class="grid grid-cols-[8rem_minmax(0,1fr)] gap-2 rounded-[0.375rem] bg-surface-muted px-3 py-2 max-[40rem]:grid-cols-1">
+          <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
+            场景事件
+          </dt>
+          <dd class="m-0 break-words text-[0.8125rem]">
             <code>{gate().eventId}</code>
           </dd>
         </div>
-        <div>
-          <dt>候选修订</dt>
-          <dd>
+        <div class="grid grid-cols-[8rem_minmax(0,1fr)] gap-2 rounded-[0.375rem] bg-surface-muted px-3 py-2 max-[40rem]:grid-cols-1">
+          <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
+            候选修订
+          </dt>
+          <dd class="m-0 break-words text-[0.8125rem]">
             <code>{gate().revisionId}</code>
           </dd>
         </div>
-        <div>
-          <dt>源哈希</dt>
-          <dd>
+        <div class="grid grid-cols-[8rem_minmax(0,1fr)] gap-2 rounded-[0.375rem] bg-surface-muted px-3 py-2 max-[40rem]:grid-cols-1">
+          <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">
+            源哈希
+          </dt>
+          <dd class="m-0 break-words text-[0.8125rem]">
             <code>{gate().sourceHash}</code>
           </dd>
         </div>
-        <div>
-          <dt>警告</dt>
-          <dd>{gate().warningFingerprints.length}</dd>
+        <div class="grid grid-cols-[8rem_minmax(0,1fr)] gap-2 rounded-[0.375rem] bg-surface-muted px-3 py-2 max-[40rem]:grid-cols-1">
+          <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-muted">警告</dt>
+          <dd class="m-0 break-words text-[0.8125rem]">{gate().warningFingerprints.length}</dd>
         </div>
       </dl>
       <Show when={gate().decision !== null}>
-        <p class="review-gate-decision" data-decision={gate().decision?.decision}>
+        <p
+          class="m-0 text-[0.8125rem] leading-[1.5] text-ink-soft"
+          data-decision={gate().decision?.decision}
+        >
           已决定：{gate().decision?.decision} · {gate().decision?.decidedAt}：{' '}
           {gate().decision?.reason}
         </p>
       </Show>
       <Show when={props.canDecide && gate().status === 'open'}>
-        <div class="review-gate-decide">
+        <div class="grid gap-2 rounded-[0.375rem] bg-surface-muted p-3">
           <label>
             <input
               type="radio"
@@ -358,14 +392,14 @@ function ReviewGateCard(props: {
             拒绝
           </label>
           <input
-            class="review-gate-reason"
+            class="rounded-[0.375rem] border border-line bg-surface px-3 py-2 font-inherit text-ink"
             aria-label="决策理由"
             placeholder="理由（必填）"
             value={reason()}
             onInput={(event) => setReason(event.currentTarget.value)}
           />
           <button
-            class="text-button"
+            class={TEXT_BUTTON}
             type="button"
             disabled={reason().trim().length === 0}
             data-testid={`gate-decide-${gate().gateId}`}
@@ -430,15 +464,15 @@ export function ReviewHub(props: ReviewHubProps) {
   };
 
   return (
-    <section class="review-hub" aria-labelledby="review-hub-heading">
-      <header class="review-hub-header">
+    <section class="mx-auto grid max-w-[60rem] gap-6" aria-labelledby="review-hub-heading">
+      <header class="flex items-start justify-between gap-3">
         <div>
-          <p class="region-kicker">人工评审</p>
+          <p class={KICKER}>人工评审</p>
           <h2 id="review-hub-heading">评审中心</h2>
         </div>
         <Show when={props.onRefresh !== undefined}>
           <button
-            class="text-button"
+            class={TEXT_BUTTON}
             type="button"
             data-testid="review-refresh"
             onClick={() => void props.onRefresh?.()}
@@ -449,9 +483,9 @@ export function ReviewHub(props: ReviewHubProps) {
       </header>
 
       <Show when={mutationError() !== null}>
-        <p class="diagnostic diagnostic-error" role="alert" data-review-mutation-error>
-          {mutationError()}
-        </p>
+        <div role="alert" data-review-mutation-error>
+          <Diagnostic severity="error">{mutationError()}</Diagnostic>
+        </div>
       </Show>
 
       <Show
@@ -462,9 +496,9 @@ export function ReviewHub(props: ReviewHubProps) {
           props.reviewError !== undefined
         }
       >
-        <p class="diagnostic diagnostic-error" role="alert" data-testid="review-partial-error">
-          {props.reviewError}
-        </p>
+        <div role="alert" data-testid="review-partial-error">
+          <Diagnostic severity="error">{props.reviewError}</Diagnostic>
+        </div>
       </Show>
 
       <Show
@@ -473,35 +507,35 @@ export function ReviewHub(props: ReviewHubProps) {
           <Show
             when={props.reviewError !== null && props.reviewError !== undefined}
             fallback={
-              <section class="screen-empty" aria-live="polite">
-                <h3>暂无评审数据</h3>
-                <p>打开已认证的项目以加载其评审意见。</p>
-              </section>
+              <ScreenEmpty title="暂无评审数据" body="打开已认证的项目以加载其评审意见。" />
             }
           >
-            <section class="screen-empty" aria-live="polite" data-testid="review-load-error">
-              <h3>评审中心加载失败</h3>
-              <p>{props.reviewError}</p>
-              <Show when={props.onRefresh !== undefined}>
-                <button
-                  class="text-button"
-                  type="button"
-                  data-testid="review-load-retry"
-                  onClick={() => void props.onRefresh?.()}
-                >
-                  重试
-                </button>
-              </Show>
-            </section>
+            <div data-testid="review-load-error">
+              <ScreenEmpty title="评审中心加载失败" body={props.reviewError ?? undefined}>
+                <Show when={props.onRefresh !== undefined}>
+                  <button
+                    class={TEXT_BUTTON}
+                    type="button"
+                    data-testid="review-load-retry"
+                    onClick={() => void props.onRefresh?.()}
+                  >
+                    重试
+                  </button>
+                </Show>
+              </ScreenEmpty>
+            </div>
           </Show>
         }
       >
         {(review) => (
-          <section class="review-comments" aria-labelledby="review-comments-heading">
-            <div class="review-section-heading">
+          <section aria-labelledby="review-comments-heading">
+            <div>
               <h3 id="review-comments-heading">
                 评审意见{' '}
-                <span class="review-count" data-testid="review-count">
+                <span
+                  class="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-accent-wash px-1 text-[0.6875rem] font-extrabold text-accent-deep"
+                  data-testid="review-count"
+                >
                   {review().comments.length}
                 </span>
               </h3>
@@ -510,7 +544,7 @@ export function ReviewHub(props: ReviewHubProps) {
                   when={addOpen()}
                   fallback={
                     <button
-                      class="text-button"
+                      class={TEXT_BUTTON}
                       type="button"
                       data-testid="review-add-open"
                       onClick={() => setAddOpen(true)}
@@ -520,13 +554,14 @@ export function ReviewHub(props: ReviewHubProps) {
                   }
                 >
                   <form
-                    class="review-add-form"
+                    class="grid gap-2 rounded-[0.625rem] border border-line bg-surface-muted p-4"
                     onSubmit={(event) => {
                       event.preventDefault();
                       addComment();
                     }}
                   >
                     <input
+                      class="rounded-[0.375rem] border border-line bg-surface px-3 py-2 font-inherit text-ink"
                       aria-label="场景事件编号"
                       placeholder="场景事件编号（如 E1）"
                       value={addEventId()}
@@ -563,7 +598,7 @@ export function ReviewHub(props: ReviewHubProps) {
                       data-testid="review-add-text"
                     />
                     <button
-                      class="text-button"
+                      class={TEXT_BUTTON}
                       type="submit"
                       disabled={
                         addEventId().trim().length === 0 || addContent().trim().length === 0
@@ -572,7 +607,7 @@ export function ReviewHub(props: ReviewHubProps) {
                     >
                       添加
                     </button>
-                    <button class="text-button" type="button" onClick={() => setAddOpen(false)}>
+                    <button class={TEXT_BUTTON} type="button" onClick={() => setAddOpen(false)}>
                       取消
                     </button>
                   </form>
@@ -581,9 +616,9 @@ export function ReviewHub(props: ReviewHubProps) {
             </div>
             <Show
               when={review().comments.length > 0}
-              fallback={<p class="screen-note">还没有评审意见。</p>}
+              fallback={<ScreenNote>还没有评审意见。</ScreenNote>}
             >
-              <ul class="review-comment-list" aria-label="评审意见">
+              <ul class="m-0 mt-4 grid list-none gap-4 p-0" aria-label="评审意见">
                 <For each={review().comments}>
                   {(comment) => (
                     <ReviewCommentCard
@@ -602,20 +637,23 @@ export function ReviewHub(props: ReviewHubProps) {
         )}
       </Show>
 
-      <Show when={props.gates} fallback={<p class="screen-note">暂无检查项数据。</p>}>
+      <Show when={props.gates} fallback={<ScreenNote>暂无检查项数据。</ScreenNote>}>
         {(gates) => (
-          <section class="review-gates" aria-labelledby="review-gates-heading">
+          <section aria-labelledby="review-gates-heading">
             <h3 id="review-gates-heading">
               发布检查项{' '}
-              <span class="review-count" data-testid="gate-count">
+              <span
+                class="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-accent-wash px-1 text-[0.6875rem] font-extrabold text-accent-deep"
+                data-testid="gate-count"
+              >
                 {gates().gates.length}
               </span>
             </h3>
             <Show
               when={gates().gates.length > 0}
-              fallback={<p class="screen-note">没有待处理的检查项。</p>}
+              fallback={<ScreenNote>没有待处理的检查项。</ScreenNote>}
             >
-              <ul class="review-gate-list" aria-label="发布检查项">
+              <ul class="m-0 mt-4 grid list-none gap-4 p-0" aria-label="发布检查项">
                 <For each={gates().gates}>
                   {(gate) => (
                     <ReviewGateCard
@@ -632,19 +670,24 @@ export function ReviewHub(props: ReviewHubProps) {
         )}
       </Show>
 
-      <Show when={props.history} fallback={<p class="screen-note">暂无评审历史记录。</p>}>
+      <Show when={props.history} fallback={<ScreenNote>暂无评审历史记录。</ScreenNote>}>
         {(history) => (
           <Show when={history().entries.length > 0}>
-            <section class="review-history" aria-labelledby="review-history-heading">
+            <section aria-labelledby="review-history-heading">
               <h3 id="review-history-heading">历史</h3>
-              <ol class="review-history-list" aria-label="评审事件流">
+              <ol class="m-0 mt-3 grid list-none gap-1 p-0" aria-label="评审事件流">
                 <For each={history().entries}>
                   {(entry) => (
-                    <li data-history-kind={entry.kind}>
-                      <span class="review-history-kind">{entry.kind}</span>
-                      <span class="review-history-summary">{entry.summary}</span>
+                    <li
+                      class="flex flex-wrap items-center gap-2 rounded-[0.375rem] bg-surface-muted px-3 py-2 text-[0.8125rem]"
+                      data-history-kind={entry.kind}
+                    >
+                      <span class="text-[0.625rem] font-extrabold uppercase tracking-[0.08em] text-muted">
+                        {entry.kind}
+                      </span>
+                      <span>{entry.summary}</span>
                       <Show when={entry.revisionId !== null}>
-                        <code class="review-history-revision">{entry.revisionId}</code>
+                        <code class="text-[0.6875rem] text-muted">{entry.revisionId}</code>
                       </Show>
                       <time>{entry.at}</time>
                     </li>

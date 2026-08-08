@@ -9,6 +9,16 @@ import type {
   ProjectAccessRole,
   ReferenceItemV1,
 } from '../contracts/index.js';
+import { Badge } from './ui/controls';
+import {
+  BUTTON,
+  BUTTON_GHOST,
+  BUTTON_PRIMARY,
+  Diagnostic,
+  KICKER,
+  ScreenEmpty,
+  ScreenNote,
+} from './ui/primitives';
 
 /** Bounded content preview slice; the Host read route caps at 1 MiB per read. */
 const REFERENCE_PREVIEW_BYTES = 64 * 1024;
@@ -120,8 +130,8 @@ function previewText(content: BrowserProjectReferenceReadResultV1): string {
 
 function MediaTypeBadge(props: { readonly mediaType: string }) {
   return (
-    <span class="badge reference-media-badge" title={props.mediaType}>
-      {props.mediaType}
+    <span title={props.mediaType}>
+      <Badge tone="event">{props.mediaType}</Badge>
     </span>
   );
 }
@@ -299,15 +309,15 @@ export function ReferencesView(props: ReferencesViewProps) {
   const selectedItem = () => items().find((item) => item.referenceId === selectedId()) ?? null;
 
   return (
-    <section class="reference-view" aria-labelledby="references-heading">
-      <header class="reference-header">
+    <section class="grid max-w-[60rem] gap-6" aria-labelledby="references-heading">
+      <header class="flex items-start justify-between gap-4">
         <div>
-          <p class="region-kicker">参考资料库</p>
+          <p class={KICKER}>参考资料库</p>
           <h2 id="references-heading">参考资料</h2>
         </div>
         <Show when={props.onRefresh !== undefined}>
           <button
-            class="btn"
+            class={BUTTON}
             type="button"
             data-testid="references-refresh"
             onClick={() => void props.onRefresh?.()}
@@ -318,9 +328,9 @@ export function ReferencesView(props: ReferencesViewProps) {
       </header>
 
       <Show when={mutationError() !== null}>
-        <p class="diagnostic diagnostic-error" role="alert" data-testid="references-mutation-error">
-          {mutationError()}
-        </p>
+        <div role="alert" data-testid="references-mutation-error">
+          <Diagnostic severity="error">{mutationError()}</Diagnostic>
+        </div>
       </Show>
 
       <Show
@@ -329,25 +339,25 @@ export function ReferencesView(props: ReferencesViewProps) {
           <Show
             when={props.referencesError !== null && props.referencesError !== undefined}
             fallback={
-              <section class="screen-empty" aria-live="polite">
-                <h3>暂无参考资料投影</h3>
-                <p>在 Host 中打开已认证的项目以加载其参考资料库。</p>
-              </section>
+              <ScreenEmpty
+                title="暂无参考资料投影"
+                body="在 Host 中打开已认证的项目以加载其参考资料库。"
+              />
             }
           >
-            <section class="screen-empty" aria-live="polite" data-testid="references-load-error">
-              <h3>参考资料库加载失败</h3>
-              <p>{props.referencesError}</p>
-              <Show when={props.onRefresh !== undefined}>
-                <button
-                  class="btn"
-                  type="button"
-                  data-testid="references-load-retry"
-                  onClick={() => void props.onRefresh?.()}
-                >
-                  重试
-                </button>
-              </Show>
+            <section data-testid="references-load-error">
+              <ScreenEmpty title="参考资料库加载失败" body={props.referencesError ?? undefined}>
+                <Show when={props.onRefresh !== undefined}>
+                  <button
+                    class={BUTTON}
+                    type="button"
+                    data-testid="references-load-retry"
+                    onClick={() => void props.onRefresh?.()}
+                  >
+                    重试
+                  </button>
+                </Show>
+              </ScreenEmpty>
             </section>
           </Show>
         }
@@ -355,7 +365,12 @@ export function ReferencesView(props: ReferencesViewProps) {
         {(catalog) => (
           <section
             aria-labelledby="references-list-heading"
-            class={`reference-list-section${dragging() ? ' reference-dragging' : ''}`}
+            class="grid gap-4 rounded-[0.625rem] border-2 border-dashed p-4 transition-[border-color,background] duration-[150ms]"
+            classList={{
+              'border-line': !dragging(),
+              'border-accent': dragging(),
+              'bg-accent-wash': dragging(),
+            }}
             data-testid="references-list-section"
             onDragOver={(event) => {
               event.preventDefault();
@@ -369,7 +384,7 @@ export function ReferencesView(props: ReferencesViewProps) {
               void importFiles(files);
             }}
           >
-            <div class="reference-section-heading">
+            <div class="flex flex-wrap items-center justify-between gap-3">
               <h3 id="references-list-heading">
                 参考资料{' '}
                 <span class="publication-count" data-testid="references-count">
@@ -377,7 +392,7 @@ export function ReferencesView(props: ReferencesViewProps) {
                 </span>
               </h3>
               <Show when={canImport()}>
-                <label class="btn btn-primary" data-testid="references-import-open">
+                <label class={`${BUTTON} ${BUTTON_PRIMARY}`} data-testid="references-import-open">
                   导入文件
                   <input
                     type="file"
@@ -395,28 +410,28 @@ export function ReferencesView(props: ReferencesViewProps) {
             </div>
 
             <Show when={canImport()}>
-              <p class="screen-note" data-testid="references-import-hint">
-                或将文件拖拽到列表区域导入。
-              </p>
+              <div data-testid="references-import-hint">
+                <ScreenNote>或将文件拖拽到列表区域导入。</ScreenNote>
+              </div>
             </Show>
 
             <Show when={uploads().length > 0}>
-              <ul class="reference-uploads" aria-label="待导入">
+              <ul class="m-0 grid list-none gap-2 p-0" aria-label="待导入">
                 <For each={uploads()}>
                   {(row) => (
                     <li
-                      class={`reference-upload reference-upload-${row.status}`}
+                      class="flex flex-wrap items-center gap-2 rounded-[0.625rem] border border-line bg-surface-muted px-3 py-2 text-[0.8125rem]"
                       data-testid={`reference-upload-${row.status}`}
                     >
-                      <span class="reference-upload-name">{row.fileName}</span>
+                      <span class="wrap-anywhere font-bold">{row.fileName}</span>
                       <Show
                         when={row.status === 'failed'}
-                        fallback={<span class="reference-upload-state">导入中…</span>}
+                        fallback={<span class="text-muted">导入中…</span>}
                       >
-                        <span class="reference-upload-state">{row.message ?? '导入失败'}</span>
+                        <span class="text-danger">{row.message ?? '导入失败'}</span>
                         <Show when={row.jobId !== undefined && props.onRetry !== undefined}>
                           <button
-                            class="btn btn-ghost"
+                            class={`${BUTTON} ${BUTTON_GHOST}`}
                             type="button"
                             data-testid={`reference-retry-${row.id}`}
                             onClick={() => void retry(row)}
@@ -432,7 +447,7 @@ export function ReferencesView(props: ReferencesViewProps) {
             </Show>
 
             <input
-              class="reference-filter"
+              class="rounded-[0.625rem] border border-line bg-surface px-3 py-2 text-ink focus-visible:outline focus-visible:outline-3 focus-visible:outline-focus focus-visible:outline-offset-2"
               type="search"
               aria-label="搜索参考资料"
               placeholder="搜索参考资料…"
@@ -444,44 +459,50 @@ export function ReferencesView(props: ReferencesViewProps) {
             <Show
               when={catalog().items.length > 0 || items().length > 0}
               fallback={
-                <section class="screen-empty" aria-live="polite" data-testid="references-empty">
-                  <h3>还没有参考资料</h3>
-                  <p>
-                    还没有参考资料。点击「导入文件」添加，或让 Agent 用{' '}
-                    <code>nova_reference_import_*</code> 帮你导入。
-                  </p>
+                <section data-testid="references-empty">
+                  <ScreenEmpty title="还没有参考资料">
+                    <p class="m-0 text-sm leading-[1.6] text-muted">
+                      还没有参考资料。点击「导入文件」添加，或让 Agent 用{' '}
+                      <code>nova_reference_import_*</code> 帮你导入。
+                    </p>
+                  </ScreenEmpty>
                 </section>
               }
             >
               <Show
                 when={visibleItems().length > 0}
                 fallback={
-                  <p class="screen-note" data-testid="references-filter-empty">
-                    没有匹配「{filter()}」的参考资料。
-                  </p>
+                  <div data-testid="references-filter-empty">
+                    <ScreenNote>没有匹配「{filter()}」的参考资料。</ScreenNote>
+                  </div>
                 }
               >
-                <ul class="reference-list" aria-label="参考资料">
+                <ul class="m-0 grid list-none gap-3 p-0" aria-label="参考资料">
                   <For each={visibleItems()}>
                     {(item) => (
-                      <li class="reference-row" data-testid={`reference-row-${item.referenceId}`}>
+                      <li
+                        class="grid grid-cols-[1fr_auto] items-center gap-3 rounded-[0.625rem] border border-line bg-surface p-4"
+                        data-testid={`reference-row-${item.referenceId}`}
+                      >
                         <button
-                          class="reference-row-main"
+                          class="group grid cursor-pointer gap-1 border-0 bg-transparent p-0 text-left text-ink"
                           type="button"
                           onClick={() => void openDetail(item)}
                         >
-                          <span class="reference-row-title">{item.displayName}</span>
-                          <span class="reference-row-subline">
+                          <span class="wrap-anywhere font-extrabold group-hover:text-accent-deep">
+                            {item.displayName}
+                          </span>
+                          <span class="text-xs text-muted">
                             {item.originalName} · {formatBytes(item.byteLength)}
                           </span>
-                          <span class="reference-row-meta">
+                          <span class="flex flex-wrap items-center gap-2 text-[0.6875rem] text-muted">
                             <MediaTypeBadge mediaType={item.mediaType} />
                             <Show when={item.authors.length > 0}>
-                              <span class="reference-row-authors">{item.authors.join(', ')}</span>
+                              <span class="wrap-anywhere">{item.authors.join(', ')}</span>
                             </Show>
                             <Show when={item.sourceUrl !== null}>
                               <a
-                                class="reference-row-source"
+                                class="wrap-anywhere text-accent-deep"
                                 href={item.sourceUrl ?? undefined}
                                 target="_blank"
                                 rel="noreferrer"
@@ -490,12 +511,12 @@ export function ReferencesView(props: ReferencesViewProps) {
                                 {item.sourceUrl}
                               </a>
                             </Show>
-                            <span class="reference-row-date">{formatDate(item.createdAt)}</span>
+                            <span class="wrap-anywhere">{formatDate(item.createdAt)}</span>
                           </span>
                         </button>
                         <Show when={canDelete()}>
                           <button
-                            class="btn btn-ghost reference-row-delete"
+                            class={`${BUTTON} ${BUTTON_GHOST} whitespace-nowrap`}
                             type="button"
                             data-testid={`reference-delete-${item.referenceId}`}
                             onClick={() => confirmDelete(item.referenceId)}
@@ -511,7 +532,7 @@ export function ReferencesView(props: ReferencesViewProps) {
 
               <Show when={nextCursor() !== null && props.onLoadMore !== undefined}>
                 <button
-                  class="btn"
+                  class={BUTTON}
                   type="button"
                   data-testid="references-load-more"
                   onClick={() => void loadMore()}
@@ -520,9 +541,9 @@ export function ReferencesView(props: ReferencesViewProps) {
                 </button>
               </Show>
               <Show when={loadMoreError() !== null}>
-                <p class="diagnostic diagnostic-error" role="alert">
-                  {loadMoreError()}
-                </p>
+                <div role="alert">
+                  <Diagnostic severity="error">{loadMoreError()}</Diagnostic>
+                </div>
               </Show>
             </Show>
           </section>
@@ -530,11 +551,16 @@ export function ReferencesView(props: ReferencesViewProps) {
       </Show>
 
       <Show when={selectedItem() !== null}>
-        <section class="reference-detail" aria-labelledby="reference-detail-heading">
-          <div class="reference-detail-heading">
-            <h3 id="reference-detail-heading">{selectedItem()?.displayName}</h3>
+        <section
+          class="grid gap-4 rounded-[0.625rem] border border-line bg-surface p-5"
+          aria-labelledby="reference-detail-heading"
+        >
+          <div class="flex items-center justify-between gap-3">
+            <h3 id="reference-detail-heading" class="m-0 wrap-anywhere">
+              {selectedItem()?.displayName}
+            </h3>
             <button
-              class="btn btn-ghost"
+              class={`${BUTTON} ${BUTTON_GHOST}`}
               type="button"
               onClick={() => setSelectedId(null)}
               data-testid="references-detail-close"
@@ -542,59 +568,68 @@ export function ReferencesView(props: ReferencesViewProps) {
               关闭
             </button>
           </div>
-          <dl class="reference-detail-meta">
-            <div>
-              <dt>原文文件名</dt>
-              <dd>{selectedItem()?.originalName}</dd>
+          <dl class="m-0 grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-2">
+            <div class="grid gap-1 rounded-[0.625rem] bg-surface-muted px-3 py-2">
+              <dt class="text-[0.625rem] font-extrabold text-muted">原文文件名</dt>
+              <dd class="m-0 wrap-anywhere text-[0.8125rem]">{selectedItem()?.originalName}</dd>
             </div>
-            <div>
-              <dt>类型</dt>
-              <dd>
+            <div class="grid gap-1 rounded-[0.625rem] bg-surface-muted px-3 py-2">
+              <dt class="text-[0.625rem] font-extrabold text-muted">类型</dt>
+              <dd class="m-0 wrap-anywhere text-[0.8125rem]">
                 <MediaTypeBadge mediaType={selectedItem()?.mediaType ?? ''} />
               </dd>
             </div>
-            <div>
-              <dt>大小</dt>
-              <dd>{formatBytes(selectedItem()?.byteLength ?? 0)}</dd>
+            <div class="grid gap-1 rounded-[0.625rem] bg-surface-muted px-3 py-2">
+              <dt class="text-[0.625rem] font-extrabold text-muted">大小</dt>
+              <dd class="m-0 wrap-anywhere text-[0.8125rem]">
+                {formatBytes(selectedItem()?.byteLength ?? 0)}
+              </dd>
             </div>
             <Show when={selectedItem()?.title !== null}>
-              <div>
-                <dt>标题</dt>
-                <dd>{selectedItem()?.title}</dd>
+              <div class="grid gap-1 rounded-[0.625rem] bg-surface-muted px-3 py-2">
+                <dt class="text-[0.625rem] font-extrabold text-muted">标题</dt>
+                <dd class="m-0 wrap-anywhere text-[0.8125rem]">{selectedItem()?.title}</dd>
               </div>
             </Show>
             <Show when={(selectedItem()?.authors.length ?? 0) > 0}>
-              <div>
-                <dt>作者</dt>
-                <dd>{selectedItem()?.authors.join(', ')}</dd>
+              <div class="grid gap-1 rounded-[0.625rem] bg-surface-muted px-3 py-2">
+                <dt class="text-[0.625rem] font-extrabold text-muted">作者</dt>
+                <dd class="m-0 wrap-anywhere text-[0.8125rem]">
+                  {selectedItem()?.authors.join(', ')}
+                </dd>
               </div>
             </Show>
             <Show when={selectedItem()?.sourceUrl !== null}>
-              <div>
-                <dt>来源</dt>
-                <dd>{selectedItem()?.sourceUrl}</dd>
+              <div class="grid gap-1 rounded-[0.625rem] bg-surface-muted px-3 py-2">
+                <dt class="text-[0.625rem] font-extrabold text-muted">来源</dt>
+                <dd class="m-0 wrap-anywhere text-[0.8125rem]">{selectedItem()?.sourceUrl}</dd>
               </div>
             </Show>
             <Show when={selectedItem()?.license !== null}>
-              <div>
-                <dt>许可</dt>
-                <dd>{selectedItem()?.license}</dd>
+              <div class="grid gap-1 rounded-[0.625rem] bg-surface-muted px-3 py-2">
+                <dt class="text-[0.625rem] font-extrabold text-muted">许可</dt>
+                <dd class="m-0 wrap-anywhere text-[0.8125rem]">{selectedItem()?.license}</dd>
               </div>
             </Show>
             <Show when={(selectedItem()?.tags.length ?? 0) > 0}>
-              <div>
-                <dt>标签</dt>
-                <dd>{selectedItem()?.tags.join(', ')}</dd>
+              <div class="grid gap-1 rounded-[0.625rem] bg-surface-muted px-3 py-2">
+                <dt class="text-[0.625rem] font-extrabold text-muted">标签</dt>
+                <dd class="m-0 wrap-anywhere text-[0.8125rem]">
+                  {selectedItem()?.tags.join(', ')}
+                </dd>
               </div>
             </Show>
           </dl>
           <Show when={detailError() !== null}>
-            <p class="diagnostic diagnostic-error" role="alert">
-              {detailError()}
-            </p>
+            <div role="alert">
+              <Diagnostic severity="error">{detailError()}</Diagnostic>
+            </div>
           </Show>
           <Show when={detailContent() !== null}>
-            <pre class="reference-detail-content" data-testid="references-detail-content">
+            <pre
+              class="m-0 max-h-96 overflow-auto whitespace-pre-wrap rounded-[0.625rem] bg-surface-deep p-3 font-mono text-xs text-ink-soft wrap-anywhere"
+              data-testid="references-detail-content"
+            >
               {detailContent()}
             </pre>
           </Show>

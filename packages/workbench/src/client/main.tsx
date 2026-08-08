@@ -50,6 +50,7 @@ import {
   runtimeErrorMessage,
   runtimeHealthForError,
 } from './runtime-client';
+import { AGENT_FAB, AGENT_GUIDANCE, AGENT_SHELF_FLOATING, KICKER } from './ui/primitives';
 import {
   FIELD,
   LoginForm,
@@ -412,32 +413,32 @@ function ProjectsRoute(props: {
   };
 
   const createForm = (
-    <main class="min-h-screen bg-[var(--wb-canvas)] px-[var(--wb-space-4)] py-[var(--wb-space-10)]">
+    <main class="min-h-screen bg-canvas px-4 py-10">
       <section
-        class="mx-auto w-full max-w-3xl rounded-[var(--wb-radius-lg)] border border-[var(--wb-border)] bg-[var(--wb-surface)] p-[var(--wb-space-6)] shadow-[var(--wb-shadow-panel)]"
+        class="mx-auto w-full max-w-3xl rounded-[1rem] border border-line bg-surface p-6 shadow-[var(--wb-shadow-panel)]"
         aria-labelledby="create-project-heading"
       >
-        <p class="mb-[var(--wb-space-1)] text-[0.625rem] font-extrabold uppercase tracking-[0.12em] text-[var(--wb-muted)]">
+        <p class="mb-1 text-[0.625rem] font-extrabold uppercase tracking-[0.12em] text-muted">
           Workbench
         </p>
         <h1
           id="create-project-heading"
-          class="font-[var(--font-display)] text-3xl font-bold text-[var(--wb-ink)]"
+          class="font-[var(--font-display)] text-3xl font-bold text-ink"
         >
           创建项目
         </h1>
-        <p class="mt-[var(--wb-space-3)] text-sm leading-relaxed text-[var(--wb-muted)]">
+        <p class="mt-3 text-sm leading-relaxed text-muted">
           项目文件会安全地保存在 Host 上，不需要填写路径。
         </p>
         <form
-          class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-4)]"
+          class="mt-6 grid gap-4"
           onSubmit={(event) => {
             event.preventDefault();
             void createProject();
           }}
         >
           <label class="block">
-            <span class="text-sm font-semibold text-[var(--wb-ink)]">项目 ID</span>
+            <span class="text-sm font-semibold text-ink">项目 ID</span>
             <input
               class={FIELD}
               value={newProjectId()}
@@ -448,7 +449,7 @@ function ProjectsRoute(props: {
             />
           </label>
           <label class="block">
-            <span class="text-sm font-semibold text-[var(--wb-ink)]">显示名称</span>
+            <span class="text-sm font-semibold text-ink">显示名称</span>
             <input
               class={FIELD}
               value={newDisplayName()}
@@ -459,11 +460,11 @@ function ProjectsRoute(props: {
             />
           </label>
           <Show when={actionError()}>
-            <p class="text-sm text-[var(--wb-danger)]" role="alert">
+            <p class="text-sm text-danger" role="alert">
               {actionError()}
             </p>
           </Show>
-          <div class="flex flex-wrap items-center gap-[var(--wb-space-3)]">
+          <div class="flex flex-wrap items-center gap-3">
             <button class={PRIMARY_BUTTON} type="submit" disabled={busy()}>
               {busy() ? '创建中…' : '创建项目'}
             </button>
@@ -480,7 +481,7 @@ function ProjectsRoute(props: {
     <Show
       when={health() !== 'unauthorized'}
       fallback={
-        <main class="min-h-screen bg-[var(--wb-canvas)] px-[var(--wb-space-4)] py-[var(--wb-space-10)]">
+        <main class="min-h-screen bg-canvas px-4 py-10">
           <RuntimeStatePanel
             state="project-picker"
             health="unauthorized"
@@ -493,7 +494,7 @@ function ProjectsRoute(props: {
       <Show when={!creating()} fallback={createForm}>
         <Show when={actionError()}>
           <div
-            class="mx-auto mb-[var(--wb-space-4)] w-full max-w-3xl rounded-[var(--wb-radius-md)] border border-[var(--wb-error-border)] bg-[var(--wb-error-surface)] px-[var(--wb-space-4)] py-[var(--wb-space-3)] text-sm text-[var(--wb-danger)]"
+            class="mx-auto mb-4 w-full max-w-3xl rounded-[0.625rem] border border-error-border bg-error-surface px-4 py-3 text-sm text-danger"
             role="alert"
           >
             {actionError()}
@@ -523,19 +524,19 @@ function ProjectsRoute(props: {
       />
       <Show when={agentOpen()}>
         <aside
-          class="agent-drawer agent-drawer-floating"
+          class={`${AGENT_SHELF_FLOATING} min-h-0 min-w-0 overflow-hidden border-l border-line bg-surface`}
           data-testid="agent-shelf"
           aria-label="Agent"
         >
-          <div class="agent-drawer-guidance" data-testid="agent-drawer-guidance">
-            <p class="region-kicker">Agent</p>
-            <p class="agent-drawer-guidance-copy">选择一个项目后,Agent 将在这里就绪</p>
+          <div class={AGENT_GUIDANCE} data-testid="agent-drawer-guidance">
+            <p class={KICKER}>Agent</p>
+            <p class="m-0 text-sm leading-[1.6] text-muted">选择一个项目后,Agent 将在这里就绪</p>
           </div>
         </aside>
       </Show>
       <Show when={!agentOpen()}>
         <button
-          class="agent-drawer-fab"
+          class={AGENT_FAB}
           type="button"
           aria-label="Open Agent Shelf"
           onClick={() => setAgentOpen(true)}

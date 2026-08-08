@@ -1,4 +1,3 @@
-import { Dialog } from '@kobalte/core/dialog';
 import type { JSX } from 'solid-js';
 import { createMemo, createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import type {
@@ -55,6 +54,19 @@ import { SceneMap } from './SceneMap';
 import { SettingsView } from './SettingsView';
 import { SceneCanvas } from './scene-canvas';
 import { SourceStudio, type SourceStudioYjsStatus } from './source-studio';
+import { Dialog, Skeleton } from './ui/controls';
+import {
+  AGENT_FAB,
+  AGENT_GUIDANCE,
+  AGENT_TOGGLE,
+  AGENT_TOGGLE_ACTIVE,
+  KICKER,
+  StatusDot,
+  VIEW_BUTTON,
+  VIEW_BUTTON_ACTIVE,
+  VIEW_GLYPH,
+  VIEW_LABEL,
+} from './ui/primitives';
 
 /**
  * Full catalog of every Workbench view. The visible list is derived from the
@@ -438,21 +450,28 @@ function statusCopy(status: HostStatus) {
   return STATUS_COPY[status];
 }
 
-export function Navigator(props: NavigatorProps) {
+export function Navigator(props: NavigatorProps & { readonly class?: string }) {
+  const regionClass = () =>
+    props.class ??
+    `overflow-auto border-r border-line transition-[width] duration-200 ${
+      props.collapsed ? 'w-[4.75rem] items-center p-3' : 'w-[15rem] p-5 pr-3'
+    }`;
   return (
     <aside
-      class={`navigator-region${props.collapsed ? ' is-collapsed' : ''}`}
+      class={`flex min-h-0 flex-col gap-6 bg-surface ${regionClass()}`}
       aria-label="导航"
       data-collapsed={props.collapsed}
       data-testid="navigator"
     >
-      <div class="region-heading navigator-heading">
-        <div class="navigator-heading-copy">
-          <p class="region-kicker">导航</p>
-          <h2>工作台视图</h2>
-        </div>
+      <div class="flex min-h-9 items-center justify-between gap-3 px-2">
+        <Show when={!props.collapsed}>
+          <div class="min-w-0">
+            <p class={KICKER}>导航</p>
+            <h2 class="m-0 text-sm">工作台视图</h2>
+          </div>
+        </Show>
         <button
-          class="icon-button"
+          class="grid size-9 shrink-0 cursor-pointer place-items-center rounded-[0.375rem] border border-line text-base leading-none text-ink-soft transition-[color,background,border-color] duration-[160ms] hover:bg-surface-muted hover:text-ink"
           type="button"
           aria-label={props.collapsed ? '展开导航' : '收起导航'}
           aria-expanded={!props.collapsed}
@@ -462,67 +481,115 @@ export function Navigator(props: NavigatorProps) {
         </button>
       </div>
 
-      <nav aria-label="工作台视图" class="view-navigation">
+      <nav aria-label="工作台视图" class="grid w-full gap-1">
         <For each={props.views}>
           {(view) => (
             <button
-              class={`view-button${props.activeView === view.id ? ' is-active' : ''}`}
+              class={`${VIEW_BUTTON} ${props.activeView === view.id ? VIEW_BUTTON_ACTIVE : ''}${
+                props.collapsed ? ' justify-center px-2' : ''
+              }`}
               type="button"
               aria-current={props.activeView === view.id ? 'page' : undefined}
               aria-label={props.collapsed ? view.label : undefined}
               title={props.collapsed ? view.label : undefined}
               onClick={() => props.onViewChange(view.id)}
             >
-              <span class="view-glyph" aria-hidden="true">
+              <span
+                class={`${VIEW_GLYPH}${props.activeView === view.id ? ' text-accent' : ''}`}
+                aria-hidden="true"
+              >
                 {view.glyph}
               </span>
-              <span class="view-label">{view.label}</span>
+              <Show when={!props.collapsed}>
+                <span class={VIEW_LABEL}>{view.label}</span>
+              </Show>
             </button>
           )}
         </For>
       </nav>
 
-      <div class="navigator-footer">
-        <span class="status-dot" aria-hidden="true" />
-        <span class="view-label">Host 连接前为只读</span>
-      </div>
+      <Show when={!props.collapsed}>
+        <div class="mt-auto flex items-center gap-2 border-t border-line px-2 pt-3 text-[0.6875rem] leading-[1.35] text-muted">
+          <StatusDot status="unavailable" />
+          <span class={VIEW_LABEL}>Host 连接前为只读</span>
+        </div>
+      </Show>
     </aside>
   );
 }
+
+const HOST_STATUS_PILL: Record<HostStatus, string> = {
+  unavailable: 'border-line bg-surface-muted text-muted',
+  loading: 'border-loading-border bg-loading-surface text-warning',
+  empty: 'border-empty-border bg-accent-wash text-accent-deep',
+  error: 'border-error-border bg-error-surface text-danger',
+  ready: 'border-ready-border bg-ready-surface text-success',
+};
+
+const STATE_BORDER: Record<HostStatus, string> = {
+  unavailable: 'border-line',
+  loading: 'border-loading-border',
+  empty: 'border-empty-border',
+  error: 'border-error-border',
+  ready: 'border-line',
+};
+
+const STATE_MARKER: Record<HostStatus, string> = {
+  unavailable: 'bg-accent-wash text-accent-deep',
+  loading: 'bg-loading-surface text-warning',
+  empty: 'bg-accent-wash text-accent-deep',
+  error: 'bg-error-surface text-danger',
+  ready: 'bg-accent-wash text-accent-deep',
+};
 
 export function Workspace(props: WorkspaceProps) {
   const view = () => viewById(props.activeView, props.views);
   const copy = () => statusCopy(props.hostStatus);
 
   return (
-    <main class="workspace-scroll" id="workspace-panel" aria-labelledby="workspace-heading">
-      <div class="workspace-heading-row">
+    <main
+      class="min-h-0 min-w-0 flex-1 overflow-auto p-[clamp(1.5rem,5vw,2.5rem)]"
+      id="workspace-panel"
+      aria-labelledby="workspace-heading"
+    >
+      <div class="mx-auto mb-8 flex max-w-[60rem] items-end justify-between gap-6">
         <div>
-          <p class="region-kicker">工作台 / {view().label}</p>
-          <h1 id="workspace-heading">{view().label}</h1>
+          <p class={KICKER}>工作台 / {view().label}</p>
+          <h1 class="m-0" id="workspace-heading">
+            {view().label}
+          </h1>
         </div>
         <span
-          class={`host-status host-status-${props.hostStatus}${
-            props.eventConnected === false ? ' host-status-disconnected' : ''
+          class={`host-status inline-flex w-max items-center gap-2 rounded-full border px-3 py-2 text-[0.6875rem] font-bold leading-none tracking-[0.04em] whitespace-nowrap ${
+            props.eventConnected === false
+              ? 'border-error-border bg-error-surface text-danger'
+              : HOST_STATUS_PILL[props.hostStatus]
           }`}
         >
-          <span class="status-dot" aria-hidden="true" />
+          <StatusDot status={props.eventConnected === false ? 'disconnected' : props.hostStatus} />
           {props.eventConnected === false ? 'Host 连接中断，正在重连…' : copy().label}
         </span>
       </div>
 
       <section
-        class={`workspace-state workspace-state-${props.hostStatus}`}
+        class={`mx-auto mb-6 grid max-w-[60rem] grid-cols-[auto_minmax(0,1fr)] items-start gap-5 border bg-surface p-6 ${
+          STATE_BORDER[props.hostStatus]
+        }`}
         aria-live="polite"
         aria-busy={props.hostStatus === 'loading'}
         data-testid="workspace-state"
       >
-        <div class="state-marker" aria-hidden="true">
+        <span
+          class={`grid size-11 place-items-center rounded-full font-display text-2xl ${
+            STATE_MARKER[props.hostStatus]
+          }`}
+          aria-hidden="true"
+        >
           {copy().marker}
-        </div>
-        <div class="state-copy">
-          <p class="region-kicker">投影状态</p>
-          <p>{copy().description}</p>
+        </span>
+        <div class="min-w-0">
+          <p class={KICKER}>投影状态</p>
+          <p class="mb-0 max-w-[48rem] text-sm leading-[1.6] text-muted">{copy().description}</p>
         </div>
       </section>
 
@@ -530,15 +597,15 @@ export function Workspace(props: WorkspaceProps) {
         when={!props.loading}
         fallback={
           <div
-            class="workspace-skeleton"
+            class="mx-auto grid max-w-[60rem] gap-3 py-4"
             data-testid="workspace-skeleton"
             aria-busy="true"
             role="status"
           >
-            <div class="skeleton skeleton-title" />
-            <div class="skeleton skeleton-row" />
-            <div class="skeleton skeleton-row" />
-            <div class="skeleton skeleton-list" />
+            <Skeleton class="h-6 w-48" />
+            <Skeleton class="h-11 border border-line" />
+            <Skeleton class="h-11 border border-line" />
+            <Skeleton class="h-48 border border-line" />
           </div>
         }
       >
@@ -666,15 +733,31 @@ const OPERATION_STATUS_LABELS: Readonly<Record<string, string>> = {
   interrupted: '已中断',
 };
 
+const OPERATION_STATUS_TONE: Readonly<Record<string, string>> = {
+  queued: 'text-warning',
+  running: 'text-accent',
+  completed: 'text-success',
+  failed: 'text-danger',
+  stale: 'text-muted',
+  conflict: 'text-danger',
+  cancelled: 'text-muted',
+  interrupted: 'text-muted',
+};
+
 function OperationStatus(props: { readonly operation: AuthoringOperationReceiptV1 }) {
   const { operation } = props;
   return (
-    <span class="flex min-w-0 flex-col items-end gap-(--wb-space-1)">
-      <span class="operation-status" data-status={operation.status}>
+    <span class="flex min-w-0 flex-col items-end gap-1">
+      <span
+        class={`text-xs font-bold uppercase tracking-[0.05em] ${
+          OPERATION_STATUS_TONE[operation.status] ?? 'text-muted'
+        }`}
+        data-status={operation.status}
+      >
         {OPERATION_STATUS_LABELS[operation.status] ?? operation.status}
       </span>
       <Show when={operation.progress !== undefined && operation.progress !== null}>
-        <span class="text-xs text-[var(--wb-text-muted)]" data-testid="operation-progress">
+        <span class="text-xs text-muted" data-testid="operation-progress">
           {operation.progress?.completed}/{operation.progress?.total}
         </span>
       </Show>
@@ -685,18 +768,20 @@ function OperationStatus(props: { readonly operation: AuthoringOperationReceiptV
 export function OperationCenter(props: OperationCenterProps) {
   return (
     <section
-      class={`operation-center${props.expanded ? ' is-expanded' : ' is-collapsed'}`}
+      class={`shrink-0 border-t border-line bg-surface ${props.expanded ? 'p-4' : 'px-6 py-4'}`}
       aria-labelledby="operation-center-heading"
       data-expanded={props.expanded}
       data-testid="operation-center"
     >
-      <div class="operation-heading">
+      <div class="flex items-center justify-between gap-3">
         <div>
-          <p class="region-kicker">活动</p>
-          <h2 id="operation-center-heading">操作中心</h2>
+          <p class={KICKER}>活动</p>
+          <h2 class="m-0 text-base" id="operation-center-heading">
+            操作中心
+          </h2>
         </div>
         <button
-          class="text-button"
+          class="cursor-pointer border-0 bg-transparent p-0 text-xs font-extrabold uppercase tracking-[0.06em] text-accent-deep hover:text-accent"
           type="button"
           aria-expanded={props.expanded}
           aria-controls="operation-center-content"
@@ -710,35 +795,36 @@ export function OperationCenter(props: OperationCenterProps) {
         <Show
           when={(props.operations?.length ?? 0) > 0}
           fallback={
-            <div class="operation-empty" id="operation-center-content">
-              <span class="operation-pulse" aria-hidden="true" />
+            <div class="flex items-center gap-3 py-4 pb-2" id="operation-center-content">
+              <span
+                class="size-2.5 shrink-0 animate-pulse rounded-full bg-success shadow-[0_0_0_0.25rem_var(--wb-ready-surface)]"
+                aria-hidden="true"
+              />
               <div>
-                <h3>没有正在运行的操作</h3>
-                <p>Host 操作将在这里显示明确的状态与来源。</p>
+                <h3 class="mb-1 text-sm font-bold">没有正在运行的操作</h3>
+                <p class="mb-0 max-w-[48rem] text-sm leading-[1.6] text-muted">
+                  Host 操作将在这里显示明确的状态与来源。
+                </p>
               </div>
             </div>
           }
         >
-          <ul
-            id="operation-center-content"
-            class="grid gap-[var(--wb-space-2)]"
-            aria-label="写作操作"
-          >
+          <ul id="operation-center-content" class="grid gap-2" aria-label="写作操作">
             <For each={props.operations ?? []}>
               {(operation) => (
-                <li class="flex flex-wrap items-center justify-between gap-[var(--wb-space-3)] rounded-[var(--wb-radius-sm)] border border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-[var(--wb-space-3)] py-[var(--wb-space-2)] text-sm">
+                <li class="flex flex-wrap items-center justify-between gap-3 rounded-[0.375rem] border border-line bg-surface-muted px-3 py-2 text-sm">
                   <span class="min-w-0">
                     <strong>{operation.kind}</strong> <code>{operation.operationId}</code>
                   </span>
                   <Show when={operation.errorCode !== null}>
-                    <span class="text-xs text-[var(--wb-text-muted)]" data-testid="operation-error">
+                    <span class="text-xs text-muted" data-testid="operation-error">
                       {operation.errorCode}
                     </span>
                   </Show>
                   <OperationStatus operation={operation} />
                   <Show when={operation.status === 'queued' || operation.status === 'running'}>
                     <button
-                      class="text-button"
+                      class="cursor-pointer border-0 bg-transparent p-0 text-xs font-extrabold uppercase tracking-[0.06em] text-accent-deep hover:text-accent"
                       type="button"
                       data-testid={`cancel-operation-${operation.operationId}`}
                       onClick={() => void props.onCancelOperation?.(operation.operationId)}
@@ -766,24 +852,8 @@ function ResponsiveDrawer(props: {
 }) {
   return (
     <Show when={props.open}>
-      <Dialog open onOpenChange={(open) => !open && props.onClose()}>
-        <Dialog.Portal>
-          <Dialog.Overlay class="responsive-drawer-backdrop" />
-          <Dialog.Content class="responsive-drawer" role="dialog">
-            <div class="responsive-drawer-heading">
-              <Dialog.Title>{props.label}</Dialog.Title>
-              <button
-                class="icon-button"
-                type="button"
-                aria-label={`关闭${props.label}`}
-                onClick={props.onClose}
-              >
-                ×
-              </button>
-            </div>
-            {props.children}
-          </Dialog.Content>
-        </Dialog.Portal>
+      <Dialog open={props.open} label={props.label} onClose={props.onClose} position="right">
+        {props.children}
       </Dialog>
     </Show>
   );
@@ -801,36 +871,51 @@ interface TopbarProps {
   readonly onAgentToggle: () => void;
 }
 
+const TOPBAR_STATUS: Record<HostStatus, string> = {
+  unavailable: 'border-line bg-surface-muted text-muted',
+  loading: 'border-loading-border bg-loading-surface text-warning',
+  empty: 'border-empty-border bg-accent-wash text-accent-deep',
+  error: 'border-error-border bg-error-surface text-danger',
+  ready: 'border-ready-border bg-ready-surface text-success',
+};
+
 function Topbar(props: TopbarProps) {
   const view = () => viewById(props.activeView, props.views);
   const copy = () => STATUS_COPY[props.hostStatus];
 
   return (
-    <header class="workbench-topbar">
-      <div class="brand-lockup">
-        <span class="brand-mark" aria-hidden="true">
+    <header class="z-10 grid h-[4.25rem] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-6 border-b border-on-ink-border bg-ink px-6 text-on-ink max-[68rem]:gap-4 max-[68rem]:px-4 max-[64rem]:grid-cols-[auto_minmax(0,1fr)_auto_auto]">
+      <div class="flex min-w-max items-center gap-3">
+        <span
+          class="grid size-8 place-items-center rounded-[0.375rem] bg-accent-wash font-display text-xl font-bold text-ink"
+          aria-hidden="true"
+        >
           F
         </span>
-        <span class="brand-copy">
-          <strong>Fabula</strong>
-          <span>工作台</span>
+        <span class="grid gap-[0.0625rem] leading-none">
+          <strong class="font-display text-[1.05rem] tracking-[0.01em]">Fabula</strong>
+          <span class="text-[0.6875rem] font-bold uppercase tracking-[0.14em] text-on-ink-muted">
+            工作台
+          </span>
         </span>
       </div>
 
-      <div class="topbar-context" aria-live="polite">
-        <span class="topbar-view">{view().label}</span>
+      <div class="flex min-w-0 items-center gap-4" aria-live="polite">
+        <span class="truncate text-sm font-semibold text-on-ink-soft">{view().label}</span>
         <span
-          class={`topbar-status topbar-status-${props.hostStatus}${
-            props.connected ? '' : ' topbar-status-disconnected'
+          class={`inline-flex w-max items-center gap-2 rounded-full border px-3 py-2 text-[0.6875rem] font-bold leading-none tracking-[0.04em] whitespace-nowrap ${
+            props.connected
+              ? TOPBAR_STATUS[props.hostStatus]
+              : 'border-error-border bg-error-surface text-danger'
           }`}
         >
-          <span class="status-dot" aria-hidden="true" />
+          <StatusDot status={props.connected ? props.hostStatus : 'disconnected'} />
           {props.connected ? copy().label : 'Host 连接中断，正在重连…'}
         </span>
       </div>
 
       <button
-        class="agent-drawer-toggle icon-button"
+        class={`${AGENT_TOGGLE}${props.agentOpen ? ` ${AGENT_TOGGLE_ACTIVE}` : ''}`}
         type="button"
         aria-label={props.agentOpen ? '收起 Agent 面板' : '展开 Agent 面板'}
         aria-expanded={props.agentOpen}
@@ -841,11 +926,11 @@ function Topbar(props: TopbarProps) {
       </button>
 
       <Show when={props.layoutMode !== 'desktop'}>
-        <fieldset class="mobile-layout-controls">
+        <fieldset class="m-0 flex min-w-0 items-center gap-2 border-0 p-0">
           <legend class="sr-only">工作区面板</legend>
           <Show when={props.layoutMode === 'mobile'}>
             <button
-              class="icon-button"
+              class="grid size-9 cursor-pointer place-items-center rounded-md text-on-ink-soft hover:bg-on-ink-border"
               type="button"
               aria-label="打开导航"
               aria-expanded={props.navigatorOpen}
@@ -963,11 +1048,28 @@ export function WorkbenchShell(props: AppProps = {}) {
 
   const toggleNavigatorDrawer = () => setNavigatorDrawerOpen((open) => !open);
 
+  // Literal strings so Tailwind's scanner can see the arbitrary grid columns.
+  const BODY_GRID = {
+    'desktop-open': 'grid-cols-[15rem_minmax(0,1fr)_minmax(0,23.75rem)]',
+    'desktop-closed': 'grid-cols-[15rem_minmax(0,1fr)]',
+    'collapsed-open': 'grid-cols-[4.75rem_minmax(0,1fr)_minmax(0,23.75rem)]',
+    'collapsed-closed': 'grid-cols-[4.75rem_minmax(0,1fr)]',
+    tablet: 'grid-cols-[15rem_minmax(0,1fr)]',
+  } as const;
+
+  const bodyClass = () => {
+    if (layoutMode() === 'mobile') return 'block';
+    const base = 'grid min-h-0 transition-[grid-template-columns] duration-200';
+    if (layoutMode() === 'tablet') return `${base} ${BODY_GRID.tablet}`;
+    const key = `${navigatorCollapsed() ? 'collapsed' : 'desktop'}-${agentOpen() ? 'open' : 'closed'}`;
+    return `${base} ${BODY_GRID[key as keyof typeof BODY_GRID]}`;
+  };
+
   return (
     <div
-      class={`workbench-shell${navigatorCollapsed() ? ' navigator-is-collapsed' : ''}${
-        agentOpen() ? ' agent-shelf-open' : ''
-      }`}
+      class={`grid h-screen grid-rows-[4.25rem_minmax(0,1fr)] overflow-hidden bg-canvas text-ink max-[54rem]:h-auto max-[54rem]:min-h-screen max-[54rem]:overflow-visible${
+        navigatorCollapsed() ? ' navigator-is-collapsed' : ''
+      }${agentOpen() ? ' agent-shelf-open' : ''}`}
       data-testid="workbench-shell"
       data-view={activeView()}
     >
@@ -983,12 +1085,16 @@ export function WorkbenchShell(props: AppProps = {}) {
         onAgentToggle={() => setAgentOpen((open) => !open)}
       />
       <Show when={props.eventConnected === false}>
-        <div class="host-disconnect-banner" role="status" data-testid="host-disconnect-banner">
-          与 Host 的连接中断，正在重连…
+        <div
+          class="flex items-center gap-2 border-b border-error-border bg-error-surface px-4 py-2 text-sm text-danger"
+          role="status"
+          data-testid="host-disconnect-banner"
+        >
+          <span aria-hidden="true">●</span>与 Host 的连接中断，正在重连…
         </div>
       </Show>
 
-      <div class="workbench-body">
+      <div class={bodyClass()}>
         <Show when={layoutMode() !== 'mobile'}>
           <Navigator
             activeView={activeView()}
@@ -999,7 +1105,7 @@ export function WorkbenchShell(props: AppProps = {}) {
           />
         </Show>
 
-        <div class="workspace-column">
+        <div class="flex min-h-0 min-w-0 flex-col">
           <Workspace
             activeView={activeView()}
             views={views()}
@@ -1077,13 +1183,19 @@ export function WorkbenchShell(props: AppProps = {}) {
         </div>
 
         <Show when={agentOpen()}>
-          <aside class="agent-drawer" data-testid="agent-shelf" aria-label="Agent">
+          <aside
+            class="min-h-0 min-w-0 overflow-hidden border-l border-line bg-surface max-[64rem]:fixed max-[64rem]:top-[4.25rem] max-[64rem]:right-0 max-[64rem]:bottom-0 max-[64rem]:z-20 max-[64rem]:w-[min(23.75rem,100vw)] max-[64rem]:shadow-[var(--wb-shadow-drawer)]"
+            data-testid="agent-shelf"
+            aria-label="Agent"
+          >
             <Show
               when={props.agentChat}
               fallback={
-                <div class="agent-drawer-guidance" data-testid="agent-drawer-guidance">
-                  <p class="region-kicker">Agent</p>
-                  <p class="agent-drawer-guidance-copy">选择一个项目后,Agent 将在这里就绪</p>
+                <div class={AGENT_GUIDANCE} data-testid="agent-drawer-guidance">
+                  <p class={KICKER}>Agent</p>
+                  <p class="m-0 text-sm leading-[1.6] text-muted">
+                    选择一个项目后,Agent 将在这里就绪
+                  </p>
                 </div>
               }
             >
@@ -1103,7 +1215,7 @@ export function WorkbenchShell(props: AppProps = {}) {
       </div>
       <Show when={!agentOpen()}>
         <button
-          class="agent-drawer-fab"
+          class={AGENT_FAB}
           type="button"
           aria-label="展开 Agent 面板"
           onClick={() => setAgentOpen(true)}
@@ -1124,6 +1236,7 @@ export function WorkbenchShell(props: AppProps = {}) {
             collapsed={false}
             onCollapseToggle={() => setNavigatorDrawerOpen(false)}
             onViewChange={chooseView}
+            class="min-h-full overflow-visible p-5 pr-3"
           />
         </ResponsiveDrawer>
       </Show>

@@ -76,20 +76,20 @@ const ONBOARDING_SEEN_KEY = 'workbench.onboardingSeen';
 /** Plan 9.4.1: four-step first-visit mini tour shown on the empty Agent Chat. */
 const TOUR_STEPS: readonly { readonly title: string; readonly body: string }[] = [
   {
-    title: 'Agent Chat 是入口',
+    title: 'Agent 对话是入口',
     body: '从这里用自然语言驱动整个写作流程：提问、渲染、发布都由它发起。',
   },
   {
-    title: 'Source Studio 编辑源文件',
-    body: '切换到 Source Studio 视图直接编辑章节源文件，Agent 的改动也落在这里。',
+    title: '文稿：编辑源文件',
+    body: '切换到文稿视图直接编辑章节源文件，Agent 的改动也落在这里。',
   },
   {
-    title: 'Review Hub 看评审门禁',
-    body: 'Review Hub 汇总评审意见与发布门禁，Agent 可以代你扫描待办。',
+    title: '审校：查看评审门禁',
+    body: '审校视图汇总评审意见与发布门禁，Agent 可以代你扫描待办。',
   },
   {
-    title: 'Publication 发布产物',
-    body: '发布后的产物在 Publication 视图查看，Agent 的发布调用会生成可查看的产物。',
+    title: '发布：查看发布产物',
+    body: '发布后的产物在发布视图查看，Agent 的发布调用会生成可查看的产物。',
   },
 ];
 
@@ -114,8 +114,18 @@ export interface AgentChatProps {
   readonly defaultOpen?: boolean;
 }
 
+/** Chinese labels for agent run statuses; unknown statuses keep their wire name. */
+const RUN_STATUS_LABELS: Readonly<Record<string, string>> = {
+  queued: '排队中',
+  running: '运行中',
+  succeeded: '已完成',
+  failed: '失败',
+  interrupted: '已中断',
+  cancelled: '已取消',
+};
 function runLabel(run: AgentChatRunViewV1): string {
-  return `Run ${run.runId.slice(0, 8)} · ${run.status} · ${run.turn}/${run.maxTurns} turns · ${run.toolCalls}/${run.maxToolCalls} tool calls`;
+  const status = RUN_STATUS_LABELS[run.status] ?? run.status;
+  return `运行 ${run.runId.slice(0, 8)} · ${status} · 第 ${run.turn}/${run.maxTurns} 轮 · 工具调用 ${run.toolCalls}/${run.maxToolCalls}`;
 }
 /** Chinese action label for known Agent tool calls; unknown tools keep their wire name. */
 const TOOL_ACTION_NAMES: Readonly<Record<string, string>> = {
@@ -202,7 +212,6 @@ function messageViewOf(message: AgentChatMessageViewV1): ChatMessage {
     at: message.createdAt,
   };
 }
-
 function artifactChipsOf(entry: AgentChatRunHistoryEntryV1): readonly ArtifactChip[] {
   const chips: ArtifactChip[] = [];
   for (const call of entry.toolCalls) {
@@ -212,14 +221,14 @@ function artifactChipsOf(entry: AgentChatRunHistoryEntryV1): readonly ArtifactCh
         key: `publish-${call.callIndex}`,
         label: '查看发布产物',
         view: 'publication',
-        hint: '在 Publication 视图查看已发布产物',
+        hint: '在发布视图查看已发布产物',
       });
     } else if (call.toolName === 'nova_render') {
       chips.push({
         key: `render-${call.callIndex}`,
         label: '查看渲染产物',
         view: 'review-hub',
-        hint: '渲染产物可在 Publication / Review Hub 查看',
+        hint: '渲染产物可在发布 / 审校视图查看',
       });
     }
   }
@@ -527,11 +536,11 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
   };
 
   return (
-    <section class="agent-chat" data-testid="agent-chat" aria-label="Agent chat">
+    <section class="agent-chat" data-testid="agent-chat" aria-label="Agent 对话">
       <div class="agent-chat-heading">
         <div>
-          <p class="region-kicker">Agent / Conversation</p>
-          <h2>Agent Chat</h2>
+          <p class="region-kicker">Agent / 会话</p>
+          <h2>Agent 对话</h2>
         </div>
         <div class="flex items-center gap-[var(--wb-space-3)]">
           <Show when={conversation() !== null}>
@@ -545,7 +554,7 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
           <button
             class="icon-button"
             type="button"
-            aria-label={open() ? '收起 Agent 面板' : '展开 Agent 面板'}
+            aria-label={open() ? '收起对话面板' : '展开对话面板'}
             aria-expanded={open()}
             data-testid="agent-panel-toggle"
             onClick={() => setOpen((current) => !current)}
@@ -624,7 +633,7 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
           </p>
         </Show>
 
-        <fieldset class="agent-conversation-chips" aria-label="Conversations">
+        <fieldset class="agent-conversation-chips" aria-label="会话列表">
           <span class="agent-conversations-label">会话</span>
           <div class="agent-chips-scroll" ref={chipsScroll} data-testid="agent-chips-scroll">
             <Show
@@ -766,7 +775,7 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
                                   data-testid={`agent-cancel-${entry.run.runId}`}
                                   onClick={() => void cancelRun(entry.run.runId)}
                                 >
-                                  Cancel
+                                  取消
                                 </button>
                               </Show>
                               <Show
@@ -786,7 +795,7 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
                               </Show>
                               <Show when={streamingRun() === entry.run.runId}>
                                 <span class="agent-streaming" data-testid="agent-streaming">
-                                  streaming…
+                                  生成中…
                                 </span>
                               </Show>
                             </span>
@@ -857,7 +866,7 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
           }}
         >
           <label class="sr-only" for="agent-chat-input">
-            Message the Agent
+            向 Agent 发送消息
           </label>
           <textarea
             ref={agentChatInput}
@@ -883,7 +892,7 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
                 data-testid="agent-chat-cancel"
                 onClick={() => void cancelCurrent()}
               >
-                Cancel
+                取消
               </button>
             </Show>
             <button
@@ -892,7 +901,7 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
               disabled={sending() || draft().trim().length === 0}
               data-testid="agent-chat-send"
             >
-              {sending() ? 'Sending…' : 'Send'}
+              {sending() ? '发送中…' : '发送'}
             </button>
           </div>
         </form>
@@ -911,5 +920,5 @@ function upsertReceipt(
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'The Agent request failed.';
+  return error instanceof Error ? error.message : 'Agent 请求失败。';
 }

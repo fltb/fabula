@@ -369,7 +369,7 @@ export function YjsEditor(props: YjsEditorProps) {
     <section
       ref={host}
       class="min-h-0 flex-1 overflow-auto"
-      aria-label={`Editing ${props.descriptor.documentId}`}
+      aria-label={`编辑 ${props.descriptor.documentId}`}
     />
   );
 }

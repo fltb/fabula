@@ -190,9 +190,9 @@ describe('Publication mutation affordances', () => {
   });
 
   it.each([
-    ['../secret.md', 'publication relative path must not traverse: ../secret.md'],
-    ['/etc/passwd', 'publication relative path must not be absolute: /etc/passwd'],
-    ['', 'publication relative path must not be empty'],
+    ['../secret.md', '发布相对路径不能包含上级目录：../secret.md'],
+    ['/etc/passwd', '发布相对路径不能是绝对路径：/etc/passwd'],
+    ['', '发布相对路径不能为空'],
   ])('rejects an unsafe relative output path (%s) before publishing', async (value, expected) => {
     const user = userEvent.setup();
     const onPublish = vi.fn(async () => undefined);

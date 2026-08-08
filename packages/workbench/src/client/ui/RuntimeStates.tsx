@@ -119,7 +119,7 @@ export function RuntimeStatePanel(props: RuntimeStatePanelProps): JSX.Element {
       </div>
       <div>
         <p class="mb-[var(--wb-space-1)] text-[0.625rem] font-extrabold uppercase tracking-[0.12em] text-[var(--wb-muted)]">
-          Runtime state
+          运行时状态
         </p>
         <h1 class="font-[var(--font-display)] text-3xl font-bold leading-tight tracking-[-0.025em] text-[var(--wb-ink)]">
           {props.health ? healthCopy()?.title : copy().title}
@@ -175,7 +175,7 @@ export function LoginForm(props: LoginFormProps): JSX.Element {
     <main class="min-h-screen bg-[var(--wb-canvas)] px-[var(--wb-space-4)] py-[var(--wb-space-10)]">
       <section class={PANEL} aria-labelledby="login-heading">
         <p class="mb-[var(--wb-space-1)] text-[0.625rem] font-extrabold uppercase tracking-[0.12em] text-[var(--wb-muted)]">
-          Fabula / Workbench
+          Fabula / 工作台
         </p>
         <h1
           id="login-heading"
@@ -384,10 +384,7 @@ export function AdminOutlet(props: {
 }): JSX.Element {
   return props.authorized ? (
     <main class="min-h-screen bg-[var(--wb-canvas)] px-[var(--wb-space-4)] py-[var(--wb-space-10)]">
-      <RuntimeStatePanel
-        state="workspace"
-        message="Owner dashboard routes are ready for the integration shell."
-      />
+      <RuntimeStatePanel state="workspace" message="所有者面板路由已就绪。" />
     </main>
   ) : (
     <main class="min-h-screen bg-[var(--wb-canvas)] px-[var(--wb-space-4)] py-[var(--wb-space-10)]">

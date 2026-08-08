@@ -202,16 +202,16 @@ function SceneMapEmpty(props: {
         when={props.mapError}
         fallback={
           <>
-            <h3>No scene map projection</h3>
-            <p>Open an authenticated project in the Host to load its chapter-grouped scene map.</p>
+            <h3>暂无场景地图投影</h3>
+            <p>在 Host 中打开已认证的项目以加载章节分组的场景地图。</p>
           </>
         }
       >
-        <h3>Scene map could not be loaded</h3>
+        <h3>场景地图加载失败</h3>
         <p>{props.mapError}</p>
         <Show when={props.onRefresh !== undefined}>
           <button class="btn" type="button" onClick={() => props.onRefresh?.()}>
-            Try again
+            重试
           </button>
         </Show>
       </Show>
@@ -428,16 +428,16 @@ export function SceneMap(props: SceneMapProps) {
     <section class="scene-map" aria-labelledby="scene-map-heading">
       <header class="scene-map-header">
         <div>
-          <p class="region-kicker">Scene Map · 章节分组 scene 建模总览</p>
-          <h2 id="scene-map-heading">{props.projectId ?? 'Scene Map'}</h2>
+          <p class="region-kicker">场景地图 · 章节分组场景建模总览</p>
+          <h2 id="scene-map-heading">{props.projectId ?? '场景地图'}</h2>
         </div>
         <div class="scene-map-chips">
           <span class="scene-chip">
-            {props.map?.chapters.length ?? 0} 章 / {allScenes().length} scenes
+            {props.map?.chapters.length ?? 0} 章 / {allScenes().length} 场
           </span>
-          <span class="scene-chip scene-chip-green">{toneCounts().released} released</span>
-          <span class="scene-chip scene-chip-amber">{toneCounts().draft} draft</span>
-          <span class="scene-chip scene-chip-red">{toneCounts().blocked} blocked</span>
+          <span class="scene-chip scene-chip-green">{toneCounts().released} 已发布</span>
+          <span class="scene-chip scene-chip-amber">{toneCounts().draft} 草稿</span>
+          <span class="scene-chip scene-chip-red">{toneCounts().blocked} 未渲染</span>
         </div>
       </header>
 
@@ -451,8 +451,8 @@ export function SceneMap(props: SceneMapProps) {
               when={(props.map?.chapters?.length ?? 0) > 0}
               fallback={
                 <section class="screen-empty" aria-live="polite">
-                  <h3>No scenes compiled</h3>
-                  <p>The accepted source compiles to no chapters or scenes yet.</p>
+                  <h3>暂无已编译场景</h3>
+                  <p>已接受的源尚未编译出章节或场景。</p>
                 </section>
               }
             >
@@ -465,7 +465,7 @@ export function SceneMap(props: SceneMapProps) {
                         {chapter.title}
                       </span>
                       <span class="scene-chapter-meta">
-                        {chapterEventRange(chapter)} · {chapter.scenes.length} scenes · planned{' '}
+                        {chapterEventRange(chapter)} · {chapter.scenes.length} 场 · 计划{' '}
                         {chapter.plannedScenes}
                       </span>
                     </header>
@@ -486,7 +486,7 @@ export function SceneMap(props: SceneMapProps) {
                                 role="option"
                                 tabIndex={0}
                                 aria-selected={selected}
-                                aria-label={`Scene ${scene.eventId} ${scene.title}`}
+                                aria-label={`场景 ${scene.eventId} ${scene.title}`}
                                 onClick={() => selectScene(scene.eventId)}
                                 onKeyDown={(event) => {
                                   if (event.key === 'Enter' || event.key === ' ') {
@@ -787,18 +787,18 @@ export function SceneMap(props: SceneMapProps) {
 
                   <div class="scene-legend">
                     <span>
-                      <span class="scene-legend-dot scene-legend-released" /> released
+                      <span class="scene-legend-dot scene-legend-released" /> 已发布
                     </span>
                     <span>
-                      <span class="scene-legend-dot scene-legend-draft" /> draft
+                      <span class="scene-legend-dot scene-legend-draft" /> 草稿
                     </span>
                     <span>
-                      <span class="scene-legend-dot scene-legend-blocked" /> blocked
+                      <span class="scene-legend-dot scene-legend-blocked" /> 未渲染
                     </span>
                     <span>
                       <span class="scene-legend-dot scene-legend-chapter" /> 章节边界
                     </span>
-                    <span class="scene-legend-hint">点击 scene 行打开 Scene Inspector</span>
+                    <span class="scene-legend-hint">点击场景行打开场景详情</span>
                   </div>
                 </section>
               </Show>

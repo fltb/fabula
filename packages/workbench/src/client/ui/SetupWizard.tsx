@@ -16,8 +16,8 @@ import { FIELD, PANEL, PRIMARY_BUTTON, QUIET_BUTTON, RuntimeStatePanel } from '.
 export type SetupStep = 'owner' | 'provider';
 
 export const SETUP_STEPS: readonly { readonly id: SetupStep; readonly label: string }[] = [
-  { id: 'owner', label: 'Owner' },
-  { id: 'provider', label: 'Provider' },
+  { id: 'owner', label: '账号' },
+  { id: 'provider', label: '模型服务' },
 ];
 
 export interface SetupWizardProps {
@@ -47,10 +47,10 @@ function trim(value: string): string {
 
 export function validateOwnerFields(displayName: string, password: string): SetupFieldErrors {
   const errors: SetupFieldErrors = {};
-  if (trim(displayName).length === 0) errors.displayName = 'Enter a display name.';
-  else if (trim(displayName).length > 80) errors.displayName = 'Use 80 characters or fewer.';
+  if (trim(displayName).length === 0) errors.displayName = '请输入显示名称。';
+  else if (trim(displayName).length > 80) errors.displayName = '请控制在 80 个字符以内。';
   if (password.length > 0 && password.length < 12) {
-    errors.ownerPassword = 'Use at least 12 characters, or leave it empty for no password.';
+    errors.ownerPassword = '密码至少 12 个字符；留空则无需密码。';
   }
   return errors;
 }
@@ -62,17 +62,17 @@ export function validateProviderFields(
 ): SetupFieldErrors {
   const errors: SetupFieldErrors = {};
   const endpoint = trim(baseUrl);
-  if (endpoint.length === 0) errors.providerBaseUrl = 'Enter the provider endpoint.';
+  if (endpoint.length === 0) errors.providerBaseUrl = '请输入服务地址。';
   else {
     try {
       const url = new URL(endpoint);
       if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('protocol');
     } catch {
-      errors.providerBaseUrl = 'Use an http(s) provider endpoint.';
+      errors.providerBaseUrl = '请输入 http(s) 开头的服务地址。';
     }
   }
-  if (trim(model).length === 0) errors.providerModel = 'Enter a model name.';
-  if (apiKey.length === 0) errors.providerApiKey = 'Enter the provider credential.';
+  if (trim(model).length === 0) errors.providerModel = '请输入模型名称。';
+  if (apiKey.length === 0) errors.providerApiKey = '请输入服务密钥。';
   return errors;
 }
 export function validateNetworkFields(
@@ -83,13 +83,13 @@ export function validateNetworkFields(
   const errors: SetupFieldErrors = {};
   const parsed = Number(port);
   if (!Number.isInteger(parsed) || parsed < 0 || parsed > 65535) {
-    errors.networkPort = 'Use a port from 0 to 65535.';
+    errors.networkPort = '端口需在 0 到 65535 之间。';
   }
   if (mode !== 'loopback' && mode !== 'lan' && mode !== 'unix') {
-    errors.networkPort = 'Choose a supported listener mode.';
+    errors.networkPort = '请选择受支持的监听模式。';
   }
   if (mode === 'unix' && !/^[A-Za-z0-9._-]{1,128}$/.test(trim(unixSocketName))) {
-    errors.unixSocketName = 'Use a simple Unix socket name.';
+    errors.unixSocketName = '请输入简单的 Unix socket 名称。';
   }
   return errors;
 }
@@ -103,24 +103,24 @@ function safeFailureMessage(error: unknown): string {
   if (isSetupApiError(error)) {
     switch (error.code) {
       case 'PROJECT_INVALID_ROOT':
-        return 'The Host could not validate this project.';
+        return 'Host 无法校验该项目。';
       case 'PROJECT_DUPLICATE_ID':
-        return 'Choose a different project identifier.';
+        return '请换一个项目标识。';
       case 'PROJECT_NOT_ACCESSIBLE':
-        return 'The Host cannot access this project.';
+        return 'Host 无法访问该项目。';
       case 'PROVIDER_VALIDATION_FAILED':
-        return 'The provider could not be validated.';
+        return '无法校验该服务配置。';
       case 'CREDENTIAL_INVALID':
-        return 'The provider credential could not be stored.';
+        return '无法保存服务密钥。';
       case 'NETWORK_INVALID':
-        return 'Review the listener settings.';
+        return '请检查监听设置。';
       case 'CONFIG_STALE':
-        return 'Setup changed elsewhere. Refresh and review it again.';
+        return '设置已在别处变更，请刷新后重新检查。';
       default:
-        return 'The Host could not complete this setup step.';
+        return 'Host 未能完成该设置步骤。';
     }
   }
-  return 'The Host could not complete this setup step.';
+  return 'Host 未能完成该设置步骤。';
 }
 
 function stepIndex(step: SetupStep): number {
@@ -284,23 +284,19 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
       <Show
         when={!statusLoading()}
         fallback={
-          <RuntimeStatePanel
-            state="setup"
-            health="loading"
-            message="Checking whether this Host needs setup…"
-          />
+          <RuntimeStatePanel state="setup" health="loading" message="正在检查 Host 是否需要设置…" />
         }
       >
         <section class="mx-auto grid w-full max-w-5xl gap-[var(--wb-space-6)] lg:grid-cols-[14rem_minmax(0,1fr)]">
           <aside
             class="rounded-[var(--wb-radius-md)] border border-[var(--wb-border)] bg-[var(--wb-surface-muted)] p-[var(--wb-space-4)]"
-            aria-label="Setup progress"
+            aria-label="设置进度"
           >
             <p class="mb-[var(--wb-space-1)] text-[0.625rem] font-extrabold uppercase tracking-[0.12em] text-[var(--wb-muted)]">
-              Fabula / Workbench
+              Fabula / 工作台
             </p>
             <h1 class="font-[var(--font-display)] text-2xl font-bold text-[var(--wb-ink)]">
-              First launch
+              首次启动
             </h1>
             <ol class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-2)]">
               <For each={SETUP_STEPS}>
@@ -344,9 +340,9 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
             <Switch>
               <Match when={step() === 'owner'}>
                 <StepHeading
-                  eyebrow="Step 1 / Owner"
-                  title="Create the owner account"
-                  description="This account controls the local Host. The password is optional; leave it empty for a passwordless first launch on this machine."
+                  eyebrow="第 1 步 / 账号"
+                  title="创建账号"
+                  description="该账号用于控制本机 Host。密码为可选项；留空则在本机免密启动。"
                 />
                 <form
                   class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-4)]"
@@ -359,7 +355,7 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
                     class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
                     for="setup-display-name"
                   >
-                    Display name
+                    显示名称
                     <input
                       class={FIELD}
                       id="setup-display-name"
@@ -374,7 +370,7 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
                     class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
                     for="setup-owner-password"
                   >
-                    Password <span class="font-normal text-[var(--wb-muted)]">(optional)</span>
+                    密码 <span class="font-normal text-[var(--wb-muted)]">（可选）</span>
                     <input
                       class={FIELD}
                       id="setup-owner-password"
@@ -390,19 +386,19 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
                       message={inputError('ownerPassword')}
                     />
                   </label>
-                  <StepActions pending={pending()} nextLabel="Create owner" onBack={undefined} />
+                  <StepActions pending={pending()} nextLabel="创建账号" onBack={undefined} />
                 </form>
               </Match>
 
               <Match when={step() === 'provider'}>
                 <StepHeading
-                  eyebrow="Step 2 / Provider"
-                  title="Connect the provider"
-                  description="Pick a provider preset or enter the endpoint yourself. The credential is handed directly to the Host credential store and cleared from this browser."
+                  eyebrow="第 2 步 / 模型服务"
+                  title="连接模型服务"
+                  description="选择一个预设服务商，或自行填写服务地址。密钥直接交给 Host 凭据库保存，本浏览器不留存。"
                 />
                 <div class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-2)]">
                   <Show when={presets() === null && presetError() === ''}>
-                    <p class="text-sm text-[var(--wb-muted)]">Loading provider presets…</p>
+                    <p class="text-sm text-[var(--wb-muted)]">正在加载预设服务商…</p>
                   </Show>
                   <Show when={presetError() !== ''}>
                     <p class="text-sm text-[var(--wb-danger)]" role="alert">
@@ -436,7 +432,7 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
                     class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
                     for="setup-provider-url"
                   >
-                    Provider endpoint
+                    服务地址
                     <input
                       class={FIELD}
                       id="setup-provider-url"
@@ -456,7 +452,7 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
                     class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
                     for="setup-provider-model"
                   >
-                    Model
+                    模型
                     <input
                       class={FIELD}
                       id="setup-provider-model"
@@ -475,7 +471,7 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
                     class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
                     for="setup-provider-key"
                   >
-                    Provider credential
+                    服务密钥
                     <input
                       class={FIELD}
                       id="setup-provider-key"
@@ -491,7 +487,7 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
                       message={inputError('providerApiKey')}
                     />
                   </label>
-                  <StepActions pending={pending()} nextLabel="Finish setup" onBack={goBack} />
+                  <StepActions pending={pending()} nextLabel="完成设置" onBack={goBack} />
                 </form>
               </Match>
             </Switch>
@@ -545,7 +541,7 @@ function StepActions(props: {
     <div class="mt-[var(--wb-space-3)] flex flex-wrap justify-between gap-[var(--wb-space-3)]">
       <Show when={props.onBack}>
         <button class={QUIET_BUTTON} type="button" onClick={props.onBack} disabled={props.pending}>
-          Back
+          上一步
         </button>
       </Show>
       <button
@@ -554,7 +550,7 @@ function StepActions(props: {
         onClick={props.onNext}
         disabled={props.pending}
       >
-        {props.pending ? 'Checking Host…' : props.nextLabel}
+        {props.pending ? '正在检查…' : props.nextLabel}
       </button>
     </div>
   );

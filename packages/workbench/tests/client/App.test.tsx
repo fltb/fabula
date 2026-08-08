@@ -10,12 +10,7 @@ import type {
   BrowserReviewListV1,
 } from '../../src/contracts/browser-api';
 
-const navigationLabels = [
-  'Project Home',
-  'Scene Canvas',
-  'Source Studio',
-  'Graph / Route',
-] as const;
+const navigationLabels = ['项目首页', '场景画布', '文稿', '图谱 / 路线'] as const;
 
 function stubAgentChatClient(): AgentChatClient {
   const conversation = {
@@ -86,11 +81,11 @@ describe('Workbench shell layout controls', () => {
     render(() => <App initialNavigatorCollapsed={false} />);
 
     const navigator = screen.getByTestId('navigator');
-    await user.click(screen.getByRole('button', { name: 'Collapse Navigator' }));
+    await user.click(screen.getByRole('button', { name: '收起导航' }));
 
     expect(navigator).toHaveAttribute('data-collapsed', 'true');
-    expect(screen.getByRole('button', { name: 'Expand Navigator' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Project Home' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '展开导航' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '项目首页' })).toBeInTheDocument();
   });
 
   it('expands the operation center without the removed Inspector column', async () => {
@@ -98,8 +93,8 @@ describe('Workbench shell layout controls', () => {
     render(() => <App initialOperationCenterExpanded={false} />);
 
     expect(screen.queryByTestId('inspector')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Expand' }));
-    expect(screen.getByText('No operations running')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '展开' }));
+    expect(screen.getByText('没有正在运行的操作')).toBeInTheDocument();
   });
 });
 
@@ -109,31 +104,31 @@ describe('Workbench responsive drawers', () => {
     const user = userEvent.setup();
     render(() => <App />);
 
-    await user.click(await screen.findByRole('button', { name: 'Open navigation' }));
-    const navigationDrawer = await screen.findByRole('dialog', { name: 'Navigation' });
+    await user.click(await screen.findByRole('button', { name: '打开导航' }));
+    const navigationDrawer = await screen.findByRole('dialog', { name: '导航' });
     const closeNavigation = within(navigationDrawer).getByRole('button', {
-      name: 'Close Navigation',
+      name: '关闭导航',
     });
     await waitFor(() => expect(closeNavigation).toHaveFocus());
     expect(
-      within(navigationDrawer).getByRole('navigation', { name: 'Workbench views' }),
+      within(navigationDrawer).getByRole('navigation', { name: '工作台视图' }),
     ).toBeInTheDocument();
     await user.keyboard('{Escape}');
     await waitFor(() =>
-      expect(screen.queryByRole('dialog', { name: 'Navigation' })).not.toBeInTheDocument(),
+      expect(screen.queryByRole('dialog', { name: '导航' })).not.toBeInTheDocument(),
     );
 
     cleanup();
     setViewport(900);
     render(() => <App />);
-    expect(screen.queryByRole('button', { name: 'Open navigation' })).not.toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'Workbench views' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '打开导航' })).not.toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: '工作台视图' })).toBeInTheDocument();
     expect(screen.queryByTestId('inspector')).not.toBeInTheDocument();
 
     cleanup();
     setViewport(1024);
     render(() => <App />);
-    expect(screen.queryByRole('button', { name: 'Open navigation' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '打开导航' })).not.toBeInTheDocument();
     expect(screen.queryByTestId('inspector')).not.toBeInTheDocument();
   });
 });
@@ -143,15 +138,15 @@ describe('Workbench named navigation', () => {
     const user = userEvent.setup();
     render(() => <App initialView="project-home" />);
 
-    const navigation = screen.getByRole('navigation', { name: 'Workbench views' });
+    const navigation = screen.getByRole('navigation', { name: '工作台视图' });
     for (const label of navigationLabels) {
       expect(within(navigation).getByRole('button', { name: label })).toBeInTheDocument();
     }
 
-    await user.click(within(navigation).getByRole('button', { name: 'Graph / Route' }));
+    await user.click(within(navigation).getByRole('button', { name: '图谱 / 路线' }));
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Graph / Route' })).toBeInTheDocument();
-    expect(within(navigation).getByRole('button', { name: 'Graph / Route' })).toHaveAttribute(
+    expect(screen.getByRole('heading', { level: 1, name: '图谱 / 路线' })).toBeInTheDocument();
+    expect(within(navigation).getByRole('button', { name: '图谱 / 路线' })).toHaveAttribute(
       'aria-current',
       'page',
     );
@@ -162,16 +157,12 @@ describe('Workbench named navigation', () => {
 describe('Workbench feature-gated views', () => {
   it('shows only the four always-on views and an empty Agent shelf without Host features', () => {
     render(() => <App />);
-    const navigation = screen.getByRole('navigation', { name: 'Workbench views' });
+    const navigation = screen.getByRole('navigation', { name: '工作台视图' });
     for (const label of navigationLabels) {
       expect(within(navigation).getByRole('button', { name: label })).toBeInTheDocument();
     }
-    expect(
-      within(navigation).queryByRole('button', { name: 'Review Hub' }),
-    ).not.toBeInTheDocument();
-    expect(
-      within(navigation).queryByRole('button', { name: 'Publication' }),
-    ).not.toBeInTheDocument();
+    expect(within(navigation).queryByRole('button', { name: '审校' })).not.toBeInTheDocument();
+    expect(within(navigation).queryByRole('button', { name: '发布' })).not.toBeInTheDocument();
     // The global Agent drawer still renders (open by default) with the
     // no-project guidance panel; the chat surface itself is absent.
     expect(screen.getByTestId('agent-shelf')).toBeInTheDocument();
@@ -179,33 +170,27 @@ describe('Workbench feature-gated views', () => {
       '选择一个项目后,Agent 将在这里就绪',
     );
     expect(screen.queryByTestId('agent-chat-input')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Close Agent Shelf' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '收起 Agent 面板' })).toBeInTheDocument();
   });
 
   it('derives the visible views from Host-supplied features', () => {
     render(() => <App features={['project-home', 'review-hub', 'agent-chat']} />);
-    const navigation = screen.getByRole('navigation', { name: 'Workbench views' });
-    expect(within(navigation).getByRole('button', { name: 'Project Home' })).toBeInTheDocument();
-    expect(within(navigation).getByRole('button', { name: 'Review Hub' })).toBeInTheDocument();
+    const navigation = screen.getByRole('navigation', { name: '工作台视图' });
+    expect(within(navigation).getByRole('button', { name: '项目首页' })).toBeInTheDocument();
+    expect(within(navigation).getByRole('button', { name: '审校' })).toBeInTheDocument();
+    expect(within(navigation).queryByRole('button', { name: '场景画布' })).not.toBeInTheDocument();
+    expect(within(navigation).queryByRole('button', { name: '文稿' })).not.toBeInTheDocument();
     expect(
-      within(navigation).queryByRole('button', { name: 'Scene Canvas' }),
+      within(navigation).queryByRole('button', { name: '图谱 / 路线' }),
     ).not.toBeInTheDocument();
-    expect(
-      within(navigation).queryByRole('button', { name: 'Source Studio' }),
-    ).not.toBeInTheDocument();
-    expect(
-      within(navigation).queryByRole('button', { name: 'Graph / Route' }),
-    ).not.toBeInTheDocument();
-    expect(
-      within(navigation).queryByRole('button', { name: 'Publication' }),
-    ).not.toBeInTheDocument();
+    expect(within(navigation).queryByRole('button', { name: '发布' })).not.toBeInTheDocument();
   });
 
   it('never offers an Agent Chat navigation view', () => {
     render(() => <App features={['project-home', 'agent-chat']} />);
-    const navigation = screen.getByRole('navigation', { name: 'Workbench views' });
+    const navigation = screen.getByRole('navigation', { name: '工作台视图' });
     expect(
-      within(navigation).queryByRole('button', { name: 'Agent Chat' }),
+      within(navigation).queryByRole('button', { name: 'Agent 对话' }),
     ).not.toBeInTheDocument();
     expect(screen.getByTestId('agent-shelf')).toBeInTheDocument();
   });
@@ -255,10 +240,10 @@ describe('Workbench feature-gated views', () => {
     await waitFor(() => {
       expect(screen.getByTestId('agent-chat-input')).toBeInTheDocument();
     });
-    await user.click(screen.getByRole('button', { name: 'Close Agent Shelf' }));
+    await user.click(screen.getByRole('button', { name: '收起 Agent 面板' }));
     expect(screen.queryByTestId('agent-shelf')).not.toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Open Agent Shelf' }).length).toBeGreaterThan(0);
-    const fab = screen.getAllByRole('button', { name: 'Open Agent Shelf' })[0];
+    expect(screen.getAllByRole('button', { name: '展开 Agent 面板' }).length).toBeGreaterThan(0);
+    const fab = screen.getAllByRole('button', { name: '展开 Agent 面板' })[0];
     expect(fab).toBeDefined();
     await user.click(fab as HTMLElement);
     expect(screen.getByTestId('agent-shelf')).toBeInTheDocument();
@@ -267,10 +252,10 @@ describe('Workbench feature-gated views', () => {
   it('never offers a hidden view and clicking a visible view activates it', async () => {
     const user = userEvent.setup();
     render(() => <App features={['project-home', 'graph-route']} />);
-    const navigation = screen.getByRole('navigation', { name: 'Workbench views' });
-    await user.click(within(navigation).getByRole('button', { name: 'Graph / Route' }));
-    expect(screen.getByRole('heading', { level: 1, name: 'Graph / Route' })).toBeInTheDocument();
-    expect(within(navigation).getByRole('button', { name: 'Graph / Route' })).toHaveAttribute(
+    const navigation = screen.getByRole('navigation', { name: '工作台视图' });
+    await user.click(within(navigation).getByRole('button', { name: '图谱 / 路线' }));
+    expect(screen.getByRole('heading', { level: 1, name: '图谱 / 路线' })).toBeInTheDocument();
+    expect(within(navigation).getByRole('button', { name: '图谱 / 路线' })).toHaveAttribute(
       'aria-current',
       'page',
     );
@@ -278,12 +263,12 @@ describe('Workbench feature-gated views', () => {
 
   it('starts on the first available view when the requested view is hidden', () => {
     render(() => <App initialView="review-hub" />);
-    const navigation = screen.getByRole('navigation', { name: 'Workbench views' });
-    expect(within(navigation).getByRole('button', { name: 'Project Home' })).toHaveAttribute(
+    const navigation = screen.getByRole('navigation', { name: '工作台视图' });
+    expect(within(navigation).getByRole('button', { name: '项目首页' })).toHaveAttribute(
       'aria-current',
       'page',
     );
-    expect(screen.getByRole('heading', { level: 1, name: 'Project Home' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: '项目首页' })).toBeInTheDocument();
   });
 
   it('renders the Review Hub only when the review-hub feature is present', async () => {
@@ -326,7 +311,7 @@ describe('Workbench feature-gated views', () => {
       />
     ));
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Review Hub' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: '审校' })).toBeInTheDocument();
     expect(screen.getByTestId('review-count')).toHaveTextContent('1');
     expect(screen.getByText('Plot hole.')).toBeInTheDocument();
 
@@ -339,7 +324,7 @@ describe('Workbench feature-gated views', () => {
         reviewState={reviewState}
       />
     ));
-    expect(screen.getByRole('heading', { level: 1, name: 'Project Home' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: '项目首页' })).toBeInTheDocument();
     expect(screen.queryByTestId('review-count')).not.toBeInTheDocument();
   });
 
@@ -379,7 +364,7 @@ describe('Workbench feature-gated views', () => {
       />
     ));
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Publication' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: '发布' })).toBeInTheDocument();
     expect(screen.getByTestId('publication-count')).toHaveTextContent('1');
     expect(screen.getByText('output/novel.md')).toBeInTheDocument();
 
@@ -392,7 +377,7 @@ describe('Workbench feature-gated views', () => {
         publications={publications}
       />
     ));
-    expect(screen.getByRole('heading', { level: 1, name: 'Project Home' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: '项目首页' })).toBeInTheDocument();
     expect(screen.queryByTestId('publication-count')).not.toBeInTheDocument();
   });
 });
@@ -401,20 +386,18 @@ describe('Workbench Host availability states', () => {
   it('shows an honest unavailable state by default and supports an empty Host response', () => {
     const unavailable = render(() => <App />);
     const unavailableWorkspace = screen.getByTestId('workspace-state');
-    expect(
-      within(unavailableWorkspace).getByText(/read API is not configured/i),
-    ).toBeInTheDocument();
+    expect(within(unavailableWorkspace).getByText(/未配置.*读取接口/i)).toBeInTheDocument();
     expect(unavailableWorkspace.closest('main')?.querySelector('.host-status')).toHaveTextContent(
-      'Host unavailable',
+      'Host 不可用',
     );
     unavailable.unmount();
 
     render(() => <App hostStatus="empty" />);
     const emptyWorkspace = screen.getByTestId('workspace-state');
     expect(emptyWorkspace.closest('main')?.querySelector('.host-status')).toHaveTextContent(
-      'No project open',
+      '未打开项目',
     );
-    expect(within(emptyWorkspace).getByText(/returned no project projection/i)).toBeInTheDocument();
+    expect(within(emptyWorkspace).getByText(/未返回.*项目投影/i)).toBeInTheDocument();
   });
 
   it('reacts when the authenticated Host projection status changes', () => {
@@ -423,10 +406,10 @@ describe('Workbench Host availability states', () => {
 
     const workspace = screen.getByTestId('workspace-state');
     expect(workspace).toHaveAttribute('aria-busy', 'true');
-    expect(workspace.closest('main')?.querySelector('.host-status')).toHaveTextContent('Loading');
+    expect(workspace.closest('main')?.querySelector('.host-status')).toHaveTextContent('加载中');
     setStatus('ready');
     expect(workspace.closest('main')?.querySelector('.host-status')).toHaveTextContent(
-      'Host connected',
+      'Host 已连接',
     );
   });
 });
@@ -499,8 +482,8 @@ describe('Workbench Host projections', () => {
       />
     ));
 
-    expect(screen.getByRole('heading', { name: 'Authoring source' })).toBeInTheDocument();
-    expect(screen.getByText(/online-only, not accepted source/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '写作源文稿' })).toBeInTheDocument();
+    expect(screen.getByText(/仅在线，非已接受源/i)).toBeInTheDocument();
     expect(screen.getByText('definitions/characters/author.yaml')).toBeInTheDocument();
   });
 
@@ -572,10 +555,10 @@ describe('Workbench Host projections', () => {
     ));
 
     // Native revision history actions are offered through the shell.
-    expect(screen.getByRole('button', { name: 'Refresh revision history' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'View revision' }));
+    expect(screen.getByRole('button', { name: '刷新修订历史' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '查看修订' }));
     expect(onGetAuthoringRevision).toHaveBeenCalledWith('head-1');
-    await user.click(screen.getByRole('button', { name: 'Restore revision' }));
+    await user.click(screen.getByRole('button', { name: '恢复修订' }));
     expect(onRestoreAuthoringRevision).toHaveBeenCalledWith({
       version: 2,
       projectId: 'project-a',
@@ -583,13 +566,13 @@ describe('Workbench Host projections', () => {
       expectedAcceptedRevisionId: null,
       expectedSourceHash: 'accepted-hash',
     });
-    await user.click(screen.getByRole('button', { name: 'Refresh revision history' }));
+    await user.click(screen.getByRole('button', { name: '刷新修订历史' }));
     expect(onListAuthoringRevisions).toHaveBeenCalledOnce();
 
     // Working-document lifecycle actions are offered through the shell.
-    await user.click(screen.getByRole('button', { name: 'New working document' }));
-    await user.type(screen.getByLabelText('Manifest-relative logical path'), 'scenes/E1.md');
-    await user.click(screen.getByRole('button', { name: 'Create working document' }));
+    await user.click(screen.getByRole('button', { name: '新建工作文稿' }));
+    await user.type(screen.getByLabelText('清单相对逻辑路径'), 'scenes/E1.md');
+    await user.click(screen.getByRole('button', { name: '创建工作文稿' }));
     expect(onCreateDocument).toHaveBeenCalledWith({
       version: 2,
       projectId: 'project-a',
@@ -602,11 +585,11 @@ describe('Workbench Host projections', () => {
     const item = screen.getByText('nova.yaml').closest('li');
     expect(item).not.toBeNull();
     const row = within(item as HTMLElement);
-    await user.click(row.getByRole('button', { name: 'Rename/Move' }));
-    const pathInput = row.getByLabelText('New manifest-relative logical path');
+    await user.click(row.getByRole('button', { name: '重命名/移动' }));
+    const pathInput = row.getByLabelText('新的清单相对逻辑路径');
     await user.clear(pathInput);
     await user.type(pathInput, 'scenes/E2.md');
-    await user.click(row.getByRole('button', { name: 'Move document' }));
+    await user.click(row.getByRole('button', { name: '移动文稿' }));
     expect(onMoveDocument).toHaveBeenCalledWith({
       version: 2,
       projectId: 'project-a',
@@ -616,8 +599,8 @@ describe('Workbench Host projections', () => {
       expectedWorkspaceDigest: 'workspace-hash',
     });
 
-    await user.click(row.getByRole('button', { name: 'Delete' }));
-    await user.click(row.getByRole('button', { name: 'Confirm delete' }));
+    await user.click(row.getByRole('button', { name: '删除' }));
+    await user.click(row.getByRole('button', { name: '确认删除' }));
     expect(onDeleteDocument).toHaveBeenCalledWith({
       version: 2,
       projectId: 'project-a',
@@ -688,7 +671,7 @@ describe('Workbench Host projections', () => {
       />
     ));
 
-    await user.click(screen.getByRole('button', { name: 'Submit working layer' }));
+    await user.click(screen.getByRole('button', { name: '提交工作层' }));
     expect(submit).toHaveBeenCalledWith({
       version: 2,
       projectId: 'project-a',
@@ -697,6 +680,7 @@ describe('Workbench Host projections', () => {
       expectedWorkspaceDigest: 'workspace-hash',
     });
     expect(screen.getAllByText('operation-1').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('排队中').length).toBeGreaterThan(0);
     expect(screen.getAllByText('queued').length).toBeGreaterThan(0);
   });
 
@@ -730,9 +714,9 @@ describe('Workbench Host projections', () => {
     ));
 
     expect(screen.getByText('render')).toBeInTheDocument();
-    expect(screen.getByText('running')).toBeInTheDocument();
+    expect(screen.getByText('运行中')).toBeInTheDocument();
     expect(screen.getByText('2/5')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(screen.getByRole('button', { name: '取消' }));
     expect(cancel).toHaveBeenCalledWith('render-1');
   });
 });

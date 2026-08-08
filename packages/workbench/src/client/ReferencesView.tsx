@@ -61,7 +61,7 @@ function canMutate(
 }
 
 function lifecycleErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'The reference operation failed.';
+  return error instanceof Error ? error.message : '参考资料操作失败。';
 }
 
 /** Human-readable byte size (B/KB/MB/GB). */
@@ -208,7 +208,7 @@ export function ReferencesView(props: ReferencesViewProps) {
                     ...entry,
                     status: 'failed' as const,
                     jobId: result.job.jobId,
-                    message: result.job.errorMessage ?? 'The import job failed on the host.',
+                    message: result.job.errorMessage ?? '导入任务在 Host 上失败了。',
                   }
                 : entry,
             ),
@@ -243,7 +243,7 @@ export function ReferencesView(props: ReferencesViewProps) {
             entry.id === row.id
               ? {
                   ...entry,
-                  message: result.job.errorMessage ?? 'The import job failed on the host.',
+                  message: result.job.errorMessage ?? '导入任务在 Host 上失败了。',
                 }
               : entry,
           ),
@@ -287,7 +287,7 @@ export function ReferencesView(props: ReferencesViewProps) {
         limit: REFERENCE_PREVIEW_BYTES,
       });
       if (result === null) {
-        setDetailError('The reference content could not be read.');
+        setDetailError('无法读取参考资料内容。');
         return;
       }
       setDetailContent(previewText(result));
@@ -302,8 +302,8 @@ export function ReferencesView(props: ReferencesViewProps) {
     <section class="reference-view" aria-labelledby="references-heading">
       <header class="reference-header">
         <div>
-          <p class="region-kicker">Reference library</p>
-          <h2 id="references-heading">References</h2>
+          <p class="region-kicker">参考资料库</p>
+          <h2 id="references-heading">参考资料</h2>
         </div>
         <Show when={props.onRefresh !== undefined}>
           <button
@@ -312,7 +312,7 @@ export function ReferencesView(props: ReferencesViewProps) {
             data-testid="references-refresh"
             onClick={() => void props.onRefresh?.()}
           >
-            Refresh
+            刷新
           </button>
         </Show>
       </header>
@@ -330,13 +330,13 @@ export function ReferencesView(props: ReferencesViewProps) {
             when={props.referencesError !== null && props.referencesError !== undefined}
             fallback={
               <section class="screen-empty" aria-live="polite">
-                <h3>No reference projection</h3>
-                <p>Open an authenticated project in the Host to load its reference library.</p>
+                <h3>暂无参考资料投影</h3>
+                <p>在 Host 中打开已认证的项目以加载其参考资料库。</p>
               </section>
             }
           >
             <section class="screen-empty" aria-live="polite" data-testid="references-load-error">
-              <h3>Reference library could not be loaded</h3>
+              <h3>参考资料库加载失败</h3>
               <p>{props.referencesError}</p>
               <Show when={props.onRefresh !== undefined}>
                 <button
@@ -345,7 +345,7 @@ export function ReferencesView(props: ReferencesViewProps) {
                   data-testid="references-load-retry"
                   onClick={() => void props.onRefresh?.()}
                 >
-                  Retry
+                  重试
                 </button>
               </Show>
             </section>
@@ -371,7 +371,7 @@ export function ReferencesView(props: ReferencesViewProps) {
           >
             <div class="reference-section-heading">
               <h3 id="references-list-heading">
-                References{' '}
+                参考资料{' '}
                 <span class="publication-count" data-testid="references-count">
                   {catalog().items.length}
                 </span>
@@ -401,7 +401,7 @@ export function ReferencesView(props: ReferencesViewProps) {
             </Show>
 
             <Show when={uploads().length > 0}>
-              <ul class="reference-uploads" aria-label="Pending imports">
+              <ul class="reference-uploads" aria-label="待导入">
                 <For each={uploads()}>
                   {(row) => (
                     <li
@@ -434,7 +434,7 @@ export function ReferencesView(props: ReferencesViewProps) {
             <input
               class="reference-filter"
               type="search"
-              aria-label="Search references"
+              aria-label="搜索参考资料"
               placeholder="搜索参考资料…"
               value={filter()}
               onInput={(event) => setFilter(event.currentTarget.value)}
@@ -461,7 +461,7 @@ export function ReferencesView(props: ReferencesViewProps) {
                   </p>
                 }
               >
-                <ul class="reference-list" aria-label="References">
+                <ul class="reference-list" aria-label="参考资料">
                   <For each={visibleItems()}>
                     {(item) => (
                       <li class="reference-row" data-testid={`reference-row-${item.referenceId}`}>

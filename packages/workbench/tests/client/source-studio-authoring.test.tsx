@@ -44,7 +44,7 @@ describe('Source Studio authoring identities', () => {
     render(() => (
       <SourceStudio state={source} authoring={authoring} onSubmitAuthoring={onSubmitAuthoring} />
     ));
-    await user.click(screen.getByRole('button', { name: 'Submit working layer' }));
+    await user.click(screen.getByRole('button', { name: '提交工作层' }));
     expect(onSubmitAuthoring).toHaveBeenCalledWith({
       version: 2,
       projectId: 'proj-a',
@@ -75,11 +75,9 @@ describe('Source Studio authoring identities', () => {
         operations={[]}
       />
     ));
-    expect(
-      screen.getByRole('heading', { name: 'Working candidate diagnostics — not accepted' }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '工作候选诊断 — 未被接受' })).toBeInTheDocument();
     expect(screen.getByText('invalid YAML')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Submit working layer' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '提交工作层' })).not.toBeInTheDocument();
   });
 });
 
@@ -90,10 +88,10 @@ describe('Source Studio working-document lifecycle', () => {
     render(() => (
       <SourceStudio state={source} authoring={authoring} onCreateDocument={onCreateDocument} />
     ));
-    await user.click(screen.getByRole('button', { name: 'New working document' }));
-    await user.type(screen.getByLabelText('Manifest-relative logical path'), 'scenes/E1.md');
-    await user.selectOptions(screen.getByLabelText('Document kind'), 'prose');
-    await user.click(screen.getByRole('button', { name: 'Create working document' }));
+    await user.click(screen.getByRole('button', { name: '新建工作文稿' }));
+    await user.type(screen.getByLabelText('清单相对逻辑路径'), 'scenes/E1.md');
+    await user.selectOptions(screen.getByLabelText('文稿类型'), 'prose');
+    await user.click(screen.getByRole('button', { name: '创建工作文稿' }));
     expect(onCreateDocument).toHaveBeenCalledWith({
       version: 2,
       projectId: 'proj-a',
@@ -113,11 +111,11 @@ describe('Source Studio working-document lifecycle', () => {
     const item = screen.getByText('nova.yaml').closest('li');
     expect(item).not.toBeNull();
     const row = within(item as HTMLElement);
-    await user.click(row.getByRole('button', { name: 'Rename/Move' }));
-    const pathInput = row.getByLabelText('New manifest-relative logical path');
+    await user.click(row.getByRole('button', { name: '重命名/移动' }));
+    const pathInput = row.getByLabelText('新的清单相对逻辑路径');
     await user.clear(pathInput);
     await user.type(pathInput, 'scenes/E2.md');
-    await user.click(row.getByRole('button', { name: 'Move document' }));
+    await user.click(row.getByRole('button', { name: '移动文稿' }));
     expect(onMoveDocument).toHaveBeenCalledWith({
       version: 2,
       projectId: 'proj-a',
@@ -137,12 +135,12 @@ describe('Source Studio working-document lifecycle', () => {
     const item = screen.getByText('nova.yaml').closest('li');
     expect(item).not.toBeNull();
     const row = within(item as HTMLElement);
-    await user.click(row.getByRole('button', { name: 'Delete' }));
+    await user.click(row.getByRole('button', { name: '删除' }));
     expect(onDeleteDocument).not.toHaveBeenCalled();
-    await user.click(row.getByRole('button', { name: 'Cancel' }));
+    await user.click(row.getByRole('button', { name: '取消' }));
     expect(onDeleteDocument).not.toHaveBeenCalled();
-    await user.click(row.getByRole('button', { name: 'Delete' }));
-    await user.click(row.getByRole('button', { name: 'Confirm delete' }));
+    await user.click(row.getByRole('button', { name: '删除' }));
+    await user.click(row.getByRole('button', { name: '确认删除' }));
     expect(onDeleteDocument).toHaveBeenCalledWith({
       version: 2,
       projectId: 'proj-a',
@@ -164,9 +162,9 @@ describe('Source Studio working-document lifecycle', () => {
     render(() => (
       <SourceStudio state={source} authoring={authoring} onCreateDocument={onCreateDocument} />
     ));
-    await user.click(screen.getByRole('button', { name: 'New working document' }));
-    await user.type(screen.getByLabelText('Manifest-relative logical path'), 'scenes/E1.md');
-    await user.click(screen.getByRole('button', { name: 'Create working document' }));
+    await user.click(screen.getByRole('button', { name: '新建工作文稿' }));
+    await user.type(screen.getByLabelText('清单相对逻辑路径'), 'scenes/E1.md');
+    await user.click(screen.getByRole('button', { name: '创建工作文稿' }));
     const alert = screen.getByRole('alert');
     expect(alert).toHaveTextContent('The working layer changed; re-read before mutating.');
     expect(alert).toHaveAttribute('data-mutation-error');
@@ -174,14 +172,14 @@ describe('Source Studio working-document lifecycle', () => {
 
   it('offers no lifecycle actions without a Host handler', () => {
     render(() => <SourceStudio state={source} authoring={authoring} />);
-    expect(screen.queryByRole('button', { name: 'New working document' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '新建工作文稿' })).not.toBeInTheDocument();
     const item = screen.getByText('nova.yaml').closest('li');
     expect(item).not.toBeNull();
     expect(
       within(item as HTMLElement).queryByRole('button', { name: 'Delete' }),
     ).not.toBeInTheDocument();
     expect(
-      within(item as HTMLElement).queryByRole('button', { name: 'Rename/Move' }),
+      within(item as HTMLElement).queryByRole('button', { name: '重命名/移动' }),
     ).not.toBeInTheDocument();
   });
 
@@ -195,10 +193,10 @@ describe('Source Studio working-document lifecycle', () => {
         onDeleteDocument={vi.fn()}
       />
     ));
-    expect(screen.queryByRole('button', { name: 'New working document' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '新建工作文稿' })).not.toBeInTheDocument();
     const item = screen.getByText('nova.yaml').closest('li');
     expect(item).not.toBeNull();
-    expect(within(item as HTMLElement).getByRole('button', { name: 'Delete' })).toBeDisabled();
-    expect(within(item as HTMLElement).getByRole('button', { name: 'Rename/Move' })).toBeDisabled();
+    expect(within(item as HTMLElement).getByRole('button', { name: '删除' })).toBeDisabled();
+    expect(within(item as HTMLElement).getByRole('button', { name: '重命名/移动' })).toBeDisabled();
   });
 });

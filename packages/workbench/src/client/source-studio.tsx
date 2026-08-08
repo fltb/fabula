@@ -87,7 +87,7 @@ export interface SourceStudioProps {
  */
 function lifecycleErrorMessage(error: unknown): string {
   if (error instanceof BrowserAuthoringApiError) return error.message;
-  return error instanceof Error ? error.message : 'The document mutation was not accepted.';
+  return error instanceof Error ? error.message : '文稿变更未被接受。';
 }
 
 /**
@@ -120,11 +120,11 @@ function HashChip(props: { readonly value: string | null; readonly fallback: str
         <button
           class="hash-chip-copy"
           type="button"
-          title="Copy full hash"
-          aria-label="Copy full hash"
+          title="复制完整哈希"
+          aria-label="复制完整哈希"
           onClick={() => void copy()}
         >
-          {copied() ? 'Copied' : 'Copy'}
+          {copied() ? '已复制' : '复制'}
         </button>
       </Show>
     </span>
@@ -132,22 +132,22 @@ function HashChip(props: { readonly value: string | null; readonly fallback: str
 }
 
 function submitBlockLabel(authoring: AuthoringStateV1): string {
-  if (authoring.canSubmit) return 'Ready to submit';
+  if (authoring.canSubmit) return '可以提交';
   switch (authoring.submitBlockReason) {
     case 'not-dirty':
-      return 'No working changes';
+      return '没有待提交的改动';
     case 'candidate-invalid':
-      return 'Blocked by invalid external candidate';
+      return '被无效的外部候选文稿阻止';
     case 'conflict-requires-resolution':
-      return 'Blocked by unresolved conflict';
+      return '存在未解决的冲突';
     case 'external-candidate-pending':
-      return 'Blocked by external candidate';
+      return '存在外部候选文稿待处理';
     case 'submission-in-flight':
-      return 'Submit in progress';
+      return '提交中';
     case 'recovery-required':
-      return 'Recovery required';
+      return '需要恢复';
     default:
-      return 'Submit unavailable';
+      return '暂不能提交';
   }
 }
 
@@ -330,11 +330,10 @@ export function SourceStudio(props: SourceStudioProps) {
     >
       <header class="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p class="region-kicker">Source Studio</p>
-          <h2 id="source-studio-heading">Authoring source</h2>
+          <p class="region-kicker">文稿</p>
+          <h2 id="source-studio-heading">写作源文稿</h2>
           <p class="screen-note max-w-2xl">
-            Accepted source is the last valid Host projection. Working edits stay local and
-            collaborative until an explicit, validated submit.
+            已接受的源是 Host 最后校验通过的投影。工作层编辑保持本地协同，直到显式校验并提交。
           </p>
         </div>
         <Show when={props.authoring}>
@@ -361,7 +360,7 @@ export function SourceStudio(props: SourceStudioProps) {
                       if (next !== null) void props.onSubmitAuthoring?.(next);
                     }}
                   >
-                    Submit working layer
+                    提交工作层
                   </button>
                 )}
               </Show>
@@ -374,8 +373,8 @@ export function SourceStudio(props: SourceStudioProps) {
         when={props.state}
         fallback={
           <div class="screen-empty" aria-live="polite">
-            <h3>No source state</h3>
-            <p>The Host has not provided Source Studio state for this project.</p>
+            <h3>暂无源状态</h3>
+            <p>Host 尚未提供该项目的文稿状态。</p>
           </div>
         }
       >
@@ -386,60 +385,53 @@ export function SourceStudio(props: SourceStudioProps) {
               aria-labelledby="accepted-source-heading"
             >
               <header>
-                <h3 id="accepted-source-heading">Accepted source — last valid projection</h3>
-                <p class="screen-note">
-                  This is the last source the Host validated and accepted. Working-layer edits below
-                  never change it.
-                </p>
+                <h3 id="accepted-source-heading">已接受的源 — 最后校验通过的投影</h3>
+                <p class="screen-note">这是 Host 校验并接受的最新源。下方工作层编辑不会改动它。</p>
               </header>
               <Show
                 when={state().accepted}
-                fallback={
-                  <p class="screen-note">
-                    The Host has no accepted source projection for this project yet.
-                  </p>
-                }
+                fallback={<p class="screen-note">Host 还没有该项目已接受的源投影。</p>}
               >
                 {(accepted) => (
                   <>
                     <dl class="projection-metrics">
                       <div>
-                        <dt>Projection revision</dt>
+                        <dt>投影修订</dt>
                         <dd>{accepted().revision}</dd>
                       </div>
                       <div>
-                        <dt>Accepted source hash</dt>
+                        <dt>已接受源哈希</dt>
                         <dd>
-                          <code>{accepted().sourceHash ?? 'none accepted'}</code>
+                          <code>{accepted().sourceHash ?? '尚未接受'}</code>
                         </dd>
                       </div>
                       <div>
-                        <dt>Documents</dt>
+                        <dt>文稿数</dt>
                         <dd>{accepted().documents}</dd>
                       </div>
                       <div>
-                        <dt>Scenes</dt>
+                        <dt>场景数</dt>
                         <dd>{accepted().events}</dd>
                       </div>
                       <div>
-                        <dt>Rendered</dt>
+                        <dt>已渲染</dt>
                         <dd>{accepted().rendered}</dd>
                       </div>
                       <div>
-                        <dt>Blocked</dt>
+                        <dt>受阻</dt>
                         <dd>{accepted().blocked}</dd>
                       </div>
                       <div>
-                        <dt>Warnings</dt>
+                        <dt>警告</dt>
                         <dd>{accepted().warningCount}</dd>
                       </div>
                       <div>
-                        <dt>Errors</dt>
+                        <dt>错误</dt>
                         <dd>{accepted().errorCount}</dd>
                       </div>
                     </dl>
                     <Show when={accepted().diagnostics.length > 0}>
-                      <ul class="diagnostic-list" aria-label="Accepted source diagnostics">
+                      <ul class="diagnostic-list" aria-label="已接受源诊断">
                         <For each={accepted().diagnostics}>
                           {(diagnostic) => (
                             <li class={`diagnostic diagnostic-${diagnostic.severity}`}>
@@ -461,29 +453,24 @@ export function SourceStudio(props: SourceStudioProps) {
               {(authoring) => (
                 <section
                   class="authoring-identities grid gap-4 sm:grid-cols-2"
-                  aria-label="Independent authoring identities"
+                  aria-label="写作身份标识"
                 >
                   <div class="workspace-state workspace-state-ready">
-                    <p class="region-kicker">Accepted identity</p>
-                    <HashChip
-                      value={authoring().acceptedSourceHash}
-                      fallback="No accepted source yet"
-                    />
-                    <p class="screen-note">
-                      Last-valid source hash; this does not change while you type.
-                    </p>
+                    <p class="region-kicker">已接受身份</p>
+                    <HashChip value={authoring().acceptedSourceHash} fallback="尚无已接受的源" />
+                    <p class="screen-note">最近一次校验通过的源哈希；输入时不会改变。</p>
                   </div>
                   <div
                     class="workspace-state"
                     data-dirty={authoring().workingDirty}
                     data-phase={authoring().phase}
                   >
-                    <p class="region-kicker">Working identity</p>
-                    <HashChip value={authoring().workspaceDigest} fallback="No working digest" />
+                    <p class="region-kicker">工作层身份</p>
+                    <HashChip value={authoring().workspaceDigest} fallback="无工作摘要" />
                     <p class="screen-note">
                       {authoring().workingDirty
-                        ? 'Local Yjs changes are pending explicit validation and submit.'
-                        : 'Working documents match the accepted identity.'}
+                        ? '本地 Yjs 改动等待显式校验与提交。'
+                        : '工作文稿与已接受身份一致。'}
                     </p>
                   </div>
                 </section>
@@ -496,13 +483,10 @@ export function SourceStudio(props: SourceStudioProps) {
             >
               <header class="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h3 id="working-layer-heading">
-                    Working layer (Yjs) — online-only, not accepted source
-                  </h3>
+                  <h3 id="working-layer-heading">工作层（Yjs）— 仅在线，非已接受源</h3>
                   <p class="screen-note">
-                    Working-layer edits are noncanonical and are never adopted as accepted source
-                    until the Host validates and submits them. Create, move and delete only touch
-                    this layer; the accepted layer changes exclusively via submit.
+                    工作层编辑是非权威的，在 Host
+                    校验并提交之前不会被采纳为已接受源。新建、移动和删除只作用于该层；已接受层仅通过提交变更。
                   </p>
                 </div>
                 <Show when={props.onCreateDocument !== undefined && canMutate()}>
@@ -517,17 +501,17 @@ export function SourceStudio(props: SourceStudioProps) {
                       setMutationError(null);
                     }}
                   >
-                    New working document
+                    新建工作文稿
                   </button>
                 </Show>
               </header>
               <Show when={creating()}>
                 <section
                   class="grid gap-2 border border-[var(--wb-border)] p-3"
-                  aria-label="Create working document"
+                  aria-label="新建工作文稿"
                 >
                   <label class="screen-note" for="new-document-path">
-                    Manifest-relative logical path
+                    清单相对逻辑路径
                   </label>
                   <input
                     id="new-document-path"
@@ -536,7 +520,7 @@ export function SourceStudio(props: SourceStudioProps) {
                     placeholder="scenes/my_new_scene.md"
                   />
                   <label class="screen-note" for="new-document-kind">
-                    Document kind
+                    文稿类型
                   </label>
                   <select
                     id="new-document-kind"
@@ -555,7 +539,7 @@ export function SourceStudio(props: SourceStudioProps) {
                       disabled={mutationBusy() || newPath().trim().length === 0}
                       onClick={() => void runCreate()}
                     >
-                      Create working document
+                      创建工作文稿
                     </button>
                     <button
                       type="button"
@@ -567,7 +551,7 @@ export function SourceStudio(props: SourceStudioProps) {
                         setMutationError(null);
                       }}
                     >
-                      Cancel
+                      取消
                     </button>
                   </div>
                 </section>
@@ -579,12 +563,10 @@ export function SourceStudio(props: SourceStudioProps) {
               </Show>
               <Show
                 when={state().working.documents.length > 0}
-                fallback={
-                  <p class="screen-note">The Host reports no working documents for this project.</p>
-                }
+                fallback={<p class="screen-note">Host 报告该项目没有工作文稿。</p>}
               >
                 <div class="grid gap-4 xl:grid-cols-[minmax(12rem,16rem)_minmax(0,1fr)]">
-                  <ul class="working-document-list" aria-label="Working documents">
+                  <ul class="working-document-list" aria-label="工作文稿">
                     <For each={state().working.documents}>
                       {(descriptor) => (
                         <li
@@ -599,7 +581,7 @@ export function SourceStudio(props: SourceStudioProps) {
                                 <code>{descriptor.documentId}</code>
                                 <span class="document-kind">{descriptor.kind}</span>
                                 <span class="document-status">
-                                  {descriptor.available ? 'available' : 'unavailable'}
+                                  {descriptor.available ? '可用' : '不可用'}
                                 </span>
                                 <span class="document-status">
                                   {statusOf(descriptor.documentId)}
@@ -616,7 +598,7 @@ export function SourceStudio(props: SourceStudioProps) {
                                 <code>{descriptor.documentId}</code>
                                 <span class="document-kind">{descriptor.kind}</span>
                                 <span class="document-status">
-                                  {descriptor.available ? 'available' : 'unavailable'}
+                                  {descriptor.available ? '可用' : '不可用'}
                                 </span>
                                 <span class="document-status">
                                   {statusOf(descriptor.documentId)}
@@ -631,7 +613,7 @@ export function SourceStudio(props: SourceStudioProps) {
                               disabled={!descriptor.available}
                               onClick={() => props.onConnectYjs?.(descriptor)}
                             >
-                              Connect working document
+                              连接工作文稿
                             </button>
                           </Show>
                           <Show when={props.onSubmit !== undefined}>
@@ -646,7 +628,7 @@ export function SourceStudio(props: SourceStudioProps) {
                               }
                               onClick={() => props.onSubmit?.(descriptor)}
                             >
-                              Submit working document to Host
+                              提交工作文稿到 Host
                             </button>
                           </Show>
                           <Show when={props.onMoveDocument !== undefined}>
@@ -660,16 +642,16 @@ export function SourceStudio(props: SourceStudioProps) {
                                 setMutationError(null);
                               }}
                             >
-                              Rename/Move
+                              重命名/移动
                             </button>
                           </Show>
                           <Show when={movingId() === descriptor.documentId}>
                             <section
                               class="grid gap-2 border border-[var(--wb-border)] p-3"
-                              aria-label={`Move ${descriptor.documentId}`}
+                              aria-label={`移动 ${descriptor.documentId}`}
                             >
                               <label class="screen-note" for={`move-path-${descriptor.documentId}`}>
-                                New manifest-relative logical path
+                                新的清单相对逻辑路径
                               </label>
                               <input
                                 id={`move-path-${descriptor.documentId}`}
@@ -683,7 +665,7 @@ export function SourceStudio(props: SourceStudioProps) {
                                   disabled={mutationBusy() || movePath().trim().length === 0}
                                   onClick={() => void runMove(descriptor.documentId)}
                                 >
-                                  Move document
+                                  移动文稿
                                 </button>
                                 <button
                                   type="button"
@@ -694,7 +676,7 @@ export function SourceStudio(props: SourceStudioProps) {
                                     setMutationError(null);
                                   }}
                                 >
-                                  Cancel
+                                  取消
                                 </button>
                               </div>
                             </section>
@@ -709,24 +691,22 @@ export function SourceStudio(props: SourceStudioProps) {
                                 setMutationError(null);
                               }}
                             >
-                              Delete
+                              删除
                             </button>
                           </Show>
                           <Show when={confirmingDeleteId() === descriptor.documentId}>
                             <section
                               class="flex flex-wrap items-center gap-2 border border-[var(--wb-border)] p-3"
-                              aria-label={`Delete ${descriptor.documentId}`}
+                              aria-label={`删除 ${descriptor.documentId}`}
                             >
-                              <span class="screen-note">
-                                Delete this working document? The accepted layer is unaffected.
-                              </span>
+                              <span class="screen-note">删除此工作文稿？已接受层不受影响。</span>
                               <button
                                 type="button"
                                 class="btn btn-primary"
                                 disabled={mutationBusy()}
                                 onClick={() => void runDelete(descriptor.documentId)}
                               >
-                                Confirm delete
+                                确认删除
                               </button>
                               <button
                                 type="button"
@@ -734,7 +714,7 @@ export function SourceStudio(props: SourceStudioProps) {
                                 disabled={mutationBusy()}
                                 onClick={() => setConfirmingDeleteId(null)}
                               >
-                                Cancel
+                                取消
                               </button>
                             </section>
                           </Show>
@@ -751,12 +731,12 @@ export function SourceStudio(props: SourceStudioProps) {
                       >
                         <header class="flex items-center justify-between gap-3 border-b border-[var(--wb-border)] px-4 py-3">
                           <div>
-                            <p class="region-kicker">Working editor</p>
+                            <p class="region-kicker">工作文稿编辑器</p>
                             <h4 id="working-editor-heading">
                               <code>{descriptor().documentId}</code>
                             </h4>
                           </div>
-                          <span class="screen-note">Yjs local-first</span>
+                          <span class="screen-note">Yjs 本地优先</span>
                         </header>
                         <YjsEditor
                           descriptor={descriptor()}
@@ -776,14 +756,11 @@ export function SourceStudio(props: SourceStudioProps) {
                 class="border-t border-[var(--wb-border)] pt-5"
                 aria-labelledby="working-diagnostics-heading"
               >
-                <h3 id="working-diagnostics-heading">
-                  Working candidate diagnostics — not accepted
-                </h3>
+                <h3 id="working-diagnostics-heading">工作候选诊断 — 未被接受</h3>
                 <p class="screen-note">
-                  These diagnostics describe the current candidate or external tree. The accepted
-                  projection above remains the last valid source.
+                  这些诊断描述当前候选或外部树。上方已接受的投影仍是最近一次的有效源。
                 </p>
-                <ul class="diagnostic-list" aria-label="Working candidate diagnostics">
+                <ul class="diagnostic-list" aria-label="工作候选诊断">
                   <For each={props.authoring?.diagnostics ?? []}>
                     {(diagnostic) => (
                       <li class={`diagnostic diagnostic-${diagnostic.severity}`}>
@@ -804,21 +781,21 @@ export function SourceStudio(props: SourceStudioProps) {
                   class="border-t border-[var(--wb-border)] pt-5"
                   aria-labelledby="external-candidate-heading"
                 >
-                  <h3 id="external-candidate-heading">External candidate</h3>
+                  <h3 id="external-candidate-heading">外部候选</h3>
                   <p class="screen-note">
                     {candidate().valid
-                      ? 'A hand-written candidate is waiting for an explicit reconciliation choice.'
-                      : 'This candidate is invalid and cannot replace the accepted projection.'}
+                      ? '存在手写候选，等待显式的合并选择。'
+                      : '该候选无效，不能替换已接受的投影。'}
                   </p>
                   <dl class="projection-metrics">
                     <div>
-                      <dt>Candidate hash</dt>
+                      <dt>候选哈希</dt>
                       <dd>
                         <code>{candidate().candidateHash}</code>
                       </dd>
                     </div>
                     <div>
-                      <dt>Changed documents</dt>
+                      <dt>变更文稿数</dt>
                       <dd>{candidate().changedLogicalPaths.length}</dd>
                     </div>
                   </dl>
@@ -844,10 +821,10 @@ export function SourceStudio(props: SourceStudioProps) {
                             }}
                           >
                             {choice === 'keep-working'
-                              ? 'Keep working'
+                              ? '保留工作层'
                               : choice === 'accept-external'
-                                ? 'Accept external'
-                                : 'Apply proposed disjoint merge'}
+                                ? '接受外部'
+                                : '应用建议的不相交合并'}
                           </button>
                         )}
                       </For>
@@ -862,13 +839,12 @@ export function SourceStudio(props: SourceStudioProps) {
                 class="border-t border-[var(--wb-border)] pt-5"
                 aria-labelledby="conflicts-heading"
               >
-                <h3 id="conflicts-heading">Dual conflict — same-path edits require resolution</h3>
-                <ul class="diagnostic-list" aria-label="Authoring conflicts">
+                <h3 id="conflicts-heading">双重冲突 — 同一路径的编辑需要解决</h3>
+                <ul class="diagnostic-list" aria-label="写作冲突">
                   <For each={props.authoring?.conflicts ?? []}>
                     {(conflict) => (
                       <li class="diagnostic diagnostic-error">
-                        <code>{conflict.logicalPath}</code> has independent working and external
-                        hashes.
+                        <code>{conflict.logicalPath}</code> 的工作层与外部哈希相互独立。
                       </li>
                     )}
                   </For>
@@ -882,15 +858,15 @@ export function SourceStudio(props: SourceStudioProps) {
             >
               <div class="operation-heading">
                 <div>
-                  <p class="region-kicker">Operation Center</p>
-                  <h3 id="operation-center-heading">Submit and reconciliation activity</h3>
+                  <p class="region-kicker">操作中心</p>
+                  <h3 id="operation-center-heading">提交与合并活动</h3>
                 </div>
               </div>
               <Show
                 when={(props.operations?.length ?? 0) > 0}
-                fallback={<p class="operation-empty">No authoring operations are pending.</p>}
+                fallback={<p class="operation-empty">没有待处理的写作操作。</p>}
               >
-                <ul class="grid gap-2" aria-label="Authoring operations">
+                <ul class="grid gap-2" aria-label="写作操作">
                   <For each={props.operations ?? []}>
                     {(operation) => (
                       <li class="flex flex-wrap items-center justify-between gap-3 border border-[var(--wb-border)] px-3 py-2">
@@ -914,32 +890,29 @@ export function SourceStudio(props: SourceStudioProps) {
             >
               <div class="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p class="region-kicker">Native history</p>
-                  <h3 id="revision-history-heading">Accepted revision history</h3>
+                  <p class="region-kicker">原生历史</p>
+                  <h3 id="revision-history-heading">已接受修订历史</h3>
                   <p class="screen-note">
-                    Native revision identities are Host authority. Git mirrors, if configured, are
-                    never used for acceptance or restore decisions.
+                    原生修订身份以 Host 为准。即使配置了 Git 镜像，也不会用于接受或恢复决策。
                   </p>
                 </div>
                 <Show when={props.onListRevisions !== undefined}>
                   <button type="button" class="btn" onClick={() => void props.onListRevisions?.()}>
-                    Refresh revision history
+                    刷新修订历史
                   </button>
                 </Show>
               </div>
               <Show
                 when={(props.revisionHistory?.revisions.length ?? 0) > 0}
-                fallback={
-                  <p class="screen-note">No native revisions are available for this project.</p>
-                }
+                fallback={<p class="screen-note">该项目没有可用的原生修订。</p>}
               >
-                <ol class="grid gap-2" aria-label="Native revision history">
+                <ol class="grid gap-2" aria-label="原生修订历史">
                   <For each={props.revisionHistory?.revisions ?? []}>
                     {(revision, index) => (
                       <li class="grid gap-2 border border-[var(--wb-border)] px-3 py-2">
                         <div class="flex flex-wrap items-center justify-between gap-3">
                           <span>
-                            <strong>Revision {index() + 1}</strong>
+                            <strong>修订 {index() + 1}</strong>
                             <code class="ml-2">{revision.revisionId}</code>
                           </span>
                           <time class="screen-note" dateTime={revision.acceptedAt}>
@@ -947,7 +920,7 @@ export function SourceStudio(props: SourceStudioProps) {
                           </time>
                         </div>
                         <span class="screen-note">
-                          Native source identity: <code>{revision.sourceHash}</code>
+                          原生源身份： <code>{revision.sourceHash}</code>
                         </span>
                         <div class="flex flex-wrap gap-2">
                           <Show when={props.onGetRevision !== undefined}>
@@ -956,7 +929,7 @@ export function SourceStudio(props: SourceStudioProps) {
                               class="btn"
                               onClick={() => void props.onGetRevision?.(revision.revisionId)}
                             >
-                              View revision
+                              查看修订
                             </button>
                           </Show>
                           <Show when={index() > 0 && props.onDiffRevisions !== undefined}>
@@ -970,7 +943,7 @@ export function SourceStudio(props: SourceStudioProps) {
                                 )
                               }
                             >
-                              Compare with previous revision
+                              与上一修订对比
                             </button>
                           </Show>
                           <Show when={props.onRestoreRevision !== undefined}>
@@ -983,7 +956,7 @@ export function SourceStudio(props: SourceStudioProps) {
                                 if (request !== null) void props.onRestoreRevision?.(request);
                               }}
                             >
-                              Restore revision
+                              恢复修订
                             </button>
                           </Show>
                         </div>
@@ -994,15 +967,15 @@ export function SourceStudio(props: SourceStudioProps) {
               </Show>
               <Show when={props.selectedRevision}>
                 {(revision) => (
-                  <dl class="projection-metrics" aria-label="Selected native revision">
+                  <dl class="projection-metrics" aria-label="选中的原生修订">
                     <div>
-                      <dt>Selected revision</dt>
+                      <dt>选中的修订</dt>
                       <dd>
                         <code>{revision().revisionId}</code>
                       </dd>
                     </div>
                     <div>
-                      <dt>Accepted at</dt>
+                      <dt>接受时间</dt>
                       <dd>{revision().acceptedAt}</dd>
                     </div>
                   </dl>
@@ -1012,16 +985,14 @@ export function SourceStudio(props: SourceStudioProps) {
                 {(diff) => (
                   <section class="grid gap-2" aria-labelledby="native-revision-diff-heading">
                     <h4 id="native-revision-diff-heading" class="screen-note">
-                      Native revision diff
+                      原生修订差异
                     </h4>
                     <p class="screen-note">
-                      Diff {diff().fromRevisionId} → {diff().toRevisionId}
+                      差异 {diff().fromRevisionId} → {diff().toRevisionId}
                     </p>
                     <Show
                       when={diff().changes.length > 0}
-                      fallback={
-                        <p class="screen-note">The selected revisions have no changed paths.</p>
-                      }
+                      fallback={<p class="screen-note">选中的修订之间没有变更路径。</p>}
                     >
                       <ul class="diagnostic-list">
                         <For each={diff().changes}>
@@ -1031,10 +1002,10 @@ export function SourceStudio(props: SourceStudioProps) {
                               <span class="screen-note">
                                 {' '}
                                 {change.beforeHash === null
-                                  ? 'added'
+                                  ? '新增'
                                   : change.afterHash === null
-                                    ? 'removed'
-                                    : 'changed'}
+                                    ? '移除'
+                                    : '修改'}
                               </span>
                             </li>
                           )}

@@ -98,11 +98,11 @@ describe('setup wizard state and validation', () => {
     // The wizard has no project step: owner-created setups go straight to
     // the provider step, where the project is created later from the UI.
     expect(screen.queryByLabelText('Project identifier')).not.toBeInTheDocument();
-    expect(await screen.findByText('Connect the provider')).toBeInTheDocument();
+    expect(await screen.findByText('连接模型服务')).toBeInTheDocument();
     const presetButton = await screen.findByRole('button', { name: 'deepseek' });
     await userEvent.setup().click(presetButton);
-    expect(screen.getByLabelText('Provider endpoint')).toHaveValue('https://api.deepseek.com/v1');
-    expect(screen.getByLabelText('Model')).toHaveValue('deepseek-chat');
+    expect(screen.getByLabelText('服务地址')).toHaveValue('https://api.deepseek.com/v1');
+    expect(screen.getByLabelText('模型')).toHaveValue('deepseek-chat');
   });
 
   it('clears the owner password after the one-way owner request', async () => {
@@ -123,12 +123,12 @@ describe('setup wizard state and validation', () => {
       />
     ));
 
-    await user.type(screen.getByLabelText(/^Password/), 'a-safe-password-123');
-    await user.click(screen.getByRole('button', { name: 'Create owner' }));
+    await user.type(screen.getByLabelText(/^密码/), 'a-safe-password-123');
+    await user.click(screen.getByRole('button', { name: '创建账号' }));
 
     expect(onOwnerCreated).toHaveBeenCalledWith('session');
     expect(screen.queryByDisplayValue('a-safe-password-123')).not.toBeInTheDocument();
     // Owner creation advances straight to the provider step (no project step).
-    expect(await screen.findByText('Connect the provider')).toBeInTheDocument();
+    expect(await screen.findByText('连接模型服务')).toBeInTheDocument();
   });
 });

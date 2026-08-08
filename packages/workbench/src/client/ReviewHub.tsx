@@ -75,7 +75,7 @@ function roleAllows(rank: number, requiredRank: number): boolean {
 
 function lifecycleErrorMessage(error: unknown): string {
   if (error instanceof BrowserReviewApiError) return error.message;
-  return error instanceof Error ? error.message : 'The review request was not accepted.';
+  return error instanceof Error ? error.message : '评审请求未被接受。';
 }
 
 function statusLabel(status: BrowserReviewCommentV1['status']): string {
@@ -236,7 +236,7 @@ function ReviewCommentCard(props: {
                 data-testid={`replace-open-${comment().commentId}`}
                 onClick={() => setReplaceOpen(true)}
               >
-                Replace text
+                替换文本
               </button>
             }
           >
@@ -254,7 +254,7 @@ function ReviewCommentCard(props: {
               data-testid={`replace-save-${comment().commentId}`}
               onClick={sendReplacement}
             >
-              Save
+              保存
             </button>
             <button
               class="text-button"
@@ -359,8 +359,8 @@ function ReviewGateCard(props: {
           </label>
           <input
             class="review-gate-reason"
-            aria-label="Decision reason"
-            placeholder="Reason (required)"
+            aria-label="决策理由"
+            placeholder="理由（必填）"
             value={reason()}
             onInput={(event) => setReason(event.currentTarget.value)}
           />
@@ -371,7 +371,7 @@ function ReviewGateCard(props: {
             data-testid={`gate-decide-${gate().gateId}`}
             onClick={decide}
           >
-            Decide
+            决定
           </button>
         </div>
       </Show>
@@ -534,7 +534,7 @@ export function ReviewHub(props: ReviewHubProps) {
                       data-testid="review-add-event"
                     />
                     <select
-                      aria-label="Severity"
+                      aria-label="严重程度"
                       value={addSeverity()}
                       onChange={(event) =>
                         setAddSeverity(event.currentTarget.value as BrowserReviewSeverityV1)
@@ -545,7 +545,7 @@ export function ReviewHub(props: ReviewHubProps) {
                       </For>
                     </select>
                     <select
-                      aria-label="Category"
+                      aria-label="类别"
                       value={addCategory()}
                       onChange={(event) =>
                         setAddCategory(event.currentTarget.value as BrowserReviewCategoryV1)

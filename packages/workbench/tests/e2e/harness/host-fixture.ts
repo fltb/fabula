@@ -477,6 +477,7 @@ export async function startHostFixture(options: HostFixtureOptions = {}): Promis
         root: project.projectRoot,
       })),
     );
+    mkdirSync(join(home, 'config'), { recursive: true });
     await writeFile(join(home, 'config', 'workbench.yaml'), configYaml, 'utf8');
   }
   // Hermetic child env: deterministic E2E never touches a real provider, so

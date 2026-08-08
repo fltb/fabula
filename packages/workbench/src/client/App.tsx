@@ -63,14 +63,14 @@ import { SourceStudio, type SourceStudioYjsStatus } from './source-studio';
  * fallback target.
  */
 const WORKBENCH_VIEW_CATALOG = [
-  { id: 'project-home', label: 'Project Home', glyph: '⌂' },
-  { id: 'source-studio', label: 'Source Studio', glyph: '≋' },
-  { id: 'graph-route', label: 'Graph / Route', glyph: '↗' },
-  { id: 'scene-map', label: 'Scene Map', glyph: '▦' },
-  { id: 'review-hub', label: 'Review Hub', glyph: '✓' },
-  { id: 'scene-canvas', label: 'Scene Canvas', glyph: '◇' },
-  { id: 'publication', label: 'Publication', glyph: '◫' },
-  { id: 'references', label: 'References', glyph: '▤' },
+  { id: 'project-home', label: '项目首页', glyph: '⌂' },
+  { id: 'source-studio', label: '文稿', glyph: '≋' },
+  { id: 'graph-route', label: '图谱 / 路线', glyph: '↗' },
+  { id: 'scene-map', label: '场景图', glyph: '▦' },
+  { id: 'review-hub', label: '审校', glyph: '✓' },
+  { id: 'scene-canvas', label: '场景画布', glyph: '◇' },
+  { id: 'publication', label: '发布', glyph: '◫' },
+  { id: 'references', label: '参考资料', glyph: '▤' },
   { id: 'settings', label: '设置', glyph: '⚙' },
 ] as const;
 
@@ -399,38 +399,33 @@ const STATUS_COPY: Record<
   }
 > = {
   unavailable: {
-    label: 'Host unavailable',
-    title: 'Host is unavailable',
-    description:
-      'The Workbench read API is not configured for this browser session. Connect an authenticated Host to load a project projection.',
+    label: 'Host 不可用',
+    title: 'Host 不可用',
+    description: '本浏览器会话未配置 Workbench 读取接口。连接已认证的 Host 以载入项目投影。',
     marker: '—',
   },
   loading: {
-    label: 'Loading',
-    title: 'Loading Host projection',
-    description:
-      'The Host is resolving an authenticated project projection. No project data is shown until that read completes.',
+    label: '加载中',
+    title: '正在加载 Host 投影',
+    description: 'Host 正在解析已认证的项目投影。读取完成前不显示任何项目数据。',
     marker: '…',
   },
   empty: {
-    label: 'No project open',
-    title: 'No project is open',
-    description:
-      'The Host is available, but it returned no project projection for this session. Open a project in the Host to populate the workspace.',
+    label: '未打开项目',
+    title: '未打开任何项目',
+    description: 'Host 可用，但本会话未返回任何项目投影。在 Host 中打开一个项目以填充工作区。',
     marker: '○',
   },
   error: {
-    label: 'Read error',
-    title: 'The Host projection could not be read',
-    description:
-      'The read API returned an error. This shell does not guess a project, scene, route, or graph while the projection is unavailable.',
+    label: '读取错误',
+    title: '无法读取 Host 投影',
+    description: '读取接口返回了错误。投影不可用时，本外壳不会猜测项目、场景、路线或图谱。',
     marker: '!',
   },
   ready: {
-    label: 'Host connected',
-    title: 'Projection ready',
-    description:
-      'The authenticated Host projection is ready for this view. Compiler-owned data will appear here when the read API supplies it.',
+    label: 'Host 已连接',
+    title: '投影就绪',
+    description: '已认证的 Host 投影已就绪。读取接口提供数据时，编译器相关数据将显示在这里。',
     marker: '·',
   },
 };
@@ -447,19 +442,19 @@ export function Navigator(props: NavigatorProps) {
   return (
     <aside
       class={`navigator-region${props.collapsed ? ' is-collapsed' : ''}`}
-      aria-label="Navigator"
+      aria-label="导航"
       data-collapsed={props.collapsed}
       data-testid="navigator"
     >
       <div class="region-heading navigator-heading">
         <div class="navigator-heading-copy">
-          <p class="region-kicker">Navigate</p>
-          <h2>Workbench views</h2>
+          <p class="region-kicker">导航</p>
+          <h2>工作台视图</h2>
         </div>
         <button
           class="icon-button"
           type="button"
-          aria-label={props.collapsed ? 'Expand Navigator' : 'Collapse Navigator'}
+          aria-label={props.collapsed ? '展开导航' : '收起导航'}
           aria-expanded={!props.collapsed}
           onClick={props.onCollapseToggle}
         >
@@ -467,7 +462,7 @@ export function Navigator(props: NavigatorProps) {
         </button>
       </div>
 
-      <nav aria-label="Workbench views" class="view-navigation">
+      <nav aria-label="工作台视图" class="view-navigation">
         <For each={props.views}>
           {(view) => (
             <button
@@ -489,7 +484,7 @@ export function Navigator(props: NavigatorProps) {
 
       <div class="navigator-footer">
         <span class="status-dot" aria-hidden="true" />
-        <span class="view-label">Read-only until Host connects</span>
+        <span class="view-label">Host 连接前为只读</span>
       </div>
     </aside>
   );
@@ -503,7 +498,7 @@ export function Workspace(props: WorkspaceProps) {
     <main class="workspace-scroll" id="workspace-panel" aria-labelledby="workspace-heading">
       <div class="workspace-heading-row">
         <div>
-          <p class="region-kicker">Workspace / {view().label}</p>
+          <p class="region-kicker">工作台 / {view().label}</p>
           <h1 id="workspace-heading">{view().label}</h1>
         </div>
         <span
@@ -526,7 +521,7 @@ export function Workspace(props: WorkspaceProps) {
           {copy().marker}
         </div>
         <div class="state-copy">
-          <p class="region-kicker">Projection status</p>
+          <p class="region-kicker">投影状态</p>
           <p>{copy().description}</p>
         </div>
       </section>
@@ -659,13 +654,24 @@ export function Workspace(props: WorkspaceProps) {
     </main>
   );
 }
+/** Chinese labels for the operation statuses shown in the operation center. */
+const OPERATION_STATUS_LABELS: Readonly<Record<string, string>> = {
+  queued: '排队中',
+  running: '运行中',
+  completed: '已完成',
+  failed: '失败',
+  stale: '已过期',
+  conflict: '冲突',
+  cancelled: '已取消',
+  interrupted: '已中断',
+};
 
 function OperationStatus(props: { readonly operation: AuthoringOperationReceiptV1 }) {
   const { operation } = props;
   return (
     <span class="flex min-w-0 flex-col items-end gap-(--wb-space-1)">
       <span class="operation-status" data-status={operation.status}>
-        {operation.status}
+        {OPERATION_STATUS_LABELS[operation.status] ?? operation.status}
       </span>
       <Show when={operation.progress !== undefined && operation.progress !== null}>
         <span class="text-xs text-[var(--wb-text-muted)]" data-testid="operation-progress">
@@ -686,8 +692,8 @@ export function OperationCenter(props: OperationCenterProps) {
     >
       <div class="operation-heading">
         <div>
-          <p class="region-kicker">Activity</p>
-          <h2 id="operation-center-heading">Operation Center</h2>
+          <p class="region-kicker">活动</p>
+          <h2 id="operation-center-heading">操作中心</h2>
         </div>
         <button
           class="text-button"
@@ -696,7 +702,7 @@ export function OperationCenter(props: OperationCenterProps) {
           aria-controls="operation-center-content"
           onClick={props.onExpandedToggle}
         >
-          {props.expanded ? 'Collapse' : 'Expand'}
+          {props.expanded ? '收起' : '展开'}
         </button>
       </div>
 
@@ -707,8 +713,8 @@ export function OperationCenter(props: OperationCenterProps) {
             <div class="operation-empty" id="operation-center-content">
               <span class="operation-pulse" aria-hidden="true" />
               <div>
-                <h3>No operations running</h3>
-                <p>Host operations will appear here with explicit status and provenance.</p>
+                <h3>没有正在运行的操作</h3>
+                <p>Host 操作将在这里显示明确的状态与来源。</p>
               </div>
             </div>
           }
@@ -716,7 +722,7 @@ export function OperationCenter(props: OperationCenterProps) {
           <ul
             id="operation-center-content"
             class="grid gap-[var(--wb-space-2)]"
-            aria-label="Authoring operations"
+            aria-label="写作操作"
           >
             <For each={props.operations ?? []}>
               {(operation) => (
@@ -737,7 +743,7 @@ export function OperationCenter(props: OperationCenterProps) {
                       data-testid={`cancel-operation-${operation.operationId}`}
                       onClick={() => void props.onCancelOperation?.(operation.operationId)}
                     >
-                      Cancel
+                      取消
                     </button>
                   </Show>
                 </li>
@@ -769,7 +775,7 @@ function ResponsiveDrawer(props: {
               <button
                 class="icon-button"
                 type="button"
-                aria-label={`Close ${props.label}`}
+                aria-label={`关闭${props.label}`}
                 onClick={props.onClose}
               >
                 ×
@@ -807,7 +813,7 @@ function Topbar(props: TopbarProps) {
         </span>
         <span class="brand-copy">
           <strong>Fabula</strong>
-          <span>Workbench</span>
+          <span>工作台</span>
         </span>
       </div>
 
@@ -826,7 +832,7 @@ function Topbar(props: TopbarProps) {
       <button
         class="agent-drawer-toggle icon-button"
         type="button"
-        aria-label={props.agentOpen ? 'Close Agent Shelf' : 'Open Agent Shelf'}
+        aria-label={props.agentOpen ? '收起 Agent 面板' : '展开 Agent 面板'}
         aria-expanded={props.agentOpen}
         title={props.agentOpen ? '收起 Agent' : '展开 Agent'}
         onClick={props.onAgentToggle}
@@ -836,12 +842,12 @@ function Topbar(props: TopbarProps) {
 
       <Show when={props.layoutMode !== 'desktop'}>
         <fieldset class="mobile-layout-controls">
-          <legend class="sr-only">Workspace panels</legend>
+          <legend class="sr-only">工作区面板</legend>
           <Show when={props.layoutMode === 'mobile'}>
             <button
               class="icon-button"
               type="button"
-              aria-label="Open navigation"
+              aria-label="打开导航"
               aria-expanded={props.navigatorOpen}
               onClick={props.onNavigatorToggle}
             >
@@ -1099,7 +1105,7 @@ export function WorkbenchShell(props: AppProps = {}) {
         <button
           class="agent-drawer-fab"
           type="button"
-          aria-label="Open Agent Shelf"
+          aria-label="展开 Agent 面板"
           onClick={() => setAgentOpen(true)}
         >
           <span aria-hidden="true">✳</span>
@@ -1109,7 +1115,7 @@ export function WorkbenchShell(props: AppProps = {}) {
       <Show when={layoutMode() === 'mobile'}>
         <ResponsiveDrawer
           open={navigatorDrawerOpen()}
-          label="Navigation"
+          label="导航"
           onClose={() => setNavigatorDrawerOpen(false)}
         >
           <Navigator

@@ -127,12 +127,12 @@ function EmptyInspector(props: { readonly detailError?: string | null }) {
         when={props.detailError}
         fallback={
           <>
-            <h3>No scene selected</h3>
-            <p>Select a scene row on the Scene Map to inspect its compiled contract.</p>
+            <h3>未选择场景</h3>
+            <p>在场景地图中选择一个场景行以查看其编译契约。</p>
           </>
         }
       >
-        <h3>Scene detail could not be loaded</h3>
+        <h3>场景详情加载失败</h3>
         <p>{props.detailError}</p>
       </Show>
     </div>
@@ -176,7 +176,7 @@ function SceneInspectorBody(props: {
   return (
     <>
       <div class="scene-inspector-head">
-        <p class="region-kicker">Scene Inspector</p>
+        <p class="region-kicker">场景详情</p>
         <div class="scene-inspector-title">
           <span class="scene-inspector-id">{detail().eventId}</span>
           <h3>{row()?.title ?? detail().eventId}</h3>
@@ -199,7 +199,7 @@ function SceneInspectorBody(props: {
         </div>
       </div>
 
-      <section class="scene-inspector-card" aria-label="Render status">
+      <section class="scene-inspector-card" aria-label="渲染状态">
         <div class="scene-inspector-card-head">
           <h4>渲染状态</h4>
           <span
@@ -236,7 +236,7 @@ function SceneInspectorBody(props: {
             disabled={!canRender() || props.renderBusy === true}
             onClick={() => props.onRenderScene?.(detail().eventId)}
           >
-            {props.renderBusy === true ? 'Queuing…' : 'Render scene'}
+            {props.renderBusy === true ? '排队中…' : '渲染场景'}
           </button>
           <Show when={detail().renderStatus === 'unadopted'}>
             <button
@@ -272,8 +272,8 @@ function SceneInspectorBody(props: {
 
       <section class="scene-inspector-card" aria-label="WorldState diff">
         <div class="scene-inspector-card-head">
-          <h4>WorldState diff</h4>
-          <span class="scene-inspector-count">{detail().diff.changed.length} changed</span>
+          <h4>WorldState 差异</h4>
+          <span class="scene-inspector-count">{detail().diff.changed.length} 处变化</span>
         </div>
         <Show
           when={detail().diff.changed.length > 0}
@@ -327,7 +327,7 @@ function SceneInspectorBody(props: {
           </table>
         </Show>
         <Show when={hints().length > 0}>
-          <div class="scene-narrative-hint" role="note" aria-label="Narrative hints">
+          <div class="scene-narrative-hint" role="note" aria-label="叙述提示">
             <span class="scene-narrative-tag">narrativeHint</span>
             <ul>
               <For each={hints()}>{(hint) => <li>{hint}</li>}</For>
@@ -336,7 +336,7 @@ function SceneInspectorBody(props: {
         </Show>
       </section>
 
-      <section class="scene-inspector-card" aria-label="Entity states">
+      <section class="scene-inspector-card" aria-label="实体状态">
         <div class="scene-inspector-card-head">
           <h4>实体状态</h4>
           <span class="scene-inspector-count">{detail().entities.length}</span>
@@ -373,10 +373,10 @@ function SceneInspectorBody(props: {
         </Show>
       </section>
 
-      <section class="scene-inspector-card" aria-label="Discourse projection">
+      <section class="scene-inspector-card" aria-label="Discourse 投影">
         <div class="scene-inspector-card-head">
           <h4>Discourse 投影</h4>
-          <span class="scene-inspector-count">planned</span>
+          <span class="scene-inspector-count">已规划</span>
         </div>
         <dl class="scene-inspector-meta">
           <div>
@@ -407,7 +407,7 @@ function SceneInspectorBody(props: {
         </Show>
       </section>
 
-      <section class="scene-inspector-card" aria-label="Graph edges">
+      <section class="scene-inspector-card" aria-label="因果图位置">
         <div class="scene-inspector-card-head">
           <h4>因果图位置</h4>
           <span class="scene-inspector-count">{detail().graphEdges.length}</span>
@@ -433,7 +433,7 @@ function SceneInspectorBody(props: {
 
       <details class="scene-technical-details" open={false}>
         <summary>技术详情</summary>
-        <section class="scene-inspector-card" aria-label="CompiledSceneContract hashes">
+        <section class="scene-inspector-card" aria-label="CompiledSceneContract 哈希">
           <div class="scene-inspector-card-head">
             <h4>CompiledSceneContract</h4>
           </div>
@@ -494,13 +494,13 @@ export function SceneInspector(props: SceneInspectorProps) {
   const detail = props.detail;
   if (detail === null || detail === undefined) {
     return (
-      <aside class="scene-inspector" aria-label="Scene inspector">
+      <aside class="scene-inspector" aria-label="场景详情">
         <EmptyInspector detailError={props.detailError} />
       </aside>
     );
   }
   return (
-    <aside class="scene-inspector" aria-label="Scene inspector">
+    <aside class="scene-inspector" aria-label="场景详情">
       <SceneInspectorBody
         row={props.row}
         detail={detail}

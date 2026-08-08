@@ -233,14 +233,7 @@ test('browser workspace: login, source studio edit, durable submit, operation ce
       const navLabels = await page
         .locator('[data-testid="navigator"] .view-navigation .view-label')
         .allTextContents();
-      expect(navLabels).toEqual([
-        'Project Home',
-        'Scene Canvas',
-        'Source Studio',
-        'Graph / Route',
-        'Review Hub',
-        'Publication',
-      ]);
+      expect(navLabels).toEqual(['项目首页', '场景画布', '文稿', '图谱 / 路线', '审校', '发布']);
       // No Agent toggle or chat entry anywhere in the shell.
       await expect(page.getByTestId('agent-chat')).toHaveCount(0);
       await expect(
@@ -248,13 +241,13 @@ test('browser workspace: login, source studio edit, durable submit, operation ce
       ).toHaveCount(0);
 
       // ── Source Studio: working document list ─────────────────────────
-      await page.getByRole('button', { name: 'Source Studio' }).click();
+      await page.getByRole('button', { name: '文稿' }).click();
       await expect(page.locator('.source-studio h2')).toBeVisible({ timeout: 15_000 });
-      const documentCount = await page.locator('ul[aria-label="Working documents"] li').count();
+      const documentCount = await page.locator('ul[aria-label="工作文稿"] li').count();
       expect(documentCount).toBeGreaterThan(0);
 
       // ── Working edit through the Yjs editor ───────────────────────────
-      await page.getByRole('button', { name: 'Connect working document' }).first().click();
+      await page.getByRole('button', { name: '连接工作文稿' }).first().click();
       await expect(page.locator('.cm-content').first()).toBeVisible({ timeout: 20_000 });
       await page.waitForTimeout(1000);
       const editor = page.locator('.cm-content').first();
@@ -263,7 +256,7 @@ test('browser workspace: login, source studio edit, durable submit, operation ce
       await editor.click({ position: { x: 2, y: 2 } });
       await page.keyboard.type('# e2e browser working edit\n', { delay: 5 });
 
-      const submitButton = page.getByRole('button', { name: 'Submit working layer' });
+      const submitButton = page.getByRole('button', { name: '提交工作层' });
       await expect(submitButton).toBeVisible({ timeout: 20_000 });
       expect(await submitButton.isDisabled()).toBe(false);
 
@@ -350,7 +343,7 @@ test('browser review hub: pending gate opens after render and a browser decision
         await loginToWorkspace(page, fixture.endpoint, owner.userId, DEFAULT_BOOTSTRAP_PASSWORD);
 
         // ── Review Hub renders the open gate card with the decide form ──
-        await page.getByRole('button', { name: 'Review Hub' }).click();
+        await page.getByRole('button', { name: '审校' }).click();
         await expect(page.locator('.review-hub h2')).toBeVisible({ timeout: 15_000 });
         await expect(page.getByTestId('gate-count')).toHaveText('1', { timeout: 15_000 });
         const card = page.locator('li.review-gate').first();
@@ -447,7 +440,7 @@ test('browser publication: full render promotes scenes, canonical record is curr
         await loginToWorkspace(page, fixture.endpoint, owner.userId, DEFAULT_BOOTSTRAP_PASSWORD);
 
         // ── Publication view shows the current canonical record ──────────
-        await page.getByRole('button', { name: 'Publication' }).click();
+        await page.getByRole('button', { name: '发布' }).click();
         await expect(page.locator('.publication-view h2')).toBeVisible({ timeout: 15_000 });
         await expect(page.getByTestId('publication-count')).toHaveText('1', { timeout: 15_000 });
         const card = page.locator('li.publication-card').first();

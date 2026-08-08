@@ -63,9 +63,9 @@ describe('SourceStudio accepted projection', () => {
   it('renders only Host-provided accepted identity and diagnostics', () => {
     render(() => <SourceStudio state={state} />);
 
-    expect(screen.getByRole('heading', { name: 'Authoring source' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '写作源文稿' })).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { name: 'Accepted source — last valid projection' }),
+      screen.getByRole('heading', { name: '已接受的源 — 最后校验通过的投影' }),
     ).toBeInTheDocument();
     expect(screen.getByText('4')).toBeInTheDocument();
     expect(screen.getByText('hash-4')).toBeInTheDocument();
@@ -75,14 +75,12 @@ describe('SourceStudio accepted projection', () => {
 
   it('shows an honest empty state when the Host has no accepted projection', () => {
     render(() => <SourceStudio state={{ ...state, accepted: null }} />);
-    expect(
-      screen.getByText('The Host has no accepted source projection for this project yet.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Host 还没有该项目已接受的源投影。')).toBeInTheDocument();
   });
 
   it('shows an honest empty state when no Host state was provided', () => {
     render(() => <SourceStudio state={null} />);
-    expect(screen.getByText('No source state')).toBeInTheDocument();
+    expect(screen.getByText('暂无源状态')).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 });
@@ -93,14 +91,10 @@ describe('SourceStudio working layer disclosure', () => {
 
     expect(
       screen.getByRole('heading', {
-        name: 'Working layer (Yjs) — online-only, not accepted source',
+        name: '工作层（Yjs）— 仅在线，非已接受源',
       }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        /Working-layer edits are noncanonical and are never adopted as accepted source/i,
-      ),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/工作层编辑是非权威的.*不会被采纳为已接受源/i)).toBeInTheDocument();
     expect(screen.getByText('chapters/chapter_01/_chapter.yaml')).toBeInTheDocument();
     expect(screen.getByText('scenes/E1.md')).toBeInTheDocument();
   });
@@ -120,8 +114,8 @@ describe('SourceStudio working layer disclosure', () => {
     const first = screen.getByText('chapters/chapter_01/_chapter.yaml').closest('li');
     expect(first).not.toBeNull();
     const available = within(first as HTMLElement);
-    await user.click(available.getByRole('button', { name: 'Connect working document' }));
-    await user.click(available.getByRole('button', { name: 'Submit working document to Host' }));
+    await user.click(available.getByRole('button', { name: '连接工作文稿' }));
+    await user.click(available.getByRole('button', { name: '提交工作文稿到 Host' }));
 
     expect(connect).toHaveBeenCalledTimes(1);
     expect(connect).toHaveBeenCalledWith(state.working.documents[0]);
@@ -134,10 +128,8 @@ describe('SourceStudio working layer disclosure', () => {
     const second = screen.getByText('scenes/E1.md').closest('li');
     expect(second).not.toBeNull();
     const unavailable = within(second as HTMLElement);
-    expect(unavailable.getByRole('button', { name: 'Connect working document' })).toBeDisabled();
-    expect(
-      unavailable.getByRole('button', { name: 'Submit working document to Host' }),
-    ).toBeDisabled();
+    expect(unavailable.getByRole('button', { name: '连接工作文稿' })).toBeDisabled();
+    expect(unavailable.getByRole('button', { name: '提交工作文稿到 Host' })).toBeDisabled();
   });
 
   it('reports browser-local connection status without binding a socket itself', () => {
@@ -200,9 +192,9 @@ describe('SourceStudio native history controls', () => {
         onRestoreRevision={restoreRevision}
       />
     ));
-    await user.click(screen.getAllByRole('button', { name: 'View revision' })[0] as HTMLElement);
-    await user.click(screen.getByRole('button', { name: 'Compare with previous revision' }));
-    await user.click(screen.getAllByRole('button', { name: 'Restore revision' })[1] as HTMLElement);
+    await user.click(screen.getAllByRole('button', { name: '查看修订' })[0] as HTMLElement);
+    await user.click(screen.getByRole('button', { name: '与上一修订对比' }));
+    await user.click(screen.getAllByRole('button', { name: '恢复修订' })[1] as HTMLElement);
     expect(getRevision).toHaveBeenCalledWith('head-1');
     expect(diffRevisions).toHaveBeenCalledWith('head-1', 'head-2');
     expect(restoreRevision).toHaveBeenCalledWith({

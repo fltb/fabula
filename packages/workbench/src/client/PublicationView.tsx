@@ -58,7 +58,7 @@ function roleAllows(rank: number, requiredRank: number): boolean {
 
 function lifecycleErrorMessage(error: unknown): string {
   if (error instanceof BrowserPublicationApiError) return error.message;
-  return error instanceof Error ? error.message : 'The publication request was not accepted.';
+  return error instanceof Error ? error.message : '发布请求未被接受。';
 }
 
 /** Project-relative artifact file → local download filename (basename only). */
@@ -71,20 +71,20 @@ function downloadFilename(record: BrowserPublicationRecordV1): string {
 /** Client mirror of the Host's assertSafePublicationRelativePath rules. */
 function publicationRelativePathError(relativePath: string): string | null {
   if (relativePath === '') {
-    return 'publication relative path must not be empty';
+    return '发布相对路径不能为空';
   }
   if (relativePath.startsWith('/') || /^[A-Za-z]:[\\/]/.test(relativePath)) {
-    return `publication relative path must not be absolute: ${relativePath}`;
+    return `发布相对路径不能是绝对路径：${relativePath}`;
   }
   const parts = relativePath.split(/[\\/]/);
   if (parts.some((part) => part === '..' || part === '.')) {
-    return `publication relative path must not traverse: ${relativePath}`;
+    return `发布相对路径不能包含上级目录：${relativePath}`;
   }
   if (parts.some((part) => part === '')) {
-    return `publication relative path must not contain empty segments: ${relativePath}`;
+    return `发布相对路径不能包含空路径段：${relativePath}`;
   }
   if (parts[0] !== 'output' || parts.length !== 2) {
-    return `publication relative path must be output/<file>: ${relativePath}`;
+    return `发布相对路径必须是 output/<文件>：${relativePath}`;
   }
   return null;
 }
@@ -223,7 +223,7 @@ function PublicationCard(props: {
           data-testid={`publication-download-${record().publicationId}`}
           onClick={() => void download()}
         >
-          {downloading() ? 'Downloading…' : 'Download'}
+          {downloading() ? '下载中…' : '下载'}
         </button>
       </Show>
     </li>

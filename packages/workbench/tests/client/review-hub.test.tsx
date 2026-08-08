@@ -182,7 +182,7 @@ describe('Review Hub mutation affordances', () => {
       action: 'resolve',
     });
 
-    await user.type(screen.getByPlaceholderText('Reason (required)'), 'Warnings acceptable.');
+    await user.type(screen.getByPlaceholderText('理由（必填）'), 'Warnings acceptable.');
     await user.click(screen.getByTestId('gate-decide-gate-1'));
     expect(onDecide).toHaveBeenCalledWith({
       version: 1,

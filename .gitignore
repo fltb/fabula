@@ -37,3 +37,8 @@ omp-session-*.html
 packages/workbench/probe-run.mjs
 packages/workbench/*-bundle-*/
 packages/workbench/.nova/
+
+# Repo-local Workbench managed home when WORKBENCH_HOME is overridden during
+# development (projects/, config/workbench.yaml, reference-jobs/, staging/)
+.workbench/
+**/.workbench/

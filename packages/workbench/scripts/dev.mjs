@@ -72,9 +72,12 @@ const env = {
   WORKBENCH_AGENT_ENABLED: pick(process.env.WORKBENCH_AGENT_ENABLED, 'true'),
   WORKBENCH_ALLOWED_ORIGINS: pick(
     process.env.WORKBENCH_ALLOWED_ORIGINS,
-    `http://127.0.0.1:${vitePort}`,
+    `http://127.0.0.1:${vitePort},http://localhost:${vitePort}`,
   ),
-  WORKBENCH_ALLOWED_HOSTS: pick(process.env.WORKBENCH_ALLOWED_HOSTS, '127.0.0.1'),
+  // Both spellings of the loopback host: the Vite proxy forwards the Host
+  // header verbatim (changeOrigin: false), so opening http://localhost:5173
+  // must not 403 the guarded read routes.
+  WORKBENCH_ALLOWED_HOSTS: pick(process.env.WORKBENCH_ALLOWED_HOSTS, '127.0.0.1,localhost'),
 };
 console.log(`[workbench dev] managed home: ${workbenchHome}`);
 

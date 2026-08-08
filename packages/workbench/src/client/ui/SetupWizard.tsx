@@ -1,23 +1,21 @@
 import type { JSX } from 'solid-js';
 import { createSignal, For, Match, onMount, Show, Switch } from 'solid-js';
 import type { ConfigOperationReceiptV1, WorkbenchSetupStatusV1 } from '../../contracts/index.js';
-import type { RuntimeState } from '../runtime-client.js';
+import { type ProviderPreset, providerPresets } from '../provider-presets.js';
 import {
   isSetupApiError,
   type SetupClient,
   type SetupField,
   type SetupFinishResult,
   type SetupNetworkInput,
-  type SetupProjectInput,
   type SetupProviderInput,
 } from '../setup-client.js';
 import { FIELD, PANEL, PRIMARY_BUTTON, QUIET_BUTTON, RuntimeStatePanel } from './RuntimeStates.js';
 
-export type SetupStep = 'owner' | 'project' | 'provider';
+export type SetupStep = 'owner' | 'provider';
 
 export const SETUP_STEPS: readonly { readonly id: SetupStep; readonly label: string }[] = [
   { id: 'owner', label: 'Owner' },
-  { id: 'project', label: 'Project' },
   { id: 'provider', label: 'Provider' },
 ];
 
@@ -33,8 +31,6 @@ export interface SetupWizardProps {
 export interface SetupFieldErrors {
   displayName?: string;
   ownerPassword?: string;
-  projectId?: string;
-  projectDisplayName?: string;
   providerBaseUrl?: string;
   providerModel?: string;
   providerApiKey?: string;
@@ -55,16 +51,6 @@ export function validateOwnerFields(displayName: string, password: string): Setu
   if (password.length > 0 && password.length < 12) {
     errors.ownerPassword = 'Use at least 12 characters, or leave it empty for no password.';
   }
-  return errors;
-}
-export function validateProjectFields(projectId: string, displayName: string): SetupFieldErrors {
-  const errors: SetupFieldErrors = {};
-  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(trim(projectId))) {
-    errors.projectId = 'Use 1–64 letters, numbers, hyphens, or underscores.';
-  }
-  if (trim(displayName).length === 0) errors.projectDisplayName = 'Enter a project name.';
-  else if (trim(displayName).length > 120)
-    errors.projectDisplayName = 'Use 120 characters or fewer.';
   return errors;
 }
 
@@ -109,7 +95,6 @@ export function validateNetworkFields(
 
 function initialStep(status: WorkbenchSetupStatusV1 | null | undefined): SetupStep {
   if (!status?.ownerCreated) return 'owner';
-  if (status.projects.length === 0) return 'project';
   return 'provider';
 }
 
@@ -137,12 +122,6 @@ function safeFailureMessage(error: unknown): string {
   return 'The Host could not complete this setup step.';
 }
 
-function parseList(value: string): string[] {
-  return value
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
-}
 
 function stepIndex(step: SetupStep): number {
   return SETUP_STEPS.findIndex((candidate) => candidate.id === step);
@@ -167,12 +146,12 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
 
   const [ownerDisplayName, setOwnerDisplayName] = createSignal('Owner');
   const [ownerPassword, setOwnerPassword] = createSignal('');
-  const [projectId, setProjectId] = createSignal('');
-  const [projectDisplayName, setProjectDisplayName] = createSignal('');
   const [providerBaseUrl, setProviderBaseUrl] = createSignal('');
   const [providerModel, setProviderModel] = createSignal('');
   const [providerApiKey, setProviderApiKey] = createSignal('');
-  let validatedProject: SetupProjectInput | null = null;
+  const [presets, setPresets] = createSignal<ProviderPreset[] | null>(null);
+  const [presetError, setPresetError] = createSignal('');
+  const [activePreset, setActivePreset] = createSignal('');
 
   onMount(() => {
     if (props.initialStatus !== undefined) return;
@@ -207,16 +186,27 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
     if (field === 'host') props.onStateChange?.('fatal-host-error');
   };
 
-  const projectInput = (): SetupProjectInput => ({
-    projectId: trim(projectId()),
-    displayName: trim(projectDisplayName()),
-  });
-
   const providerInput = (): SetupProviderInput => ({
     kind: 'pi',
     baseUrl: trim(providerBaseUrl()) || null,
     model: trim(providerModel()) || null,
   });
+
+  onMount(() => {
+    void (async () => {
+      try {
+        setPresets(await providerPresets());
+      } catch (error) {
+        setPresetError(safeFailureMessage(error));
+      }
+    })();
+  });
+
+  const pickPreset = (preset: ProviderPreset) => {
+    setActivePreset(preset.id);
+    setProviderBaseUrl(preset.baseUrl);
+    setProviderModel(preset.modelHint ?? '');
+  };
 
   const runOwner = async (): Promise<void> => {
     clearErrors();
@@ -231,33 +221,10 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
       });
       props.onOwnerCreated?.(result.sessionId);
       setOwnerPassword('');
-      setStep('project');
+      setStep('provider');
     } catch (error) {
       setOwnerPassword('');
       fail('owner', error);
-    } finally {
-      setPending(false);
-    }
-  };
-
-  const runProjectValidation = async (): Promise<void> => {
-    clearErrors();
-    const input = projectInput();
-    const local = validateProjectFields(input.projectId, input.displayName);
-    setErrors(local);
-    if (Object.keys(local).length > 0) return;
-    validatedProject = input;
-    setPending(true);
-    try {
-      await props.client.validateProject(input);
-      await props.client.saveProject(input);
-      validatedProject = null;
-      setStep('provider');
-    } catch (error) {
-      validatedProject = null;
-      // The error is rendered below this step only; no Host message/body is
-      // interpolated, so a rejected payload cannot leak into the browser.
-      fail('project', error);
     } finally {
       setPending(false);
     }
@@ -281,7 +248,6 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
       setPending(false);
     }
   };
-
 
   const runFinish = async (): Promise<void> => {
     clearErrors();
@@ -408,8 +374,7 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
                     class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
                     for="setup-owner-password"
                   >
-                    Password{' '}
-                    <span class="font-normal text-[var(--wb-muted)]">(optional)</span>
+                    Password <span class="font-normal text-[var(--wb-muted)]">(optional)</span>
                     <input
                       class={FIELD}
                       id="setup-owner-password"
@@ -429,80 +394,37 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
                 </form>
               </Match>
 
-              <Match when={step() === 'project'}>
-                <StepHeading
-                  eyebrow="Step 2 / Project"
-                  title="Register a project"
-                  description="Name your project. The Host keeps it in its own workspace; you never need to pick a folder."
-                />
-                <form
-                  class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-4)]"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void runProjectValidation();
-                  }}
-                >
-                  <label
-                    class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
-                    for="setup-project-id"
-                  >
-                    Project identifier
-                    <input
-                      class={FIELD}
-                      id="setup-project-id"
-                      value={projectId()}
-                      onInput={(event) => setProjectId(event.currentTarget.value)}
-                      aria-invalid={Boolean(inputError('projectId'))}
-                      aria-describedby={describedBy('projectId', 'setup-project-id-error')}
-                    />
-                    <FieldError id="setup-project-id-error" message={inputError('projectId')} />
-                  </label>
-                  <label
-                    class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
-                    for="setup-project-display-name"
-                  >
-                    Display name
-                    <input
-                      class={FIELD}
-                      id="setup-project-display-name"
-                      value={projectDisplayName()}
-                      onInput={(event) => setProjectDisplayName(event.currentTarget.value)}
-                      aria-invalid={Boolean(inputError('projectDisplayName'))}
-                      aria-describedby={describedBy(
-                        'projectDisplayName',
-                        'setup-project-display-name-error',
-                      )}
-                    />
-                    <FieldError
-                      id="setup-project-display-name-error"
-                      message={inputError('projectDisplayName')}
-                    />
-                  </label>
-                  <label
-                    class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
-                    for="setup-project-location"
-                  >
-                    Workspace location
-                    <input
-                      class={`${FIELD} cursor-not-allowed bg-[var(--wb-surface-muted)] text-[var(--wb-muted)]`}
-                      id="setup-project-location"
-                      type="text"
-                      readOnly
-                      disabled
-                      value={`${status()?.hostHome ?? '$WORKBENCH_HOME'}/projects/${trim(projectId()) || '<project-id>'}`}
-                    />
-                  </label>
-                  <StepActions pending={pending()} nextLabel="Create project" onBack={goBack} />
-                </form>
-              </Match>
-
-
               <Match when={step() === 'provider'}>
                 <StepHeading
-                  eyebrow="Step 3 / Provider"
+                  eyebrow="Step 2 / Provider"
                   title="Connect the provider"
-                  description="Endpoint and model are validated first. The credential is then handed directly to the Host credential store and cleared from this browser."
+                  description="Pick a provider preset or enter the endpoint yourself. The credential is handed directly to the Host credential store and cleared from this browser."
                 />
+                <div class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-2)]">
+                  <Show when={presets() === null && presetError() === ''}>
+                    <p class="text-sm text-[var(--wb-muted)]">Loading provider presets…</p>
+                  </Show>
+                  <Show when={presetError() !== ''}>
+                    <p class="text-sm text-[var(--wb-danger)]" role="alert">
+                      {presetError()}
+                    </p>
+                  </Show>
+                  <div class="settings-preset-grid" data-testid="setup-preset-grid">
+                    <For each={presets() ?? []}>
+                      {(preset) => (
+                        <button
+                          type="button"
+                          class="settings-preset"
+                          classList={{ 'is-active': activePreset() === preset.id }}
+                          onClick={() => pickPreset(preset)}
+                          title={preset.baseUrl}
+                        >
+                          {preset.label}
+                        </button>
+                      )}
+                    </For>
+                  </div>
+                </div>
                 <form
                   class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-4)]"
                   onSubmit={(event) => {
@@ -569,14 +491,9 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
                       message={inputError('providerApiKey')}
                     />
                   </label>
-                  <StepActions
-                    pending={pending()}
-                    nextLabel="Finish setup"
-                    onBack={goBack}
-                  />
+                  <StepActions pending={pending()} nextLabel="Finish setup" onBack={goBack} />
                 </form>
               </Match>
-
             </Switch>
           </section>
         </section>
@@ -643,15 +560,3 @@ function StepActions(props: {
   );
 }
 
-function ReviewItem(props: { readonly label: string; readonly value: string }): JSX.Element {
-  return (
-    <div class="rounded-[var(--wb-radius-sm)] border border-[var(--wb-border)] bg-[var(--wb-surface-muted)] p-[var(--wb-space-3)]">
-      <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-[var(--wb-muted)]">
-        {props.label}
-      </dt>
-      <dd class="mt-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink)]">
-        {props.value}
-      </dd>
-    </div>
-  );
-}

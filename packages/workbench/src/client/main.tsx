@@ -26,8 +26,8 @@ import type {
   BrowserReviewAddRequestV1,
   BrowserReviewGateDecideRequestV1,
   BrowserReviewGateListV1,
-  BrowserReviewListV1,
   BrowserReviewHistoryV1,
+  BrowserReviewListV1,
   BrowserReviewUpdateRequestV1,
   BrowserSessionPrincipalV1,
   ConfigOperationReceiptV1,
@@ -44,6 +44,7 @@ import {
 } from './project-event-client';
 import {
   createRuntimeClient,
+  requiresSetup,
   type RuntimeClient,
   type RuntimeWorkspace,
   runtimeErrorMessage,
@@ -83,8 +84,7 @@ function RuntimeRouter(props: RuntimeRouterProps) {
   onMount(() => {
     void (async () => {
       try {
-        const status = await props.client.setup.getStatus();
-        if (!status.configurationPresent || status.phase !== 'ready') {
+        if (requiresSetup(status)) {
           setStartup('setup');
         } else {
           setStartup('ready');
@@ -141,8 +141,7 @@ function RuntimeRouter(props: RuntimeRouterProps) {
     // is a visible retry affordance while the Host remains authoritative.
     void (async () => {
       try {
-        const status = await props.client.setup.getStatus();
-        setStartup(!status.configurationPresent || status.phase !== 'ready' ? 'setup' : 'ready');
+        setStartup(requiresSetup(status) ? 'setup' : 'ready');
       } catch (error) {
         setStartupError(runtimeErrorMessage(error));
         setStartup('fatal');
@@ -426,9 +425,7 @@ function WorkspaceRoute(props: {
       await refreshReferences(
         nextWorkspace.capabilities?.features?.includes('references') === true,
       );
-      await refreshSceneMap(
-        nextWorkspace.capabilities?.features?.includes('scene-map') === true,
-      );
+      await refreshSceneMap(nextWorkspace.capabilities?.features?.includes('scene-map') === true);
       // The adoption preview is keyed by one released scene revision; the
       // workspace projection carries no scene-revision pointer, so the
       // load-time preview stays null (honest empty state) until a released
@@ -605,9 +602,7 @@ function WorkspaceRoute(props: {
     cursor: string,
   ): Promise<BrowserProjectReferenceListV1 | null> =>
     props.client.read.listReferences(props.projectId, { cursor }).catch(() => null);
-  const importReference = async (
-    file: File,
-  ): Promise<BrowserProjectReferenceImportResultV1> =>
+  const importReference = async (file: File): Promise<BrowserProjectReferenceImportResultV1> =>
     props.client.read.importReference(props.projectId, file);
   const retryReference = async (
     jobId: string,
@@ -661,10 +656,7 @@ function WorkspaceRoute(props: {
       ?.chapters.flatMap((chapter) => chapter.scenes)
       .find((scene) => scene.eventId === eventId);
     const revisionId = row?.revisionId ?? null;
-    await refreshSceneAdoption(
-      true,
-      revisionId === null ? null : { eventId, revisionId },
-    );
+    await refreshSceneAdoption(true, revisionId === null ? null : { eventId, revisionId });
   };
   /**
    * Author+ render trigger (plan 9.2.3). The POST enqueues the durable

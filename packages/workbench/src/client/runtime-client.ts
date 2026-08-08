@@ -125,6 +125,19 @@ export interface RuntimeClient {
   readonly agentChat: AgentChatClient;
 }
 
+/**
+ * Decide whether the first-run setup wizard must show. The gate is
+ * configuration- and owner-scoped only: a config is applied once `finish`
+ * runs, and project/provider readiness is deliberately not part of it — an
+ * author enters the (possibly empty) workspace and creates a project there.
+ */
+export function requiresSetup(status: {
+  readonly configurationPresent: boolean;
+  readonly ownerCreated: boolean;
+}): boolean {
+  return !status.configurationPresent || !status.ownerCreated;
+}
+
 const RUNTIME_ERROR_MESSAGES: Readonly<Record<RuntimeErrorCode, string>> = {
   DISCONNECTED: 'The Workbench Host is unavailable. Check the connection and try again.',
   UNAUTHORIZED: 'Your session is no longer authorized. Sign in again.',

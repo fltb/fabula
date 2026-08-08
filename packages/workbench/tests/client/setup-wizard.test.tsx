@@ -2,12 +2,19 @@ import { cleanup, render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SetupApiError, type SetupClient } from '../../src/client/setup-client';
-import {
-  SetupWizard,
-  validateNetworkFields,
-  validateProjectFields,
-} from '../../src/client/ui/SetupWizard';
+import { SetupWizard, validateNetworkFields } from '../../src/client/ui/SetupWizard';
 import type { WorkbenchSetupStatusV1 } from '../../src/contracts/index';
+
+vi.mock('../../src/client/provider-presets', () => ({
+  providerPresets: vi.fn(async () => [
+    {
+      id: 'deepseek',
+      label: 'deepseek',
+      baseUrl: 'https://api.deepseek.com/v1',
+      modelHint: 'deepseek-chat',
+    },
+  ]),
+}));
 
 const status: WorkbenchSetupStatusV1 = {
   version: 1,
@@ -81,35 +88,21 @@ function createClient(overrides: Partial<SetupClient> = {}): SetupClient {
 }
 
 afterEach(cleanup);
-
 describe('setup wizard state and validation', () => {
-  it('keeps local errors on the project step and never collects a project root', async () => {
-    expect(validateProjectFields('bad id', 'Project').projectId).toBeDefined();
+  it('skips the project step: an owner-created status lands directly on provider', async () => {
     expect(validateNetworkFields('unix', '8787').unixSocketName).toBeDefined();
 
-    const client = createClient({
-      validateProject: vi.fn(async () => {
-        throw new SetupApiError(
-          400,
-          'PROJECT_INVALID_ROOT',
-          'project',
-          'safe project validation error',
-        );
-      }),
-    });
-    const user = userEvent.setup();
+    const client = createClient();
     render(() => <SetupWizard client={client} initialStatus={status} />);
 
-    await user.type(screen.getByLabelText('Project identifier'), 'project-a');
-    await user.type(screen.getByLabelText('Display name'), 'A Project');
-    // The wizard collects no project path: the Host derives the managed root.
-    expect(screen.queryByLabelText('Project path on Host')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Workspace location')).toHaveAttribute('readonly');
-    await user.click(screen.getByRole('button', { name: 'Create project' }));
-
-    expect(await screen.findByTestId('setup-server-error')).toHaveTextContent(
-      'The Host could not validate this project.',
-    );
+    // The wizard has no project step: owner-created setups go straight to
+    // the provider step, where the project is created later from the UI.
+    expect(screen.queryByLabelText('Project identifier')).not.toBeInTheDocument();
+    expect(await screen.findByText('Connect the provider')).toBeInTheDocument();
+    const presetButton = await screen.findByRole('button', { name: 'deepseek' });
+    await userEvent.setup().click(presetButton);
+    expect(screen.getByLabelText('Provider endpoint')).toHaveValue('https://api.deepseek.com/v1');
+    expect(screen.getByLabelText('Model')).toHaveValue('deepseek-chat');
   });
 
   it('clears the owner password after the one-way owner request', async () => {
@@ -135,5 +128,7 @@ describe('setup wizard state and validation', () => {
 
     expect(onOwnerCreated).toHaveBeenCalledWith('session');
     expect(screen.queryByDisplayValue('a-safe-password-123')).not.toBeInTheDocument();
+    // Owner creation advances straight to the provider step (no project step).
+    expect(await screen.findByText('Connect the provider')).toBeInTheDocument();
   });
 });

@@ -9,6 +9,19 @@ const vitePort = Number(process.env.WORKBENCH_VITE_PORT?.trim() || '5173');
 
 export default defineConfig({
   plugins: [tailwindcss(), solid()],
+  // micromark's dev entry imports debug as a CJS default export; served raw
+  // via @fs it loses the interop `default` and vite throws "doesn't provide an
+  // export named: 'default'". Pre-bundling gives esbuild the interop shim.
+  optimizeDeps: {
+    // CJS deps that automatic discovery cannot see get served raw via @fs
+    // and lose the interop `default` (vite docs: "Dependency Pre-Bundling").
+    // - debug: imported by micromark's `development` entry (dev/lib), which
+    //   the production-condition scan does not follow.
+    // - gaxios/extend: CJS require chain under @google/genai (pi-ai google
+    //   provider, dynamic import in SettingsView); extend is extraneous.
+    // Include recursively pre-bundles each entry's whole dependency tree.
+    include: ['debug', 'extend', 'gaxios'],
+  },
   server: {
     host: '127.0.0.1',
     port: vitePort,

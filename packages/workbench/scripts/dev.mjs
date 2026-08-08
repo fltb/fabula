@@ -86,25 +86,104 @@ const inheritedControlFd3 = (() => {
 })();
 const hostEnv = {
   ...env,
-  WORKBENCH_CONTROL_FD3: inheritedControlFd3 ? '3' : 'disabled',
+  // An explicit WORKBENCH_CONTROL_FD3 wins (shell values always win); the
+  // default mirrors the launcher's own detection so supervised runs keep the
+  // control channel while plain terminals (no fd3) disable it.
+  WORKBENCH_CONTROL_FD3: pick(
+    process.env.WORKBENCH_CONTROL_FD3,
+    inheritedControlFd3 ? '3' : 'disabled',
+  ),
 };
-const host = spawn(process.execPath, ['dist/host/host/main.js'], {
-  cwd: root,
-  env: hostEnv,
-  stdio: ['inherit', 'inherit', 'inherit', inheritedControlFd3 ? 'inherit' : 'ignore'],
-});
+let hostStartedByRestart = false;
+const startHost = () => {
+  const child = spawn(process.execPath, ['dist/host/host/main.js'], {
+    cwd: root,
+    env: hostEnv,
+    stdio: ['inherit', 'inherit', 'inherit', inheritedControlFd3 ? 'inherit' : 'ignore'],
+  });
+  child.on('exit', (code, signal) => {
+    if (restartPending) {
+      restartPending = false;
+      console.log('[workbench dev] host restarted');
+      host = startHost();
+      hostStartedByRestart = true;
+      return;
+    }
+    hostExited = true;
+    const detail = `code=${code ?? 'null'} signal=${signal ?? 'none'}`;
+    if (!shuttingDown && hostStartedByRestart) {
+      // Restarted host crashed at boot: keep the watcher and the dev session
+      // alive (nodemon/tsx behavior) — never tear the whole tree down.
+      hostStartedByRestart = false;
+      console.error(
+        `[workbench dev] restarted host exited (${detail}); keeping watcher alive — fix the error and save again to retry`,
+      );
+      return;
+    }
+    if (!shuttingDown) console.error(`[workbench dev] host exited (${detail})`);
+    if (!shuttingDown) close(code ?? 1);
+    else if (viteExited) finish();
+  });
+  return child;
+};
+let host = startHost();
+const restartHost = () => {
+  if (restartPending) return;
+  restartPending = true;
+  if (host.exitCode !== null || host.signalCode !== null) {
+    // The previous host already crashed: its exit event was consumed, so
+    // spawn a fresh one directly instead of waiting for a kill that never
+    // fires an exit.
+    restartPending = false;
+    console.log('[workbench dev] host already exited — starting fresh host');
+    host = startHost();
+    hostStartedByRestart = true;
+    return;
+  }
+  host.kill('SIGTERM');
+};
 const vite = spawn('npx', ['vite', '--config', 'vite.config.ts'], {
   cwd: root,
   env,
   stdio: 'inherit',
 });
+const watcher = spawn(process.execPath, ['build.host.mjs', '--watch'], {
+  cwd: root,
+  env,
+  stdio: ['ignore', 'pipe', 'inherit'],
+});
+let watchBuffer = '';
+watcher.stdout.on('data', (chunk) => {
+  watchBuffer += chunk.toString();
+  let newline = watchBuffer.indexOf('\n');
+  while (newline !== -1) {
+    const line = watchBuffer.slice(0, newline).trim();
+    watchBuffer = watchBuffer.slice(newline + 1);
+    if (line === '[host-build] built') {
+      if (watcherBuilt) {
+        console.log('[workbench dev] host source changed — restarting host');
+        restartHost();
+      } else {
+        watcherBuilt = true; // initial build duplicates the build:host gate above
+      }
+    } else if (line === '[host-build] failed') {
+      console.warn('[workbench dev] host rebuild failed; keeping current host running');
+    }
+    newline = watchBuffer.indexOf('\n');
+  }
+});
 let shuttingDown = false;
 let hostExited = false;
 let viteExited = false;
+let restartPending = false;
+let watcherBuilt = false;
 let shutdownCode = 0;
 let shutdownDeadline;
 const finish = () => {
-  if (shutdownDeadline !== undefined) clearTimeout(shutdownDeadline);
+  clearTimeout(shutdownDeadline);
+  for (const child of [host, vite, watcher]) {
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+  }
   process.exit(shutdownCode);
 };
 const close = (code = 0) => {
@@ -113,19 +192,25 @@ const close = (code = 0) => {
   shutdownCode = code;
   host.kill('SIGTERM');
   vite.kill('SIGTERM');
+  watcher.kill('SIGTERM');
   // Host persistence shutdown is bounded at five seconds; leave the project
   // copy available until both children exit, then use a small final fallback.
   shutdownDeadline = setTimeout(finish, 5_500);
 };
-host.on('exit', (code) => {
-  hostExited = true;
-  if (!shuttingDown) close(code ?? 1);
-  else if (viteExited) finish();
-});
 vite.on('exit', (code) => {
   viteExited = true;
-  if (!shuttingDown) close(code ?? 1);
-  else if (hostExited) finish();
+  if (!shuttingDown) {
+    console.error(`[workbench dev] vite exited (code=${code ?? 'null'})`);
+    close(code ?? 1);
+  } else if (hostExited) finish();
+});
+watcher.on('exit', (code, signal) => {
+  if (!shuttingDown) {
+    console.error(
+      `[workbench dev] host watcher exited (code=${code ?? 'null'} signal=${signal ?? 'none'})`,
+    );
+    close(code ?? 1);
+  }
 });
 process.on('SIGINT', () => close());
 process.on('SIGTERM', () => close());

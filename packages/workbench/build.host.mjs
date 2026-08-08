@@ -4,13 +4,14 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { arch, platform } from 'node:os';
 import { dirname, relative, resolve } from 'node:path';
-import { build } from 'esbuild';
+import { build, context } from 'esbuild';
+const watchMode = process.argv.includes('--watch');
 
 const root = dirname(new URL(import.meta.url).pathname);
 const outdir = resolve(root, 'dist/host');
 mkdirSync(outdir, { recursive: true });
 
-const result = await build({
+const buildOptions = {
   entryPoints: [
     // Browser-safe contract barrel (package "exports" target): pure type
     // re-exports only, so the bundled output is a dependency-free module.
@@ -49,64 +50,91 @@ const result = await build({
   sourcemap: true,
   metafile: true,
   logLevel: 'info',
-});
-
-writeFileSync(
-  resolve(outdir, 'meta.json'),
-  JSON.stringify(
-    {
-      inputs: result.metafile.inputs,
-      outputs: result.metafile.outputs,
-      warnings: result.warnings,
-    },
-    null,
-    2,
-  ),
-);
-const outputFiles = Object.keys(result.metafile.outputs)
-  .map((outputPath) => relative(outdir, outputPath).split('\\').join('/'))
-  .filter((outputPath) => outputPath.length > 0);
-const entryPoints = {
-  contracts: 'contracts/index.js',
-  host: 'host/main.js',
-  mcp: 'host/mcp/index.js',
-  'persistence-worker': 'persistence/worker.js',
 };
-const entryByPath = new Map(
-  Object.entries(entryPoints).map(([name, outputPath]) => [outputPath, name]),
-);
-const outputs = outputFiles.map((path) => {
-  const bytes = readFileSync(resolve(outdir, path));
-  return {
-    path,
-    hash: createHash('sha256').update(bytes).digest('hex'),
-    size: statSync(resolve(outdir, path)).size,
-    ...(entryByPath.has(path) ? { entryPointFor: entryByPath.get(path) } : {}),
-  };
-});
-const buildId = /^[A-Za-z0-9._-]{1,128}$/.test(process.env.WORKBENCH_BUILD_ID ?? '')
-  ? process.env.WORKBENCH_BUILD_ID
-  : 'development';
-writeFileSync(
-  resolve(outdir, 'artifact-manifest.json'),
-  JSON.stringify(
-    {
-      version: 1,
-      manifestId: randomUUID(),
-      build: {
-        version: 1,
-        packageId: '@novalistically/workbench',
-        buildId,
-        protocolVersion: 1,
-        nodeVersion: process.versions.node,
-        platform: platform(),
-        arch: arch(),
+
+if (watchMode) {
+  const ctx = await context({
+    ...buildOptions,
+    plugins: [
+      {
+        name: 'host-build-marker',
+        setup(build) {
+          build.onEnd((rebuildResult) => {
+            if (rebuildResult.errors.length > 0) {
+              console.error('[host-build] failed');
+              return;
+            }
+            finalizeBuild(rebuildResult);
+            console.log('[host-build] built');
+          });
+        },
       },
-      buildTimestamp: new Date().toISOString(),
-      outputRoot: outdir,
-      outputs,
-    },
-    null,
-    2,
-  ),
-);
+    ],
+  });
+  await ctx.watch();
+} else {
+  const result = await build(buildOptions);
+  await finalizeBuild(result);
+}
+
+async function finalizeBuild(result) {
+  writeFileSync(
+    resolve(outdir, 'meta.json'),
+    JSON.stringify(
+      {
+        inputs: result.metafile.inputs,
+        outputs: result.metafile.outputs,
+        warnings: result.warnings,
+      },
+      null,
+      2,
+    ),
+  );
+  const outputFiles = Object.keys(result.metafile.outputs)
+    .map((outputPath) => relative(outdir, outputPath).split('\\').join('/'))
+    .filter((outputPath) => outputPath.length > 0);
+  const entryPoints = {
+    contracts: 'contracts/index.js',
+    host: 'host/main.js',
+    mcp: 'host/mcp/index.js',
+    'persistence-worker': 'persistence/worker.js',
+  };
+  const entryByPath = new Map(
+    Object.entries(entryPoints).map(([name, outputPath]) => [outputPath, name]),
+  );
+  const outputs = outputFiles.map((path) => {
+    const bytes = readFileSync(resolve(outdir, path));
+    return {
+      path,
+      hash: createHash('sha256').update(bytes).digest('hex'),
+      size: statSync(resolve(outdir, path)).size,
+      ...(entryByPath.has(path) ? { entryPointFor: entryByPath.get(path) } : {}),
+    };
+  });
+  const buildId = /^[A-Za-z0-9._-]{1,128}$/.test(process.env.WORKBENCH_BUILD_ID ?? '')
+    ? process.env.WORKBENCH_BUILD_ID
+    : 'development';
+  writeFileSync(
+    resolve(outdir, 'artifact-manifest.json'),
+    JSON.stringify(
+      {
+        version: 1,
+        manifestId: randomUUID(),
+        build: {
+          version: 1,
+          packageId: '@novalistically/workbench',
+          buildId,
+          protocolVersion: 1,
+          nodeVersion: process.versions.node,
+          platform: platform(),
+          arch: arch(),
+        },
+        buildTimestamp: new Date().toISOString(),
+        outputRoot: outdir,
+        outputs,
+      },
+      null,
+      2,
+    ),
+  );
+}

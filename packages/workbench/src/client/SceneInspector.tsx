@@ -491,24 +491,27 @@ function SceneInspectorBody(props: {
  * (render trigger, adoption) stay wired through the workspace host callbacks.
  */
 export function SceneInspector(props: SceneInspectorProps) {
+  const detail = props.detail;
+  if (detail === null || detail === undefined) {
+    return (
+      <aside class="scene-inspector" aria-label="Scene inspector">
+        <EmptyInspector detailError={props.detailError} />
+      </aside>
+    );
+  }
   return (
     <aside class="scene-inspector" aria-label="Scene inspector">
-      <Show
-        when={props.detail !== null && props.detail !== undefined}
-        fallback={<EmptyInspector detailError={props.detailError} />}
-      >
-        <SceneInspectorBody
-          row={props.row}
-          detail={props.detail!}
-          adoption={props.adoption}
-          sessionRole={props.sessionRole}
-          renderBusy={props.renderBusy}
-          renderNotice={props.renderNotice}
-          renderError={props.renderError}
-          onRenderScene={props.onRenderScene}
-          onRequestAdoption={props.onRequestAdoption}
-        />
-      </Show>
+      <SceneInspectorBody
+        row={props.row}
+        detail={detail}
+        adoption={props.adoption}
+        sessionRole={props.sessionRole}
+        renderBusy={props.renderBusy}
+        renderNotice={props.renderNotice}
+        renderError={props.renderError}
+        onRenderScene={props.onRenderScene}
+        onRequestAdoption={props.onRequestAdoption}
+      />
     </aside>
   );
 }

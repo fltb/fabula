@@ -274,7 +274,9 @@ describe('Workbench feature-gated views', () => {
     await user.click(screen.getByRole('button', { name: 'Close Agent Shelf' }));
     expect(screen.queryByTestId('agent-shelf')).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Open Agent Shelf' }).length).toBeGreaterThan(0);
-    await user.click(screen.getAllByRole('button', { name: 'Open Agent Shelf' })[0]!);
+    const fab = screen.getAllByRole('button', { name: 'Open Agent Shelf' })[0];
+    expect(fab).toBeDefined();
+    await user.click(fab as HTMLElement);
     expect(screen.getByTestId('agent-shelf')).toBeInTheDocument();
   });
 

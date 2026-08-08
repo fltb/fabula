@@ -355,7 +355,7 @@ export async function loadSceneMap(input: SceneMapServiceInput): Promise<SceneMa
         greyLineById.set(greyLine.id, series);
         seenAppearances.set(greyLine.id, new Set());
       }
-      const seen = seenAppearances.get(greyLine.id)!;
+      const seen = seenAppearances.get(greyLine.id) ?? new Set<string>();
       for (const node of greyLine.nodes) {
         if (seen.has(node.eventId)) continue;
         seen.add(node.eventId);

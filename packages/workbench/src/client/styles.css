@@ -1532,8 +1532,6 @@ h3 {
   gap: var(--wb-space-3);
 }
 
-
-
 .agent-chat-error {
   margin: 0;
   padding: var(--wb-space-3) var(--wb-space-4);
@@ -2538,13 +2536,13 @@ h3 {
   cursor: pointer;
 }
 
-.reference-row-main:hover .reference-row-title {
-  color: var(--wb-accent-deep);
-}
-
 .reference-row-title {
   font-weight: 800;
   overflow-wrap: anywhere;
+}
+
+.reference-row-main:hover .reference-row-title {
+  color: var(--wb-accent-deep);
 }
 
 .reference-row-subline {

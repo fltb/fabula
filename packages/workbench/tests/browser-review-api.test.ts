@@ -894,7 +894,7 @@ describe('browser review API routes', () => {
 
 describe('browser review client wire shape', () => {
   it('drives every route through the real client and typed error envelope', async () => {
-    const { app, service } = harness();
+    const { app } = harness();
     const client = createBrowserReviewClient({
       baseUrl: 'http://localhost',
       fetch: (input, init) => app.request(String(input), init),

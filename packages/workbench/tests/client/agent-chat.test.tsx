@@ -223,7 +223,9 @@ describe('AgentChat surface', () => {
     await waitFor(() => {
       expect(client.progressListeners.length).toBeGreaterThan(0);
     });
-    const { listener } = client.progressListeners[0]!;
+    const entry = client.progressListeners[0];
+    expect(entry).toBeDefined();
+    const { listener } = entry as { listener: (e: unknown) => void };
     listener({ type: 'assistant-text', runId: 'run-1', text: 'Alpha ', at: 'now' });
     expect(screen.getByText('Alpha')).toBeInTheDocument();
     listener({ type: 'assistant-text', runId: 'run-1', text: 'Beta ', at: 'now' });
@@ -264,7 +266,9 @@ describe('AgentChat surface', () => {
     await waitFor(() => {
       expect(client.progressListeners.length).toBeGreaterThan(0);
     });
-    const { listener } = client.progressListeners[0]!;
+    const entry = client.progressListeners[0];
+    expect(entry).toBeDefined();
+    const { listener } = entry as { listener: (e: unknown) => void };
     listener({ type: 'assistant-text', runId: 'run-1', text: 'inspecting…', at: 'now' });
     expect(screen.getByText('inspecting…')).toBeInTheDocument();
     listener({

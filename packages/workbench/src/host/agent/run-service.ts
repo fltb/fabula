@@ -298,7 +298,7 @@ function receiptViewOf(record: AgentToolCallRecordV1): AgentChatToolCallReceiptV
 export function createWorkbenchAgentRunService(
   options: WorkbenchAgentRunServiceOptions,
 ): WorkbenchAgentRunService {
-  const { projectId, store, executor, agentModel, operations } = options;
+  const { projectId, store, executor, operations } = options;
   const now = options.now ?? (() => new Date().toISOString());
   const maxTurns = Math.max(1, Math.floor(options.agent.maxTurns));
   const maxToolCalls = Math.max(1, Math.floor(options.agent.maxToolCalls));

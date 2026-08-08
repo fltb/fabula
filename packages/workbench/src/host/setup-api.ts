@@ -18,7 +18,6 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { createMinimalProjectSource } from '@novalistically/core';
 import type { Handler } from 'hono';
-import YAML from 'yaml';
 import {
   type AdminNetworkUpdateRequestV1,
   BROWSER_SETUP_BASE_PATH,

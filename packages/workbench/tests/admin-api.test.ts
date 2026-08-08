@@ -797,7 +797,7 @@ describe('admin configuration domains', () => {
       // A discovered entry with a null moduleHash can never match; clearing the
       // allowlist to an empty array is still allowed.
       const h = createConfigHarness({
-        discoveredPlugins: [{ ...discovered[0]!, moduleHash: null }],
+        discoveredPlugins: [{ ...discovered[0], moduleHash: null }],
       });
       const rejected = await h.server.app.request('/api/v1/admin/config/advanced', {
         method: 'PUT',

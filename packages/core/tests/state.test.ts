@@ -1913,9 +1913,13 @@ describe('canonical snapshot bridge', () => {
     ]);
 
     const byId = new Map(events.map((event) => [event.id, event]));
-    const derived = canonicalOrder.map((id, index) =>
-      narrativeEventToStateEvent(byId.get(id)!, index + 1),
-    );
+    const derived = canonicalOrder.map((id, index) => {
+      const event = byId.get(id);
+      if (event === undefined) {
+        throw new Error(`missing canonical event ${id}`);
+      }
+      return narrativeEventToStateEvent(event, index + 1);
+    });
 
     expect(derived.map((entry) => entry.sequence)).toEqual([1, 2, 3]);
     expect(derived.map((entry) => entry.eventId)).toEqual(canonicalOrder);

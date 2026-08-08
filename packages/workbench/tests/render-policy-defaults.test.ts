@@ -21,9 +21,7 @@ describe('DEFAULT_WORKBENCH_RENDER_POLICY vs core sampling defaults', () => {
     expect(DEFAULT_WORKBENCH_RENDER_POLICY.pass2.temperature).toBe(
       PASS2_SAMPLING_CONFIG.temperature,
     );
-    expect(DEFAULT_WORKBENCH_RENDER_POLICY.pass2.maxTokens).toBe(
-      PASS2_SAMPLING_CONFIG.maxTokens,
-    );
+    expect(DEFAULT_WORKBENCH_RENDER_POLICY.pass2.maxTokens).toBe(PASS2_SAMPLING_CONFIG.maxTokens);
     expect(DEFAULT_WORKBENCH_RENDER_POLICY.pass2.seed).toBe(PASS2_SAMPLING_CONFIG.seed);
   });
 

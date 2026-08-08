@@ -44,13 +44,20 @@ import {
 } from './project-event-client';
 import {
   createRuntimeClient,
-  requiresSetup,
   type RuntimeClient,
   type RuntimeWorkspace,
+  requiresSetup,
   runtimeErrorMessage,
   runtimeHealthForError,
 } from './runtime-client';
-import { LoginForm, ProjectPicker, RuntimeStatePanel } from './ui/RuntimeStates';
+import {
+  FIELD,
+  LoginForm,
+  PRIMARY_BUTTON,
+  ProjectPicker,
+  QUIET_BUTTON,
+  RuntimeStatePanel,
+} from './ui/RuntimeStates';
 import { SetupWizard } from './ui/SetupWizard';
 import './styles.css';
 import { App } from './App';
@@ -184,13 +191,12 @@ function RuntimeRouter(props: RuntimeRouterProps) {
   // leaves the form visible.
   createEffect(() => {
     if (startup() !== 'ready' || props.client.auth.hasSession()) return;
-    if (location.pathname !== '/login') return;
     void props.client.auth
       .loopback()
       .then((principal) => {
         if (principal === null) return;
         setPrincipal(principal);
-        navigate('/projects', { replace: true });
+        if (location.pathname !== '/projects') navigate('/projects', { replace: true });
       })
       .catch(() => {});
   });
@@ -303,12 +309,24 @@ function ProjectsRoute(props: {
   const [health, setHealth] = createSignal<
     'empty' | 'disconnected' | 'unauthorized' | 'fatal' | null
   >(null);
+  const [creating, setCreating] = createSignal(false);
+  const [busy, setBusy] = createSignal(false);
+  const [actionError, setActionError] = createSignal<string | null>(null);
+  const [agentOpen, setAgentOpen] = createSignal(true);
+  const [newProjectId, setNewProjectId] = createSignal('');
+  const [newDisplayName, setNewDisplayName] = createSignal('');
+  let importInput: HTMLInputElement | undefined;
 
   const load = async () => {
     if (!props.client.auth.hasSession()) {
-      setHealth('unauthorized');
-      setPending(false);
-      return;
+      // Passwordless owners have no interactive credentials: mint a loopback
+      // session before declaring the overview unauthorized.
+      const principal = await props.client.auth.loopback().catch(() => null);
+      if (principal === null) {
+        setHealth('unauthorized');
+        setPending(false);
+        return;
+      }
     }
     setPending(true);
     setError(null);
@@ -327,6 +345,137 @@ function ProjectsRoute(props: {
 
   onMount(() => void load());
 
+  const openCreateForm = () => {
+    setActionError(null);
+    setCreating(true);
+  };
+
+  const cancelCreate = () => {
+    setCreating(false);
+    setNewProjectId('');
+    setNewDisplayName('');
+    setActionError(null);
+  };
+
+  const createProject = async () => {
+    const projectId = newProjectId().trim();
+    const displayName = newDisplayName().trim();
+    if (!projectId || !displayName) {
+      setActionError('请填写项目 ID 和显示名称。');
+      return;
+    }
+    setBusy(true);
+    setActionError(null);
+    try {
+      await props.client.admin.createProject({ projectId, displayName });
+      setCreating(false);
+      setNewProjectId('');
+      setNewDisplayName('');
+      await load();
+    } catch (cause) {
+      setActionError(runtimeErrorMessage(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const importProject = async () => {
+    const input = importInput;
+    const file = input?.files?.[0];
+    if (!file) return;
+    // `File.path` is a Chromium-only extension exposing the picked folder's
+    // absolute path; the standard File API has no such field. The Host import
+    // endpoint wants the directory, so strip the relative file suffix when
+    // the picker reports a file inside the selected folder.
+    const fileWithPath = file as { path?: string };
+    const rawPath = fileWithPath.path;
+    if (typeof rawPath !== 'string' || rawPath.length === 0) {
+      setActionError('此浏览器无法获取文件夹路径；请从桌面 Host 导入。');
+      return;
+    }
+    const relative = file.webkitRelativePath ?? '';
+    const sourcePath =
+      relative.length > 0 && rawPath.endsWith(relative)
+        ? rawPath.slice(0, -relative.length)
+        : rawPath;
+    setBusy(true);
+    setActionError(null);
+    try {
+      await props.client.admin.importProject(sourcePath);
+      if (input) input.value = '';
+      await load();
+    } catch (cause) {
+      setActionError(runtimeErrorMessage(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const createForm = (
+    <main class="min-h-screen bg-[var(--wb-canvas)] px-[var(--wb-space-4)] py-[var(--wb-space-10)]">
+      <section
+        class="mx-auto w-full max-w-3xl rounded-[var(--wb-radius-lg)] border border-[var(--wb-border)] bg-[var(--wb-surface)] p-[var(--wb-space-6)] shadow-[var(--wb-shadow-panel)]"
+        aria-labelledby="create-project-heading"
+      >
+        <p class="mb-[var(--wb-space-1)] text-[0.625rem] font-extrabold uppercase tracking-[0.12em] text-[var(--wb-muted)]">
+          Workbench
+        </p>
+        <h1
+          id="create-project-heading"
+          class="font-[var(--font-display)] text-3xl font-bold text-[var(--wb-ink)]"
+        >
+          创建项目
+        </h1>
+        <p class="mt-[var(--wb-space-3)] text-sm leading-relaxed text-[var(--wb-muted)]">
+          项目文件会安全地保存在 Host 上，不需要填写路径。
+        </p>
+        <form
+          class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-4)]"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void createProject();
+          }}
+        >
+          <label class="block">
+            <span class="text-sm font-semibold text-[var(--wb-ink)]">项目 ID</span>
+            <input
+              class={FIELD}
+              value={newProjectId()}
+              onInput={(event) => setNewProjectId(event.currentTarget.value)}
+              placeholder="例如 my-novel"
+              autocomplete="off"
+              disabled={busy()}
+            />
+          </label>
+          <label class="block">
+            <span class="text-sm font-semibold text-[var(--wb-ink)]">显示名称</span>
+            <input
+              class={FIELD}
+              value={newDisplayName()}
+              onInput={(event) => setNewDisplayName(event.currentTarget.value)}
+              placeholder="例如《我的小说》"
+              autocomplete="off"
+              disabled={busy()}
+            />
+          </label>
+          <Show when={actionError()}>
+            <p class="text-sm text-[var(--wb-danger)]" role="alert">
+              {actionError()}
+            </p>
+          </Show>
+          <div class="flex flex-wrap items-center gap-[var(--wb-space-3)]">
+            <button class={PRIMARY_BUTTON} type="submit" disabled={busy()}>
+              {busy() ? '创建中…' : '创建项目'}
+            </button>
+            <button class={QUIET_BUTTON} type="button" onClick={cancelCreate} disabled={busy()}>
+              取消
+            </button>
+          </div>
+        </form>
+      </section>
+    </main>
+  );
+
   return (
     <Show
       when={health() !== 'unauthorized'}
@@ -341,14 +490,59 @@ function ProjectsRoute(props: {
         </main>
       }
     >
-      <ProjectPicker
-        projects={projects()}
-        pending={pending()}
-        error={error()}
-        health={health() ?? undefined}
-        onSelect={props.onSelect}
-        onRetry={() => void load()}
+      <Show when={!creating()} fallback={createForm}>
+        <Show when={actionError()}>
+          <div
+            class="mx-auto mb-[var(--wb-space-4)] w-full max-w-3xl rounded-[var(--wb-radius-md)] border border-[var(--wb-error-border)] bg-[var(--wb-error-surface)] px-[var(--wb-space-4)] py-[var(--wb-space-3)] text-sm text-[var(--wb-danger)]"
+            role="alert"
+          >
+            {actionError()}
+          </div>
+        </Show>
+        <ProjectPicker
+          projects={projects()}
+          pending={pending()}
+          error={error()}
+          health={health() ?? undefined}
+          onSelect={props.onSelect}
+          onRetry={() => void load()}
+          onCreateProject={openCreateForm}
+          onImportProject={() => importInput?.click()}
+        />
+      </Show>
+      <input
+        ref={(el) => {
+          importInput = el;
+          el.setAttribute('webkitdirectory', '');
+        }}
+        type="file"
+        class="hidden"
+        tabIndex={-1}
+        aria-hidden="true"
+        onChange={() => void importProject()}
       />
+      <Show when={agentOpen()}>
+        <aside
+          class="agent-drawer agent-drawer-floating"
+          data-testid="agent-shelf"
+          aria-label="Agent"
+        >
+          <div class="agent-drawer-guidance" data-testid="agent-drawer-guidance">
+            <p class="region-kicker">Agent</p>
+            <p class="agent-drawer-guidance-copy">选择一个项目后,Agent 将在这里就绪</p>
+          </div>
+        </aside>
+      </Show>
+      <Show when={!agentOpen()}>
+        <button
+          class="agent-drawer-fab"
+          type="button"
+          aria-label="Open Agent Shelf"
+          onClick={() => setAgentOpen(true)}
+        >
+          <span aria-hidden="true">✳</span>
+        </button>
+      </Show>
     </Show>
   );
 }
@@ -358,6 +552,7 @@ function WorkspaceRoute(props: {
   readonly projectId: string;
   readonly onSignIn: () => void;
 }) {
+  const location = useLocation();
   const [pending, setPending] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
   const [health, setHealth] = createSignal<
@@ -759,6 +954,7 @@ function WorkspaceRoute(props: {
     >
       {(current) => (
         <App
+          route={location.pathname}
           hostStatus="ready"
           loading={pending()}
           eventConnected={authoring()?.connected ?? true}

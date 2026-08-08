@@ -191,7 +191,7 @@ export function ProjectsPage(props: ProjectsPageProps) {
 
   let importInput: HTMLInputElement | undefined;
 
-  const importProject = () => {
+  const _importProject = () => {
     void run(async () => {
       const input = importInput;
       const file = input?.files?.[0];

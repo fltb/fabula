@@ -1,7 +1,8 @@
 import { Dialog } from '@kobalte/core/dialog';
 import type { JSX } from 'solid-js';
-import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
+import { createMemo, createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import type {
+  AgentViewContextV1,
   AuthoringOperationReceiptV1,
   AuthoringStateV1,
   BrowserAuthoringDocumentCreateRequestV1,
@@ -23,8 +24,8 @@ import type {
   BrowserPublicationReadQueryV1,
   BrowserPublicationReadResultV1,
   BrowserPublishRequestV1,
-  BrowserReviewGateDecideRequestV1,
   BrowserReviewAddRequestV1,
+  BrowserReviewGateDecideRequestV1,
   BrowserReviewGateListV1,
   BrowserReviewHistoryV1,
   BrowserReviewListV1,
@@ -40,22 +41,22 @@ import type {
   WorkbenchProjectFeatureV1,
   WorkbenchRouteSelectorV1,
 } from '../contracts/index.js';
-import { AgentChat } from './AgentChat';
+import { AgentChat, agentViewLabel } from './AgentChat';
 import type { AgentChatClient } from './agent-chat-client.js';
+import { describeCoordinate, describeOrigin } from './graph-view-model';
 import { PublicationView } from './PublicationView';
-import { ReferencesView } from './ReferencesView';
 import {
   loadWorkbenchPreferences,
   saveWorkbenchPreferences,
   type WorkbenchPreferencesV1,
 } from './preferences';
 import { GraphRoute, ProjectHome } from './projection-views';
-import { SceneMap } from './SceneMap';
+import { ReferencesView } from './ReferencesView';
 import { ReviewHub } from './ReviewHub';
+import { SceneMap } from './SceneMap';
+import { SettingsView } from './SettingsView';
 import { SceneCanvas } from './scene-canvas';
 import { SourceStudio, type SourceStudioYjsStatus } from './source-studio';
-import { SettingsView } from './SettingsView';
-import { describeCoordinate, describeOrigin } from './graph-view-model';
 
 /**
  * Full catalog of every Workbench view. The visible list is derived from the
@@ -64,7 +65,6 @@ import { describeCoordinate, describeOrigin } from './graph-view-model';
  * fallback target.
  */
 const WORKBENCH_VIEW_CATALOG = [
-  { id: 'agent-chat', label: 'Agent Chat', glyph: '✳' },
   { id: 'project-home', label: 'Project Home', glyph: '⌂' },
   { id: 'source-studio', label: 'Source Studio', glyph: '≋' },
   { id: 'graph-route', label: 'Graph / Route', glyph: '↗' },
@@ -100,9 +100,8 @@ const DEFAULT_VIEWS: ViewDefinition[] = WORKBENCH_VIEW_CATALOG.filter((view) =>
 /**
  * Derive the visible view list from Host-supplied feature gates. Catalog
  * order is preserved, so the navigation order never depends on Host array
- * ordering; when the `agent-chat` feature is present it becomes the first
- * (default) view, and without Host features the always-on `DEFAULT_FEATURES`
- * views keep the shell honest.
+ * ordering; without Host features the always-on `DEFAULT_FEATURES` views
+ * keep the shell honest.
  */
 function viewsFor(
   features: readonly WorkbenchProjectFeatureV1[] | null | undefined,
@@ -115,6 +114,8 @@ function viewsFor(
 export interface AppProps {
   /** The initial view is a local UI choice; it never identifies a project. */
   readonly initialView?: WorkbenchViewId;
+  /** Browser route (`location.pathname`) supplied by the router wiring; feeds the agent context. */
+  readonly route?: string;
   /** The shell stays honest until an authenticated Host supplies a status. */
   readonly hostStatus?: HostStatus;
   /** True while the workspace wiring reloads; the shell shows view-level skeletons. */
@@ -230,9 +231,7 @@ export interface AppProps {
   /** Re-requests the first server page after an import or delete. */
   readonly onRefreshReferences?: () => void | Promise<void>;
   /** Fetches one more server page for the accumulated list. */
-  readonly onLoadMoreReferences?: (
-    cursor: string,
-  ) => Promise<BrowserProjectReferenceListV1 | null>;
+  readonly onLoadMoreReferences?: (cursor: string) => Promise<BrowserProjectReferenceListV1 | null>;
   /** Uploads one file through the Host's durable three-phase import. */
   readonly onImportReference?: (file: File) => Promise<BrowserProjectReferenceImportResultV1>;
   /** Re-runs one failed import job from its persisted chunks. */
@@ -272,7 +271,8 @@ export interface AppProps {
   readonly onRenderScene?: (eventId: string) => void | Promise<void>;
   /**
    * Agent chat surface (plan 9.5): supplied only when the Host feature set
-   * includes `agent-chat`; absent here the view is never rendered.
+   * includes `agent-chat`; the global drawer renders this surface when
+   * present and a guidance panel when it is absent.
    */
   readonly agentChat?: { readonly projectId: string; readonly client: AgentChatClient } | null;
 }
@@ -376,9 +376,7 @@ interface WorkspaceProps {
   readonly references?: BrowserProjectReferenceListV1 | null;
   readonly referencesError?: string | null;
   readonly onRefreshReferences?: () => void | Promise<void>;
-  readonly onLoadMoreReferences?: (
-    cursor: string,
-  ) => Promise<BrowserProjectReferenceListV1 | null>;
+  readonly onLoadMoreReferences?: (cursor: string) => Promise<BrowserProjectReferenceListV1 | null>;
   readonly onImportReference?: (file: File) => Promise<BrowserProjectReferenceImportResultV1>;
   readonly onRetryReference?: (
     jobId: string,
@@ -398,7 +396,6 @@ interface WorkspaceProps {
   readonly onRefreshSceneMap?: () => void | Promise<void>;
   readonly onSelectScene?: (eventId: string) => void | Promise<void>;
   readonly onRenderScene?: (eventId: string) => void | Promise<void>;
-  readonly agentChat?: { readonly projectId: string; readonly client: AgentChatClient } | null;
   readonly loading?: boolean;
   readonly eventConnected?: boolean;
   readonly reviewError?: string | null;
@@ -564,130 +561,115 @@ export function Workspace(props: WorkspaceProps) {
           </div>
         }
       >
-      <Show when={props.hostStatus === 'ready' && props.activeView === 'project-home'}>
-        <ProjectHome overview={props.overview ?? null} />
-      </Show>
-      <Show when={props.hostStatus === 'ready' && props.activeView === 'graph-route'}>
-        <GraphRoute
-          projection={props.graphProjection ?? null}
-          onRouteChange={props.onGraphRouteChange}
-          onNodeSelect={props.onNodeSelect}
-        />
-      </Show>
-      <Show when={props.hostStatus === 'ready' && props.activeView === 'source-studio'}>
-        <SourceStudio
-          state={props.sourceStudio ?? null}
-          authoring={props.authoringState}
-          operations={props.authoringOperations}
-          revisionHistory={props.authoringRevisionHistory}
-          selectedRevision={props.authoringRevision}
-          revisionDiff={props.authoringRevisionDiff}
-          onListRevisions={props.onListAuthoringRevisions}
-          onGetRevision={props.onGetAuthoringRevision}
-          onDiffRevisions={props.onDiffAuthoringRevisions}
-          onRestoreRevision={props.onRestoreAuthoringRevision}
-          sessionId={props.sourceSessionId}
-          selectedDocumentId={props.selectedSourceDocumentId}
-          onSelectDocument={props.onConnectSourceYjs}
-          yjsStatus={props.sourceYjsStatus}
-          onConnectYjs={props.onConnectSourceYjs}
-          onSubmit={props.onSubmitSource}
-          onSubmitAuthoring={props.onSubmitAuthoring}
-          onReconcileAuthoring={props.onReconcileAuthoring}
-          onCreateDocument={props.onCreateDocument}
-          onMoveDocument={props.onMoveDocument}
-          onDeleteDocument={props.onDeleteDocument}
-          onYjsStatusChange={props.onSourceYjsStatusChange}
-        />
-      </Show>
-      <Show when={props.hostStatus === 'ready' && props.activeView === 'scene-canvas'}>
-        <SceneCanvas
-          adoption={props.sceneAdoption ?? null}
-          onRequestAdoption={props.onRequestAdoption}
-          adoptionError={props.sceneAdoptionError ?? null}
-          onRetryAdoption={props.onRetryAdoption}
-        />
-      </Show>
-      <Show when={props.hostStatus === 'ready' && props.activeView === 'review-hub'}>
-        <ReviewHub
-          projectId={props.overview?.projectId ?? null}
-          review={props.reviewState ?? null}
-          gates={props.reviewGates ?? null}
-          reviewError={props.reviewError ?? null}
-          history={props.reviewHistory ?? null}
-          sessionRole={props.sessionProjectRole ?? null}
-          onAddComment={props.onAddReviewComment}
-          onUpdateComment={props.onUpdateReviewComment}
-          onDecideGate={props.onDecideReviewGate}
-          onRefresh={props.onRefreshReview}
-        />
-      </Show>
-      <Show when={props.hostStatus === 'ready' && props.activeView === 'publication'}>
-        <PublicationView
-          projectId={props.overview?.projectId ?? null}
-          publications={props.publications ?? null}
-          publicationsError={props.publicationsError ?? null}
-          sessionRole={props.sessionProjectRole ?? null}
-          onPublish={props.onPublish}
-          onRefresh={props.onRefreshPublication}
-          onReadPublication={props.onReadPublication}
-        />
-      </Show>
-      <Show when={props.hostStatus === 'ready' && props.activeView === 'references'}>
-        <ReferencesView
-          projectId={props.overview?.projectId ?? null}
-          references={props.references ?? null}
-          referencesError={props.referencesError ?? null}
-          sessionRole={props.sessionProjectRole ?? null}
-          onRefresh={props.onRefreshReferences}
-          onLoadMore={props.onLoadMoreReferences}
-          onImport={props.onImportReference}
-          onRetry={props.onRetryReference}
-          onDelete={props.onDeleteReference}
-          onReadContent={props.onReadReferenceContent}
-        />
-      </Show>
-      <Show when={props.hostStatus === 'ready' && props.activeView === 'settings'}>
-        <SettingsView
-          projectId={props.overview?.projectId ?? null}
-          sessionRole={props.sessionProjectRole ?? null}
-          sessionId={props.sourceSessionId ?? null}
-        />
-      </Show>
-      <Show when={props.hostStatus === 'ready' && props.activeView === 'scene-map'}>
-        <SceneMap
-          projectId={props.overview?.projectId ?? null}
-          map={props.sceneMap ?? null}
-          mapError={props.sceneMapError ?? null}
-          detail={props.sceneDetail ?? null}
-          detailError={props.sceneDetailError ?? null}
-          adoption={props.sceneAdoption ?? null}
-          sessionRole={props.sessionProjectRole ?? null}
-          renderBusy={props.sceneRenderBusy ?? false}
-          renderNotice={props.sceneRenderNotice ?? null}
-          renderError={props.sceneRenderError ?? null}
-          onSelectScene={props.onSelectScene}
-          onRenderScene={props.onRenderScene}
-          onRequestAdoption={props.onRequestAdoption}
-          onRefresh={props.onRefreshSceneMap}
-          sourceSessionId={props.sourceSessionId ?? null}
-        />
-      </Show>
-      <Show
-        when={
-          props.hostStatus === 'ready' &&
-          props.activeView === 'agent-chat' &&
-          props.agentChat !== undefined &&
-          props.agentChat !== null
-        }>
-        <AgentChat
-          projectId={props.agentChat!.projectId}
-          client={props.agentChat!.client}
-          hostStatus={props.hostStatus}
-          onViewChange={props.onViewChange}
-          onOpenSettings={props.onOpenSettings}
-        />
-      </Show>
+        <Show when={props.hostStatus === 'ready' && props.activeView === 'project-home'}>
+          <ProjectHome overview={props.overview ?? null} />
+        </Show>
+        <Show when={props.hostStatus === 'ready' && props.activeView === 'graph-route'}>
+          <GraphRoute
+            projection={props.graphProjection ?? null}
+            onRouteChange={props.onGraphRouteChange}
+            onNodeSelect={props.onNodeSelect}
+          />
+        </Show>
+        <Show when={props.hostStatus === 'ready' && props.activeView === 'source-studio'}>
+          <SourceStudio
+            state={props.sourceStudio ?? null}
+            authoring={props.authoringState}
+            operations={props.authoringOperations}
+            revisionHistory={props.authoringRevisionHistory}
+            selectedRevision={props.authoringRevision}
+            revisionDiff={props.authoringRevisionDiff}
+            onListRevisions={props.onListAuthoringRevisions}
+            onGetRevision={props.onGetAuthoringRevision}
+            onDiffRevisions={props.onDiffAuthoringRevisions}
+            onRestoreRevision={props.onRestoreAuthoringRevision}
+            sessionId={props.sourceSessionId}
+            selectedDocumentId={props.selectedSourceDocumentId}
+            onSelectDocument={props.onConnectSourceYjs}
+            yjsStatus={props.sourceYjsStatus}
+            onConnectYjs={props.onConnectSourceYjs}
+            onSubmit={props.onSubmitSource}
+            onSubmitAuthoring={props.onSubmitAuthoring}
+            onReconcileAuthoring={props.onReconcileAuthoring}
+            onCreateDocument={props.onCreateDocument}
+            onMoveDocument={props.onMoveDocument}
+            onDeleteDocument={props.onDeleteDocument}
+            onYjsStatusChange={props.onSourceYjsStatusChange}
+          />
+        </Show>
+        <Show when={props.hostStatus === 'ready' && props.activeView === 'scene-canvas'}>
+          <SceneCanvas
+            adoption={props.sceneAdoption ?? null}
+            onRequestAdoption={props.onRequestAdoption}
+            adoptionError={props.sceneAdoptionError ?? null}
+            onRetryAdoption={props.onRetryAdoption}
+          />
+        </Show>
+        <Show when={props.hostStatus === 'ready' && props.activeView === 'review-hub'}>
+          <ReviewHub
+            projectId={props.overview?.projectId ?? null}
+            review={props.reviewState ?? null}
+            gates={props.reviewGates ?? null}
+            reviewError={props.reviewError ?? null}
+            history={props.reviewHistory ?? null}
+            sessionRole={props.sessionProjectRole ?? null}
+            onAddComment={props.onAddReviewComment}
+            onUpdateComment={props.onUpdateReviewComment}
+            onDecideGate={props.onDecideReviewGate}
+            onRefresh={props.onRefreshReview}
+          />
+        </Show>
+        <Show when={props.hostStatus === 'ready' && props.activeView === 'publication'}>
+          <PublicationView
+            projectId={props.overview?.projectId ?? null}
+            publications={props.publications ?? null}
+            publicationsError={props.publicationsError ?? null}
+            sessionRole={props.sessionProjectRole ?? null}
+            onPublish={props.onPublish}
+            onRefresh={props.onRefreshPublication}
+            onReadPublication={props.onReadPublication}
+          />
+        </Show>
+        <Show when={props.hostStatus === 'ready' && props.activeView === 'references'}>
+          <ReferencesView
+            projectId={props.overview?.projectId ?? null}
+            references={props.references ?? null}
+            referencesError={props.referencesError ?? null}
+            sessionRole={props.sessionProjectRole ?? null}
+            onRefresh={props.onRefreshReferences}
+            onLoadMore={props.onLoadMoreReferences}
+            onImport={props.onImportReference}
+            onRetry={props.onRetryReference}
+            onDelete={props.onDeleteReference}
+            onReadContent={props.onReadReferenceContent}
+          />
+        </Show>
+        <Show when={props.hostStatus === 'ready' && props.activeView === 'settings'}>
+          <SettingsView
+            projectId={props.overview?.projectId ?? null}
+            sessionRole={props.sessionProjectRole ?? null}
+            sessionId={props.sourceSessionId ?? null}
+          />
+        </Show>
+        <Show when={props.hostStatus === 'ready' && props.activeView === 'scene-map'}>
+          <SceneMap
+            projectId={props.overview?.projectId ?? null}
+            map={props.sceneMap ?? null}
+            mapError={props.sceneMapError ?? null}
+            detail={props.sceneDetail ?? null}
+            detailError={props.sceneDetailError ?? null}
+            adoption={props.sceneAdoption ?? null}
+            sessionRole={props.sessionProjectRole ?? null}
+            renderBusy={props.sceneRenderBusy ?? false}
+            renderNotice={props.sceneRenderNotice ?? null}
+            renderError={props.sceneRenderError ?? null}
+            onSelectScene={props.onSelectScene}
+            onRenderScene={props.onRenderScene}
+            onRequestAdoption={props.onRequestAdoption}
+            onRefresh={props.onRefreshSceneMap}
+            sourceSessionId={props.sourceSessionId ?? null}
+          />
+        </Show>
       </Show>
     </main>
   );
@@ -832,7 +814,7 @@ export function Inspector(props: InspectorProps) {
 function OperationStatus(props: { readonly operation: AuthoringOperationReceiptV1 }) {
   const { operation } = props;
   return (
-    <span class="flex min-w-0 flex-col items-end gap-[var(--wb-space-1)]">
+    <span class="flex min-w-0 flex-col items-end gap-(--wb-space-1)">
       <span class="operation-status" data-status={operation.status}>
         {operation.status}
       </span>
@@ -960,8 +942,10 @@ interface TopbarProps {
   readonly layoutMode: WorkbenchLayoutMode;
   readonly navigatorOpen: boolean;
   readonly inspectorOpen: boolean;
+  readonly agentOpen: boolean;
   readonly onNavigatorToggle: () => void;
   readonly onInspectorToggle: () => void;
+  readonly onAgentToggle: () => void;
 }
 
 function Topbar(props: TopbarProps) {
@@ -992,6 +976,17 @@ function Topbar(props: TopbarProps) {
         </span>
       </div>
 
+      <button
+        class="agent-drawer-toggle icon-button"
+        type="button"
+        aria-label={props.agentOpen ? 'Close Agent Shelf' : 'Open Agent Shelf'}
+        aria-expanded={props.agentOpen}
+        title={props.agentOpen ? '收起 Agent' : '展开 Agent'}
+        onClick={props.onAgentToggle}
+      >
+        <span aria-hidden="true">✳</span>
+      </button>
+
       <Show when={props.layoutMode !== 'desktop'}>
         <fieldset class="mobile-layout-controls">
           <legend class="sr-only">Workspace panels</legend>
@@ -1021,6 +1016,23 @@ function Topbar(props: TopbarProps) {
   );
 }
 
+/**
+ * Static view → available-agent-action map for the agent context snapshot.
+ * Display strings only; the Host folds them into the run prompt as hints,
+ * never as commands.
+ */
+const VIEW_AGENT_ACTIONS: Readonly<Record<string, readonly string[]>> = {
+  'project-home': ['查看项目概览'],
+  'source-studio': ['查看文稿', '提交文稿'],
+  'graph-route': ['查看图谱'],
+  'scene-map': ['查看场景', '提交场景'],
+  'review-hub': ['查看门禁', '提交审校'],
+  'scene-canvas': ['查看场景画布'],
+  publication: ['查看发布产物'],
+  references: ['查看参考资料'],
+  settings: ['查看设置'],
+};
+
 export function WorkbenchShell(props: AppProps = {}) {
   const stored = loadWorkbenchPreferences();
   const views = () => viewsFor(props.features);
@@ -1032,6 +1044,7 @@ export function WorkbenchShell(props: AppProps = {}) {
   const initialVisibleView = available.some((view) => view.id === initialView)
     ? initialView
     : available[0].id;
+  const [agentOpen, setAgentOpen] = createSignal(true);
   const [activeView, setActiveView] = createSignal<WorkbenchViewId>(initialVisibleView);
   const [navigatorCollapsed, setNavigatorCollapsed] = createSignal(
     props.initialNavigatorCollapsed ?? stored.navigatorCollapsed,
@@ -1063,6 +1076,19 @@ export function WorkbenchShell(props: AppProps = {}) {
   };
 
   const hostStatus = () => props.hostStatus ?? 'unavailable';
+  /** Secret-free snapshot of the current view + project, folded into every agent run. */
+  const agentContext = createMemo<AgentViewContextV1>(() => {
+    const view = activeView();
+    const overview = props.overview;
+    return {
+      route: props.route ?? '',
+      view,
+      projectId: overview?.projectId,
+      projectName: overview?.metadata.displayName,
+      visible: [agentViewLabel(view)],
+      actions: VIEW_AGENT_ACTIONS[view] ?? [],
+    };
+  });
 
   const persistPreferences = (patch: Partial<WorkbenchPreferencesV1>) => {
     saveWorkbenchPreferences({
@@ -1105,7 +1131,9 @@ export function WorkbenchShell(props: AppProps = {}) {
 
   return (
     <div
-      class={`workbench-shell${navigatorCollapsed() ? ' navigator-is-collapsed' : ''}`}
+      class={`workbench-shell${navigatorCollapsed() ? ' navigator-is-collapsed' : ''}${
+        agentOpen() ? ' agent-shelf-open' : ''
+      }`}
       data-testid="workbench-shell"
       data-view={activeView()}
     >
@@ -1117,8 +1145,10 @@ export function WorkbenchShell(props: AppProps = {}) {
         layoutMode={layoutMode()}
         navigatorOpen={navigatorDrawerOpen()}
         inspectorOpen={inspectorDrawerOpen()}
+        agentOpen={agentOpen()}
         onNavigatorToggle={toggleNavigatorDrawer}
         onInspectorToggle={toggleInspectorDrawer}
+        onAgentToggle={() => setAgentOpen((open) => !open)}
       />
       <Show when={props.eventConnected === false}>
         <div class="host-disconnect-banner" role="status" data-testid="host-disconnect-banner">
@@ -1196,7 +1226,6 @@ export function WorkbenchShell(props: AppProps = {}) {
             onRetryReference={props.onRetryReference}
             onDeleteReference={props.onDeleteReference}
             onReadReferenceContent={props.onReadReferenceContent}
-            agentChat={props.agentChat}
             sceneMap={props.sceneMap}
             sceneMapError={props.sceneMapError}
             sceneDetail={props.sceneDetail}
@@ -1223,7 +1252,41 @@ export function WorkbenchShell(props: AppProps = {}) {
             graphProjection={props.graphProjection}
           />
         </Show>
+        <Show when={agentOpen()}>
+          <aside class="agent-drawer" data-testid="agent-shelf" aria-label="Agent">
+            <Show
+              when={props.agentChat}
+              fallback={
+                <div class="agent-drawer-guidance" data-testid="agent-drawer-guidance">
+                  <p class="region-kicker">Agent</p>
+                  <p class="agent-drawer-guidance-copy">选择一个项目后,Agent 将在这里就绪</p>
+                </div>
+              }
+            >
+              {(surface) => (
+                <AgentChat
+                  projectId={surface().projectId}
+                  client={surface().client}
+                  hostStatus={hostStatus()}
+                  onViewChange={props.onViewChange}
+                  onOpenSettings={props.onOpenSettings}
+                  context={agentContext()}
+                />
+              )}
+            </Show>
+          </aside>
+        </Show>
       </div>
+      <Show when={!agentOpen()}>
+        <button
+          class="agent-drawer-fab"
+          type="button"
+          aria-label="Open Agent Shelf"
+          onClick={() => setAgentOpen(true)}
+        >
+          <span aria-hidden="true">✳</span>
+        </button>
+      </Show>
 
       <Show when={layoutMode() === 'tablet'}>
         <ResponsiveDrawer

@@ -35,6 +35,7 @@ export type {
   AgentChatToolCallEventV1,
   AgentChatToolCallReceiptV1,
   AgentChatToolResultEventV1,
+  AgentViewContextV1,
 } from './agent-chat.js';
 export type {
   AuthoringActivityEventV1,
@@ -95,6 +96,7 @@ export type {
   BrowserGraphRouteSelectorV1,
   BrowserProjectActivityV1,
   BrowserProjectCapabilitiesV1,
+  BrowserProjectImportResultV1,
   BrowserProjectListV1,
   BrowserProjectOverviewV1,
   BrowserProjectReferenceDeleteResultV1,
@@ -105,7 +107,6 @@ export type {
   BrowserProjectReferenceReadQueryV1,
   BrowserProjectReferenceReadResultV1,
   BrowserProjectReferenceRetryResultV1,
-  BrowserProjectImportResultV1,
   BrowserProjectSummaryV1,
   BrowserPublicationGetResultV1,
   BrowserPublicationKindV1,

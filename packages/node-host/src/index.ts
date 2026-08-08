@@ -64,14 +64,6 @@ export {
   PluginIdentityMismatchError,
   pluginHookNames,
 } from './plugins/node-plugin-catalog.js';
-export {
-  PiOpenAICompatibleProvider,
-  type PiOpenAICompatibleProviderOptions,
-} from './providers/pi-openai-compatible.js';
-export {
-  createPiProviderStack,
-  type PiProviderStack,
-} from './providers/pi-provider.js';
 export type { DeterministicMockProviderOptions } from './providers/deterministic-mock.js';
 export {
   createDeterministicMockProvider,
@@ -82,6 +74,14 @@ export {
   FileMockPass2Provider,
   loadReferenceEntries,
 } from './providers/file-mock-pass2.js';
+export {
+  PiOpenAICompatibleProvider,
+  type PiOpenAICompatibleProviderOptions,
+} from './providers/pi-openai-compatible.js';
+export {
+  createPiProviderStack,
+  type PiProviderStack,
+} from './providers/pi-provider.js';
 export {
   FileProjectStatusReporter,
   formatProjectStatus,

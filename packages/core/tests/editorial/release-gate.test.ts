@@ -103,7 +103,7 @@ function warningEntry(id: string): MockPass2Entry {
   return makeCustomEntry(id, prose, result);
 }
 
-function cleanEntry(id: string): MockPass2Entry {
+function _cleanEntry(id: string): MockPass2Entry {
   return makeCustomEntry(id, PROSE, {
     eventId: id,
     protocol: makeProtocol(PROSE),

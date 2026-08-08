@@ -7,7 +7,7 @@
 // succeeds, 3 failures returns last result with accumulated errors.
 
 import { describe, expect, it, vi } from 'vitest';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { generateWithSchemaRetry } from '../../src/ai/generators/schema-aware-gen.ts';
 
 // ── Test schema ──────────────────────────────────────────────────────────────

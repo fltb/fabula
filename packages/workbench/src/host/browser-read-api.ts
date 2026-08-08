@@ -17,8 +17,8 @@
  * no browser API at all.
  */
 
-import type { Context, Handler } from 'hono';
 import { REFERENCE_MCP_LIMITS_V1 } from '@novalistically/workbench-protocol';
+import type { Context, Handler } from 'hono';
 import {
   BROWSER_API_VERSION,
   BROWSER_GRAPH_ROUTE_QUERY,
@@ -33,31 +33,28 @@ import {
   BROWSER_PROJECT_SCENE_MAP_PATH,
   BROWSER_PROJECT_SCENE_PATH,
   BROWSER_PROJECTS_PATH,
-  BROWSER_SESSION_HEADER,
-  BROWSER_SESSION_PATH,
   BROWSER_SCENE_ADOPTION_EVENT_QUERY,
   BROWSER_SCENE_ADOPTION_REVISION_QUERY,
+  BROWSER_SESSION_HEADER,
+  BROWSER_SESSION_PATH,
   type BrowserApiErrorV1,
   type BrowserGraphRouteSelectorV1,
   type BrowserProjectCapabilitiesV1,
+  type BrowserProjectListV1,
+  type BrowserProjectOverviewV1,
   type BrowserProjectReferenceGetResultV1,
+  type BrowserProjectReferenceListQueryV1,
+  type BrowserProjectReferenceListV1,
   type BrowserProjectReferenceReadQueryV1,
   type BrowserProjectReferenceReadResultV1,
   type BrowserProjectRoleV1,
-  type BrowserProjectListV1,
-  type BrowserProjectOverviewV1,
-  type BrowserProjectReferenceListQueryV1,
-  type BrowserProjectReferenceListV1,
   type BrowserProjectSummaryV1,
   type BrowserSessionPrincipalV1,
 } from '../contracts/browser-api.js';
+import type { ProjectAccessRole } from '../contracts/configuration.js';
 import type { WorkbenchGraphProjectionV1 } from '../contracts/graph.js';
 import type { UserState } from '../contracts/persistence.js';
-import type {
-  SceneAdoptionViewV1,
-  SceneMapViewV1,
-} from '../contracts/scene.js';
-import type { SceneDetailLoadResult } from './scene-map-service.js';
+import type { SceneAdoptionViewV1, SceneMapViewV1 } from '../contracts/scene.js';
 import {
   BROWSER_PROJECT_SOURCE_PATH,
   type SourceStudioStateV1,
@@ -65,8 +62,8 @@ import {
 import type { LocalAuthService } from './auth/service.js';
 import type { HostListenerEnv } from './listener.js';
 import type { ProjectAccessRequiredRole, ProjectAccessService } from './project-access-service.js';
-import type { ProjectAccessRole } from '../contracts/configuration.js';
 import type { SceneAdoptionFailureCode, SceneAdoptionPreparation } from './scene-adoption.js';
+import type { SceneDetailLoadResult } from './scene-map-service.js';
 
 // ─── Injected ports ──────────────────────────────────────────────────────────
 
@@ -207,10 +204,7 @@ export interface BrowserReferenceLibrarySource {
     projectId: string,
     query: BrowserProjectReferenceListQueryV1,
   ): Promise<BrowserProjectReferenceListV1 | null>;
-  get?(
-    projectId: string,
-    referenceId: string,
-  ): Promise<BrowserProjectReferenceGetResultV1 | null>;
+  get?(projectId: string, referenceId: string): Promise<BrowserProjectReferenceGetResultV1 | null>;
   readContent?(
     projectId: string,
     referenceId: string,
@@ -339,7 +333,6 @@ export function errorResponse(code: BrowserApiErrorV1['error']['code'], message:
     headers: { 'content-type': 'application/json; charset=utf-8' },
   });
 }
-
 
 // ─── Strict route selector parsing ───────────────────────────────────────────
 
@@ -834,7 +827,7 @@ function referenceGetHandler(api: BrowserReadApiImpl): Handler<HostListenerEnv> 
     const guarded = await referenceRouteGuard(api, c);
     if (guarded instanceof Response) return guarded;
     try {
-      const result = await api.options.references!.get?.(guarded.projectId, guarded.referenceId);
+      const result = await api.options.references?.get?.(guarded.projectId, guarded.referenceId);
       if (result === null || result === undefined) {
         return errorResponse('REFERENCE_NOT_FOUND', 'The requested reference does not exist.');
       }
@@ -872,7 +865,7 @@ function referenceContentHandler(api: BrowserReadApiImpl): Handler<HostListenerE
     }
     const query: BrowserProjectReferenceReadQueryV1 = { offset, limit };
     try {
-      const result = await api.options.references!.readContent?.(
+      const result = await api.options.references?.readContent?.(
         guarded.projectId,
         guarded.referenceId,
         query,
@@ -1026,7 +1019,7 @@ function sceneMapHandler(api: BrowserReadApiImpl): Handler<HostListenerEnv> {
     const guard = await sceneRouteGuard(api, c);
     if (guard instanceof Response) return guard;
     try {
-      const view = await api.options.sceneMap!.loadSceneMap(guard.projectId);
+      const view = await api.options.sceneMap?.loadSceneMap(guard.projectId);
       if (view === null) {
         return errorResponse(
           'SCENE_MAP_UNAVAILABLE',
@@ -1052,7 +1045,10 @@ function sceneDetailHandler(api: BrowserReadApiImpl): Handler<HostListenerEnv> {
       return errorResponse('SCENE_NOT_FOUND', 'A bounded scene event id is required.');
     }
     try {
-      const outcome = await api.options.sceneMap!.loadSceneDetail(guard.projectId, eventId);
+      const outcome = await api.options.sceneMap?.loadSceneDetail(guard.projectId, eventId);
+      if (outcome === undefined) {
+        return errorResponse('SCENE_MAP_UNAVAILABLE', 'Scene detail is not available.');
+      }
       if (!outcome.ok) {
         return errorResponse(
           outcome.code === 'SCENE_NOT_FOUND' ? 'SCENE_NOT_FOUND' : 'SCENE_MAP_UNAVAILABLE',

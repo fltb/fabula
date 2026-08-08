@@ -23,13 +23,13 @@ import {
   BROWSER_SETUP_BASE_PATH,
   BROWSER_SETUP_STATUS_PATH,
   type ConfigOperationReceiptV1,
-  type SetupFinishRequestV1,
-  type SetupSaveCredentialRequestV1,
   DEFAULT_WORKBENCH_AGENT_CONFIGURATION,
   DEFAULT_WORKBENCH_NETWORK,
   DEFAULT_WORKBENCH_OPERATION_LIMITS,
   DEFAULT_WORKBENCH_REFERENCE_LIMITS,
   DEFAULT_WORKBENCH_RENDER_POLICY,
+  type SetupFinishRequestV1,
+  type SetupSaveCredentialRequestV1,
   type SetupSaveProjectRequestV1,
   WORKBENCH_CONFIGURATION_VERSION,
   type WorkbenchAdminOverviewV1,
@@ -223,8 +223,7 @@ export function createSetupStatusBuilder(options: SetupStatusBuilderOptions): Se
             defaultProject: project.projectId === effective.defaultProjectId,
           }));
 
-    const providerConfiguration =
-      effective === null ? null : (effective.providers.default ?? null);
+    const providerConfiguration = effective === null ? null : (effective.providers.default ?? null);
     const providerConfigured =
       providerConfiguration != null &&
       (await options.credentials.get(providerCredentialKey(DEFAULT_PROVIDER_PROFILE))) !== null;
@@ -359,7 +358,7 @@ function isLoopback(mode: HostListenerMode): boolean {
  * skeleton write must never fail the wizard response; the author fills the
  * project from the workbench afterwards.
  */
-async function writeProjectSkeleton(
+export async function writeProjectSkeleton(
   hostHome: string,
   projectId: string,
   displayName: string,
@@ -417,7 +416,10 @@ export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
       if (denied !== null) return denied;
       const body = await bodyObject(c.req.raw);
       const parsed = parseRequest(body, ['password', 'displayName'], 'owner');
-      if (parsed === null || (parsed.password !== undefined && typeof parsed.password !== 'string')) {
+      if (
+        parsed === null ||
+        (parsed.password !== undefined && typeof parsed.password !== 'string')
+      ) {
         return setupError(
           'SETUP_INVALID_INPUT',
           'owner requires a password (optional; at least 12 characters when set) and no unknown fields.',
@@ -509,11 +511,7 @@ export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
       const body = await bodyObject(c.req.raw);
       const parsed = parseRequest(body, ['projectId', 'displayName'], 'projects');
       if (parsed === null) {
-        return setupError(
-          'UNKNOWN_FIELD',
-          'projects accepts only projectId, displayName.',
-          400,
-        );
+        return setupError('UNKNOWN_FIELD', 'projects accepts only projectId, displayName.', 400);
       }
       const projectId = typeof parsed.projectId === 'string' ? parsed.projectId : '';
       const displayName = typeof parsed.displayName === 'string' ? parsed.displayName : '';

@@ -11,35 +11,65 @@
 //  - Fixture B: legacy-shaped objects must be rejected by `Validator`.
 // ============================================================================
 
+import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import ts from 'typescript';
 import { afterAll, describe, expect, it } from 'vitest';
 
 const CORE_SRC = path.resolve(import.meta.dirname, '..', 'src');
+const TSC_BIN = path.resolve(
+  import.meta.dirname,
+  '..',
+  '..',
+  '..',
+  'node_modules',
+  'typescript',
+  'lib',
+  'tsc.js',
+);
 
-function compileFixture(fixturePath: string, sourceCode: string): readonly ts.Diagnostic[] {
+/**
+ * Compile one fixture through the tsc CLI (TS7 exposes no programmatic
+ * createProgram API) and return the fixture-file diagnostic messages.
+ */
+function compileFixture(fixturePath: string, sourceCode: string): readonly string[] {
   writeFileSync(fixturePath, sourceCode, 'utf8');
-  const program = ts.createProgram([fixturePath], {
-    module: ts.ModuleKind.NodeNext,
-    moduleResolution: ts.ModuleResolutionKind.NodeNext,
-    target: ts.ScriptTarget.ES2022,
-    strict: true,
-    // `allowImportingTsExtensions` is only legal with noEmit / emitDeclarationOnly.
-    allowImportingTsExtensions: true,
-    noEmit: true,
-    skipLibCheck: true,
-  });
-  return ts.getPreEmitDiagnostics(program);
-}
-
-/** Diagnostics reported on the fixture file itself (not on resolved sources). */
-function diagnosticsForFile(
-  diagnostics: readonly ts.Diagnostic[],
-  fixturePath: string,
-): readonly ts.Diagnostic[] {
-  return diagnostics.filter((diagnostic) => diagnostic.file?.fileName === fixturePath);
+  try {
+    execFileSync(
+      process.execPath,
+      [
+        TSC_BIN,
+        fixturePath,
+        '--noEmit',
+        '--strict',
+        '--skipLibCheck',
+        '--target',
+        'es2022',
+        '--module',
+        'nodenext',
+        '--moduleResolution',
+        'nodenext',
+        '--allowImportingTsExtensions',
+      ],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    return [];
+  } catch (error) {
+    const errorRecord =
+      error !== null && typeof error === 'object' && 'stdout' in error
+        ? error
+        : { stdout: '', stderr: '' };
+    const stdout = typeof errorRecord.stdout === 'string' ? errorRecord.stdout : '';
+    const stderr =
+      'stderr' in errorRecord && typeof errorRecord.stderr === 'string' ? errorRecord.stderr : '';
+    const fixtureName = path.basename(fixturePath);
+    return (stdout + stderr)
+      .split('\n')
+      .filter((line) => line.includes(fixtureName) && line.includes('error TS'))
+      .map((line) => line.replace(/^.*error TS\d+: /, ''))
+      .filter((message) => message.length > 0);
+  }
 }
 
 describe('public contract negative typecheck fixtures', () => {
@@ -59,16 +89,10 @@ describe('public contract negative typecheck fixtures', () => {
 declare const compilation: ProjectCompilation;
 compilation.entities.register({ id: 'x' } as never);
 `;
-    const fixtureDiagnostics = diagnosticsForFile(
-      compileFixture(fixturePath, fixtureSource),
-      fixturePath,
-    );
+    const fixtureDiagnostics = compileFixture(fixturePath, fixtureSource);
 
     expect(fixtureDiagnostics.length).toBeGreaterThan(0);
-    const messages = fixtureDiagnostics.map((diagnostic) =>
-      ts.flattenDiagnosticMessageText(diagnostic.messageText, ' '),
-    );
-    expect(messages.some((message) => message.includes('register'))).toBe(true);
+    expect(fixtureDiagnostics.some((message) => message.includes('register'))).toBe(true);
   });
 
   it('fixture B: legacy validate and validateRender members are rejected', () => {
@@ -82,15 +106,9 @@ const legacyRender: Validator = { name: 'LegacyRender', category: 'prose_quality
 void legacyValidate;
 void legacyRender;
 `;
-    const fixtureDiagnostics = diagnosticsForFile(
-      compileFixture(fixturePath, fixtureSource),
-      fixturePath,
-    );
+    const fixtureDiagnostics = compileFixture(fixturePath, fixtureSource);
     expect(fixtureDiagnostics.length).toBeGreaterThan(0);
-    const messages = fixtureDiagnostics.map((diagnostic) =>
-      ts.flattenDiagnosticMessageText(diagnostic.messageText, ' '),
-    );
-    expect(messages.some((message) => message.includes('validate'))).toBe(true);
-    expect(messages.some((message) => message.includes('validateRender'))).toBe(true);
+    expect(fixtureDiagnostics.some((message) => message.includes('validate'))).toBe(true);
+    expect(fixtureDiagnostics.some((message) => message.includes('validateRender'))).toBe(true);
   });
 });

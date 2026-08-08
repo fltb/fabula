@@ -2,7 +2,7 @@
 // Novalistically — Narrative Technique Contract Schemas
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 const nonBlankString = z.string().trim().min(1);
 const uniqueStrings = (values: string[]): boolean => new Set(values).size === values.length;

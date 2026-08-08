@@ -6,7 +6,7 @@
 // ensuring a healthy mix of action, dialogue, description, etc.
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type {
   PostRenderInput,
   PreRenderInput,

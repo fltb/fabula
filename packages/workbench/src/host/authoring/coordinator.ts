@@ -137,7 +137,7 @@ function hashBundle(
 }
 
 /** Map an authoring receipt status onto the durable queue status vocabulary. */
-function recordStatusFor(status: AuthoringOperationStatusV1): ProjectOperationStatusV1 {
+function _recordStatusFor(status: AuthoringOperationStatusV1): ProjectOperationStatusV1 {
   switch (status) {
     case 'queued':
       return 'queued';

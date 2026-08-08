@@ -2,7 +2,7 @@
 // CausalityValidator — LLM-assisted causal reasoning
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { compareFact } from '../entity/compare.js';
 import type {
   PostRenderInput,

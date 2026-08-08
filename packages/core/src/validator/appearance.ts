@@ -9,7 +9,7 @@
 // (detail contradicts the definition) is flagged as an error.
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type {
   PostRenderInput,
   PreRenderInput,

@@ -24,7 +24,6 @@ import type {
   AgentChatHistoryV1,
   AgentChatProgressEventV1,
   AgentChatRunViewV1,
-  AgentChatSendMessageRequestV1,
   AgentChatSendMessageResultV1,
 } from '../contracts/agent-chat.js';
 import {
@@ -104,7 +103,6 @@ const AGENT_CHAT_ERROR_STATUS: Readonly<Record<BrowserApiErrorCode, number>> = {
   PROJECT_IMPORT_NOT_FOUND: 404,
   PROJECT_IMPORT_INVALID: 400,
   PROJECT_IMPORT_CONFLICT: 409,
-
 };
 
 function errorResponse(code: BrowserApiErrorCode, message: string): Response {
@@ -310,11 +308,36 @@ function sendMessageHandler(api: BrowserAgentChatApiImpl): Handler<HostListenerE
         `The message must be 1..${AGENT_CHAT_MESSAGE_MAX_LENGTH} characters.`,
       );
     }
+    // Optional caller-view snapshot; shape-checked and secret-free by design
+    // (route/view/selection/visible/actions are bounded display strings).
+    const context =
+      isRecord(body.context) && typeof body.context.route === 'string'
+        ? {
+            route: body.context.route,
+            view: typeof body.context.view === 'string' ? body.context.view : body.context.route,
+            ...(typeof body.context.projectId === 'string'
+              ? { projectId: body.context.projectId }
+              : {}),
+            ...(typeof body.context.projectName === 'string'
+              ? { projectName: body.context.projectName }
+              : {}),
+            ...(typeof body.context.selection === 'string'
+              ? { selection: body.context.selection }
+              : {}),
+            ...(Array.isArray(body.context.visible)
+              ? { visible: body.context.visible.filter((x): x is string => typeof x === 'string') }
+              : {}),
+            ...(Array.isArray(body.context.actions)
+              ? { actions: body.context.actions.filter((x): x is string => typeof x === 'string') }
+              : {}),
+          }
+        : undefined;
     const role = await api.roleOf(guarded.principal, guarded.projectId);
     try {
       const run: AgentChatRunViewV1 = await guarded.service.sendMessage({
         conversationId,
         message: body.message,
+        ...(context === undefined ? {} : { context }),
         principal: {
           userId: guarded.principal.userId,
           role,
@@ -375,7 +398,7 @@ function progressHandler(api: BrowserAgentChatApiImpl): Handler<HostListenerEnv>
     if (snapshot === null || snapshot.run.conversationId !== conversationId) {
       return errorResponse('AGENT_CHAT_RUN_NOT_FOUND', 'The run does not exist.');
     }
-    const encoder = new TextEncoder();
+    const _encoder = new TextEncoder();
     let unsubscribe: (() => void) | null = null;
     let closed = false;
     const stream = new ReadableStream<Uint8Array>({

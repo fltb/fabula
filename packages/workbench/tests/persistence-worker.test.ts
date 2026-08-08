@@ -368,8 +368,8 @@ describe('persistence worker project publications', () => {
       expect(pageOne).toMatchObject({
         ok: true,
         result: [
-          { publicationId: '0'.repeat(62) + '03' },
-          { publicationId: '0'.repeat(62) + '02' },
+          { publicationId: `${'0'.repeat(62)}03` },
+          { publicationId: `${'0'.repeat(62)}02` },
         ],
       });
       const pageOneResult = (pageOne as { result: { updatedAt: string; publicationId: string }[] })
@@ -382,7 +382,7 @@ describe('persistence worker project publications', () => {
       });
       expect(pageTwo).toMatchObject({
         ok: true,
-        result: [{ publicationId: '0'.repeat(62) + '01' }],
+        result: [{ publicationId: `${'0'.repeat(62)}01` }],
       });
       await expect(
         request('listProjectPublications', {

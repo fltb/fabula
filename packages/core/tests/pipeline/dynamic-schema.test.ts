@@ -12,7 +12,7 @@
 // ============================================================================
 
 import { describe, expect, it } from 'vitest';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { MockPass2Entry } from '../../src/ai/providers/mock-pass2.ts';
 import { MockPass2Provider } from '../../src/ai/providers/mock-pass2.ts';
 import { type RenderJob, RenderPipeline } from '../../src/pipeline/render.ts';

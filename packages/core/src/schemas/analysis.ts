@@ -22,7 +22,7 @@
 //   - evidence quotes are validated as exact substrings of the rendered
 //     prose when the parser has the prose
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { AnalysisObservation, AnalysisResult } from '../types/analysis.js';
 import type { ValidationKey } from '../types/discourse.js';
 import { analysisContentSchema } from '../validator/index.js';

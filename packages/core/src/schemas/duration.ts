@@ -4,7 +4,7 @@
 // Schemas for DurationType and DurationProfile.
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 // ─── Duration Type ────────────────────────────────────────────────────────────
 

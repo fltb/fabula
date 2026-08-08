@@ -237,31 +237,48 @@ export interface ProjectPickerProps {
   readonly health?: RuntimeHealth;
   readonly onSelect: (projectId: string) => void;
   readonly onRetry?: () => void;
+  /** Author-facing create/import affordances; the route owns the actions. */
+  readonly onCreateProject?: () => void;
+  readonly onImportProject?: () => void;
 }
 
+/**
+ * Author-facing project overview: a card grid over the server-scoped catalog.
+ * Loading, disconnected, unauthorized, and fatal states keep the
+ * RuntimeStatePanel fallback; an empty catalog is an actionable guidance card
+ * (create/import), never a dead-end panel.
+ */
 export function ProjectPicker(props: ProjectPickerProps): JSX.Element {
+  const blockingHealth = () =>
+    props.pending
+      ? 'loading'
+      : props.health && props.health !== 'empty' && props.health !== 'ready'
+        ? props.health
+        : null;
+  const isEmpty = () => !props.pending && props.projects.length === 0 && !blockingHealth();
+
   return (
     <main class="min-h-screen bg-[var(--wb-canvas)] px-[var(--wb-space-4)] py-[var(--wb-space-10)]">
       <section class={PANEL} aria-labelledby="project-picker-heading">
         <p class="mb-[var(--wb-space-1)] text-[0.625rem] font-extrabold uppercase tracking-[0.12em] text-[var(--wb-muted)]">
-          Workbench / 项目访问
+          Workbench
         </p>
         <h1
           id="project-picker-heading"
           class="font-[var(--font-display)] text-3xl font-bold text-[var(--wb-ink)]"
         >
-          选择项目
+          项目总览
         </h1>
         <p class="mt-[var(--wb-space-3)] text-sm leading-relaxed text-[var(--wb-muted)]">
-          项目路径保留在 Host 上。这里只使用你的会话对应的安全项目名称。
+          选择或创建一个项目开始写作
         </p>
         <Show
-          when={!props.pending && props.projects.length > 0}
+          when={!blockingHealth()}
           fallback={
             <div class="mt-[var(--wb-space-6)]" aria-live="polite" aria-busy={props.pending}>
               <RuntimeStatePanel
                 state="project-picker"
-                health={props.pending ? 'loading' : (props.health ?? 'empty')}
+                health={blockingHealth() ?? 'loading'}
                 message={props.error ?? undefined}
                 actionLabel={props.onRetry ? '重试' : undefined}
                 onAction={props.onRetry}
@@ -269,38 +286,77 @@ export function ProjectPicker(props: ProjectPickerProps): JSX.Element {
             </div>
           }
         >
-          <ul
-            class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-3)]"
-            aria-label="可用项目"
+          <Show
+            when={!isEmpty()}
+            fallback={
+              <div
+                class="mt-[var(--wb-space-6)] grid place-items-center rounded-[var(--wb-radius-md)] border border-dashed border-[var(--wb-border-strong)] bg-[var(--wb-surface-muted)] px-[var(--wb-space-6)] py-[var(--wb-space-10)] text-center"
+                aria-live="polite"
+              >
+                <div>
+                  <h2 class="font-[var(--font-display)] text-xl font-bold text-[var(--wb-ink)]">
+                    还没有项目
+                  </h2>
+                  <p class="mx-auto mt-[var(--wb-space-2)] max-w-md text-sm leading-relaxed text-[var(--wb-muted)]">
+                    创建第一个项目开始写作，或把已有的项目文件夹导入工作台。
+                  </p>
+                  <div class="mt-[var(--wb-space-5)] flex flex-wrap items-center justify-center gap-[var(--wb-space-3)]">
+                    <Show when={props.onCreateProject}>
+                      <button class={PRIMARY_BUTTON} type="button" onClick={props.onCreateProject}>
+                        创建第一个项目
+                      </button>
+                    </Show>
+                    <Show when={props.onImportProject}>
+                      <button class={QUIET_BUTTON} type="button" onClick={props.onImportProject}>
+                        导入现有项目
+                      </button>
+                    </Show>
+                  </div>
+                </div>
+              </div>
+            }
           >
-            <For each={props.projects}>
-              {(project) => (
-                <li>
-                  <button
-                    class="flex min-h-16 w-full items-center justify-between rounded-[var(--wb-radius-md)] border border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-[var(--wb-space-4)] py-[var(--wb-space-3)] text-left transition hover:border-[var(--wb-accent)] hover:bg-[var(--wb-accent-wash)] focus-visible:outline focus-visible:outline-3 focus-visible:outline-[var(--wb-focus)] focus-visible:outline-offset-2"
-                    type="button"
-                    onClick={() => props.onSelect(project.projectId)}
-                  >
-                    <span>
-                      <strong class="block text-base text-[var(--wb-ink)]">
-                        {project.displayName}
-                      </strong>
-                      <span class="mt-1 block text-xs text-[var(--wb-muted)]">
-                        {project.open ? '已在 Host 打开' : 'Host 可用'}
+            <ul
+              class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-3)] sm:grid-cols-2"
+              aria-label="可用项目"
+            >
+              <For each={props.projects}>
+                {(project) => (
+                  <li>
+                    <button
+                      class="group flex min-h-24 w-full flex-col gap-[var(--wb-space-2)] rounded-[var(--wb-radius-md)] border border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-[var(--wb-space-4)] py-[var(--wb-space-3)] text-left transition hover:border-[var(--wb-accent)] hover:bg-[var(--wb-accent-wash)] focus-visible:outline focus-visible:outline-3 focus-visible:outline-[var(--wb-focus)] focus-visible:outline-offset-2"
+                      type="button"
+                      onClick={() => props.onSelect(project.projectId)}
+                    >
+                      <span class="flex w-full items-center justify-between gap-[var(--wb-space-2)]">
+                        <strong class="text-base text-[var(--wb-ink)]">
+                          {project.displayName}
+                        </strong>
+                        <span
+                          aria-hidden="true"
+                          class="text-lg text-[var(--wb-accent)] transition-transform group-hover:translate-x-0.5"
+                        >
+                          →
+                        </span>
                       </span>
-                    </span>
-                    <span aria-hidden="true" class="text-lg text-[var(--wb-accent)]">
-                      →
-                    </span>
-                  </button>
-                </li>
-              )}
-            </For>
-          </ul>
-          <Show when={props.error}>
-            <p class="mt-[var(--wb-space-4)] text-sm text-[var(--wb-danger)]" role="alert">
-              {props.error}
-            </p>
+                      <span class="flex items-center gap-[var(--wb-space-2)]">
+                        <span class="text-xs text-[var(--wb-muted)]">{project.projectId}</span>
+                        <Show when={project.open}>
+                          <span class="rounded-full border border-[var(--wb-border)] bg-[var(--wb-surface)] px-[var(--wb-space-2)] py-0.5 text-[0.625rem] font-bold text-[var(--wb-muted)]">
+                            已打开
+                          </span>
+                        </Show>
+                      </span>
+                    </button>
+                  </li>
+                )}
+              </For>
+            </ul>
+            <Show when={props.error}>
+              <p class="mt-[var(--wb-space-4)] text-sm text-[var(--wb-danger)]" role="alert">
+                {props.error}
+              </p>
+            </Show>
           </Show>
         </Show>
       </section>

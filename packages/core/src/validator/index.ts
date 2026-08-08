@@ -41,7 +41,7 @@ export { WorldRuleValidator } from './world-rule.js';
 // ============================================================================
 // Aggregated analysis schema — built from built-in validator schemas
 // ============================================================================
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { checklistResultSchema } from '../schemas/narrative-checklist.js';
 import { characterReferenceSchema } from './alias.js';
 import { anachronyDetectedSchema } from './anachrony-consistency.js';

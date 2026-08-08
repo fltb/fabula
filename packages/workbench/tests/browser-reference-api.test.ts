@@ -20,7 +20,6 @@ import {
   type BrowserProjectReferenceListV1,
   type BrowserSessionPrincipalV1,
 } from '../src/contracts/browser-api.js';
-import { createBrowserReferenceApi } from '../src/host/browser-reference-api.js';
 import type {
   BrowserGraphProjector,
   BrowserPrincipalResolver,
@@ -30,6 +29,7 @@ import type {
   BrowserReadApiOptions,
   BrowserSourceStudioSource,
 } from '../src/host/browser-read-api.js';
+import { createBrowserReferenceApi } from '../src/host/browser-reference-api.js';
 import { createWorkbenchReferencePort } from '../src/host/mcp/reference-port.js';
 import { createHostServer, type HostServer } from '../src/host/server.js';
 
@@ -97,7 +97,9 @@ function browserOptions(): BrowserReadApiOptions {
   };
 }
 
-function testLimits(overrides: Partial<WorkbenchReferenceLimitsV1> = {}): WorkbenchReferenceLimitsV1 {
+function testLimits(
+  overrides: Partial<WorkbenchReferenceLimitsV1> = {},
+): WorkbenchReferenceLimitsV1 {
   return {
     ...DEFAULT_WORKBENCH_REFERENCE_LIMITS,
     maxFileBytes: 1024,
@@ -150,7 +152,12 @@ async function makeHarness(limits: WorkbenchReferenceLimitsV1 = testLimits()): P
         },
         readContent: async (projectId, referenceId, query) => {
           const reference = await port;
-          const result = await reference.readContent({ version: 1, referenceId, offset: query.offset, limit: query.limit });
+          const result = await reference.readContent({
+            version: 1,
+            referenceId,
+            offset: query.offset,
+            limit: query.limit,
+          });
           return { version: 1, projectId, content: result.content };
         },
       },
@@ -196,11 +203,7 @@ function contentPath(referenceId: string): string {
   );
 }
 
-function multipartBody(
-  bytes: Uint8Array,
-  name = 'guide.txt',
-  type = 'text/plain',
-): FormData {
+function multipartBody(bytes: Uint8Array, name = 'guide.txt', type = 'text/plain'): FormData {
   const form = new FormData();
   form.append('file', new File([bytes], name, { type }));
   return form;

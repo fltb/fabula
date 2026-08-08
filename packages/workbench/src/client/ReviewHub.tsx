@@ -206,7 +206,7 @@ function ReviewCommentCard(props: {
               data-testid={`resolve-${comment().commentId}`}
               onClick={() => sendStatusAction('resolve')}
             >
-                标记已解决
+              标记已解决
             </button>
             <button
               class="text-button"
@@ -214,7 +214,7 @@ function ReviewCommentCard(props: {
               data-testid={`wontfix-${comment().commentId}`}
               onClick={() => sendStatusAction('wontfix')}
             >
-                不修复
+              不修复
             </button>
             <Show when={comment().severity !== 'blocking'}>
               <button
@@ -602,10 +602,7 @@ export function ReviewHub(props: ReviewHubProps) {
         )}
       </Show>
 
-      <Show
-        when={props.gates}
-        fallback={<p class="screen-note">暂无检查项数据。</p>}
-      >
+      <Show when={props.gates} fallback={<p class="screen-note">暂无检查项数据。</p>}>
         {(gates) => (
           <section class="review-gates" aria-labelledby="review-gates-heading">
             <h3 id="review-gates-heading">
@@ -635,10 +632,7 @@ export function ReviewHub(props: ReviewHubProps) {
         )}
       </Show>
 
-      <Show
-        when={props.history}
-        fallback={<p class="screen-note">暂无评审历史记录。</p>}
-      >
+      <Show when={props.history} fallback={<p class="screen-note">暂无评审历史记录。</p>}>
         {(history) => (
           <Show when={history().entries.length > 0}>
             <section class="review-history" aria-labelledby="review-history-heading">

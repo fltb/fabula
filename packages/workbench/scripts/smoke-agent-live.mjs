@@ -33,11 +33,11 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { build } from 'esbuild';
 import {
   DEFAULT_WORKBENCH_REFERENCE_LIMITS,
   DEFAULT_WORKBENCH_RENDER_POLICY,
 } from '@novalistically/workbench-protocol';
+import { build } from 'esbuild';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(scriptDir, '..'); // packages/workbench
@@ -297,7 +297,9 @@ try {
       await sleepMs(500);
     }
     if (entry === null)
-      throw new Error(`stage(${expectTool}) run did not reach a terminal status within the timeout`);
+      throw new Error(
+        `stage(${expectTool}) run did not reach a terminal status within the timeout`,
+      );
     terminalRun = entry.run;
     const sawTool = entry.toolCalls?.some(
       (call) => call.toolName === expectTool && call.status === 'succeeded',

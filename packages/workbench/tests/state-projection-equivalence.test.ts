@@ -31,6 +31,7 @@ import { fileURLToPath } from 'node:url';
 import type {
   CompileProjectOptions,
   CoreRuntimeServices,
+  ProjectCompilation,
   ProjectSourceSnapshotV1,
 } from '@novalistically/core';
 import {
@@ -285,7 +286,7 @@ describe('state-projection equivalence gate', () => {
 
       for (const selector of selectors) {
         const label = selectorLabel(selector);
-        let expected;
+        let expected: ProjectCompilation;
         try {
           expected = compileProject(snapshot, compileOptionsFor(selector));
         } catch (error) {
@@ -496,13 +497,13 @@ describe('state projection corrupt-snapshot quarantine + rebuild', () => {
     };
   }
 
-  function snapshotFor(projectId: string): ProjectSourceSnapshotV1 {
+  function snapshotFor(_projectId: string): ProjectSourceSnapshotV1 {
     return materializeFixture(join(FIXTURES_ROOT, FIXTURE));
   }
 
   it('never hydrates a hash-tampered snapshot: quarantine + full-replay correctness', async () => {
     const projectId = 'p-corrupt-hash';
-    const { projectRoot, services, snapshotFile } = fileHarness();
+    const { services, snapshotFile } = fileHarness();
     const snapshot = snapshotFor(projectId);
 
     // Session 1: build the stream and persist valid snapshots.
@@ -559,7 +560,7 @@ describe('state projection corrupt-snapshot quarantine + rebuild', () => {
 
   it('rebuilds a broken snapshot file from the immutable source', async () => {
     const projectId = 'p-corrupt-file';
-    const { projectRoot, services, snapshotFile } = fileHarness();
+    const { services, snapshotFile } = fileHarness();
     const snapshot = snapshotFor(projectId);
 
     const first = createCanonicalStateProjectionService({

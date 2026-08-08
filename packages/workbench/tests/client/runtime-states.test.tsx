@@ -1,5 +1,5 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ProjectPicker, RuntimeStatePanel } from '../../src/client/ui/RuntimeStates';
 import type { BrowserProjectSummaryV1 } from '../../src/contracts/index';
 
@@ -48,10 +48,43 @@ describe('runtime state views', () => {
     expect(screen.getByRole('button', { name: '登录' })).toBeInTheDocument();
   });
 
-  it('shows only safe project labels when the Host returns an available catalog', () => {
+  it('shows the safe project id and display label when the Host returns an available catalog', () => {
     render(() => <ProjectPicker projects={[project()]} onSelect={() => undefined} />);
     expect(screen.getByRole('button', { name: /A safe project label/ })).toBeInTheDocument();
+    expect(screen.getByText('project-a')).toBeInTheDocument();
     expect(screen.queryByText(/2026-08/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/project-a/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the loading panel while the catalog is pending', () => {
+    render(() => <ProjectPicker projects={[]} pending onSelect={() => undefined} />);
+    expect(screen.getByRole('heading', { name: '正在检查 Host 状态' })).toBeInTheDocument();
+    expect(screen.queryByText('还没有项目')).not.toBeInTheDocument();
+  });
+
+  it('renders an actionable guidance card with create/import actions when the catalog is empty', () => {
+    const onCreateProject = vi.fn();
+    const onImportProject = vi.fn();
+    render(() => (
+      <ProjectPicker
+        projects={[]}
+        onSelect={() => undefined}
+        onCreateProject={onCreateProject}
+        onImportProject={onImportProject}
+      />
+    ));
+    expect(screen.getByRole('heading', { name: '还没有项目' })).toBeInTheDocument();
+    const createButton = screen.getByRole('button', { name: '创建第一个项目' });
+    const importButton = screen.getByRole('button', { name: '导入现有项目' });
+    createButton.click();
+    importButton.click();
+    expect(onCreateProject).toHaveBeenCalledTimes(1);
+    expect(onImportProject).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the create/import affordances when no handlers are provided', () => {
+    render(() => <ProjectPicker projects={[]} onSelect={() => undefined} />);
+    expect(screen.getByRole('heading', { name: '还没有项目' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '创建第一个项目' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '导入现有项目' })).not.toBeInTheDocument();
   });
 });

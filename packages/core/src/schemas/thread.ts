@@ -2,7 +2,7 @@
 // Novalistically — STATE-5: Thread Schema Definitions (Zod)
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 import { actantModelSchema, structuralFunctionSchema } from './story-ir.js';
 // ─── Identities ──────────────────────────────────────────────────────────────

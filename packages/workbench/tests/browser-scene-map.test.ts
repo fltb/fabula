@@ -13,19 +13,16 @@ import type {
   LLMProvider,
   ProjectSourceSnapshotV1,
   RenderCacheRepository,
-  StateLogRepository,
-  StateSnapshotRepository,
 } from '@novalistically/core';
 import { compileProject } from '@novalistically/core';
 import { buildSourceSnapshot, computeSourceDocumentHash } from '@novalistically/core/source';
 import {
   MemoryExecutionRepository,
-  MemoryRenderCacheRepository,
   MemoryStateLogRepository,
   MemoryStateSnapshotRepository,
 } from '@novalistically/core/testing';
-import YAML from 'yaml';
 import { afterEach, describe, expect, it } from 'vitest';
+import YAML from 'yaml';
 import {
   BROWSER_PROJECT_SCENE_MAP_PATH,
   BROWSER_PROJECT_SCENE_PATH,
@@ -44,15 +41,11 @@ import type {
 import { createProjectCoreRuntime } from '../src/host/core-runtime.js';
 import type { ProjectionDerivationInput, ProjectSession } from '../src/host/project-session.js';
 import { createProjectSession } from '../src/host/project-session.js';
-import {
-  loadSceneDetail,
-  loadSceneMap,
-  sceneFingerprint,
-} from '../src/host/scene-map-service.js';
+import { loadSceneDetail, loadSceneMap, sceneFingerprint } from '../src/host/scene-map-service.js';
 import { createHostServer, type HostServer } from '../src/host/server.js';
 import {
-  createCanonicalStateProjectionService,
   type CanonicalStateProjectionService,
+  createCanonicalStateProjectionService,
 } from '../src/host/state/canonical-state-projection.js';
 
 const PROJECT_ID = 'proj-scenes';
@@ -265,10 +258,10 @@ async function harness(): Promise<Harness> {
     try {
       compileProject(snap);
     } catch (e) {
-      console.log('PROBE_ERR', (e as Error).message); console.log('PROBE_STACK', (e as Error).stack?.split('\n').slice(0,12).join('\n'));
+      console.log('PROBE_ERR', (e as Error).message);
+      console.log('PROBE_STACK', (e as Error).stack?.split('\n').slice(0, 12).join('\n'));
     }
   }
-
 
   const snapshot = buildFixtureSnapshot();
   const authoringSource = buildAuthoringSnapshot();
@@ -429,10 +422,7 @@ describe('browser scene map surface (plan 9.2)', () => {
     const body = (await res.json()) as SceneMapViewV1;
     expect(body.version).toBe(1);
     expect(body.projectId).toBe(PROJECT_ID);
-    expect(body.chapters.map((chapter) => chapter.chapterId)).toEqual([
-      'chapter_01',
-      'chapter_02',
-    ]);
+    expect(body.chapters.map((chapter) => chapter.chapterId)).toEqual(['chapter_01', 'chapter_02']);
     const [first, second] = body.chapters;
     expect(first?.title).toBe('Opening');
     expect(first?.summary).toBe('The start');

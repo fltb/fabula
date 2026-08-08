@@ -7,7 +7,7 @@
 // or CharacterDefinition.aliases[].
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { PostRenderInput, ValidationIssue, Validator } from '../types/index.js';
 import { getAttributesBySemanticRole, makeIssue } from './base.js';
 

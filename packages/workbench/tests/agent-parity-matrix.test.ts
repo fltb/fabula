@@ -38,15 +38,10 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type {
-  CompletionRequest,
-  LLMProvider,
-  WorkflowStatusV1,
-} from '@novalistically/core';
-import { MockProvider } from '@novalistically/core/testing';
-import type { Api, Model } from '@earendil-works/pi-ai';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
-import { assistantPartial, doneEvent, scriptedStream } from './helpers/scripted-stream.js';
+import type { Api, Model } from '@earendil-works/pi-ai';
+import type { CompletionRequest, LLMProvider, WorkflowStatusV1 } from '@novalistically/core';
+import { MockProvider } from '@novalistically/core/testing';
 import { createFileCoreRuntimeServices, FileProjectSourceLoader } from '@novalistically/node-host';
 import {
   DEFAULT_WORKBENCH_OPERATION_LIMITS,
@@ -57,16 +52,17 @@ import {
 import { build } from 'esbuild';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PROJECT_ACCESS_ROLE_GRANTS } from '../src/contracts/configuration.js';
-import {
-  AgentCapabilityService,
-  createCapabilityPersistence,
-} from '../src/host/agent/index.js';
-import type { ProjectToolExecutor, ProjectToolExecutorPrincipal } from '../src/host/agent/project-tool-executor.js';
+import { AgentCapabilityService, createCapabilityPersistence } from '../src/host/agent/index.js';
+import type {
+  ProjectToolExecutor,
+  ProjectToolExecutorPrincipal,
+} from '../src/host/agent/project-tool-executor.js';
 import { createProjectToolExecutor } from '../src/host/agent/project-tool-executor.js';
 import { createMcpAuthoringCoordinatorPort } from '../src/host/authoring/mcp-adapter.js';
 import { createProjectAuthoringRuntime } from '../src/host/authoring/project-runtime.js';
 import { serializeConfigurationYaml } from '../src/host/configuration-file-store.js';
 import { createProjectCoreRuntime } from '../src/host/core-runtime.js';
+import { createWorkbenchReferencePort } from '../src/host/mcp/reference-port.js';
 import type {
   McpAuthoringCoordinatorPort,
   McpRegistryOptions,
@@ -74,7 +70,6 @@ import type {
   McpToolRegistry,
 } from '../src/host/mcp/registry.js';
 import { createProjectSessionMcpRegistry } from '../src/host/mcp/registry.js';
-import { createWorkbenchReferencePort } from '../src/host/mcp/reference-port.js';
 import {
   createProjectOperationService,
   type ProjectOperationService,
@@ -84,14 +79,12 @@ import type { ProjectPublicationService } from '../src/host/publication/publicat
 import { createProjectPublicationService } from '../src/host/publication/publication-service.js';
 import type { HostReviewService } from '../src/host/review/review-service.js';
 import { createHostReviewService } from '../src/host/review/review-service.js';
-import {
-  startWorkbench,
-  type WorkbenchLaunchHandle,
-} from '../src/host/workbench-launch.js';
+import { startWorkbench, type WorkbenchLaunchHandle } from '../src/host/workbench-launch.js';
 import { createYjsPersistencePort, createYjsWorkingDocumentCore } from '../src/host/yjs/index.js';
 import { createProjectOperationStore } from '../src/persistence/project-operation-store.js';
 import { createProjectPublicationStore } from '../src/persistence/project-publication-store.js';
 import { createRealPersistence, type RealPersistenceHarness } from './helpers/real-persistence.js';
+import { assistantPartial, doneEvent, scriptedStream } from './helpers/scripted-stream.js';
 
 // ─── Fixture + temp workspace ───────────────────────────────────────────────
 
@@ -360,7 +353,7 @@ interface ParityHarness {
   readonly registryOptions: McpRegistryOptions;
   readonly operations: ProjectOperationService;
   readonly provider: GatedMockProvider;
-  readonly dispose(): Promise<void>;
+  dispose(): Promise<void>;
 }
 
 function registryOptions(
@@ -545,8 +538,14 @@ async function waitForOperation(
   expected?: readonly string[],
   timeoutMs = 30_000,
 ): Promise<OperationReceiptWire> {
-  const terminal =
-    expected ?? ['completed', 'failed', 'stale', 'cancelled', 'conflict', 'interrupted'];
+  const terminal = expected ?? [
+    'completed',
+    'failed',
+    'stale',
+    'cancelled',
+    'conflict',
+    'interrupted',
+  ];
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     const data = (await call(executor, 'nova_operation_get', {
@@ -627,9 +626,11 @@ function finishOnlyAgentModel(): { readonly model: Model<Api>; readonly streamFn
 }
 
 /** Scripted tool-then-stop streamFn (turn 1 calls the tool, turn 2 finishes). */
-function toolThenStopAgentModel(
-  toolCall: { readonly id: string; readonly name: string; readonly args: Record<string, unknown> },
-): { readonly model: Model<Api>; readonly streamFn: StreamFn } {
+function toolThenStopAgentModel(toolCall: {
+  readonly id: string;
+  readonly name: string;
+  readonly args: Record<string, unknown>;
+}): { readonly model: Model<Api>; readonly streamFn: StreamFn } {
   const toolFinal = assistantPartial([
     { type: 'toolCall', id: toolCall.id, name: toolCall.name, arguments: toolCall.args },
   ]);
@@ -645,7 +646,12 @@ function toolThenStopAgentModel(
             {
               type: 'toolcall_end',
               contentIndex: 0,
-              toolCall: { type: 'toolCall', id: toolCall.id, name: toolCall.name, arguments: toolCall.args },
+              toolCall: {
+                type: 'toolCall',
+                id: toolCall.id,
+                name: toolCall.name,
+                arguments: toolCall.args,
+              },
               partial: toolFinal,
             },
             doneEvent('toolUse', toolFinal),
@@ -774,7 +780,10 @@ describe('Workbench Agent parity matrix (plan 9.6)', () => {
         .map((tool) => tool.name)
         .sort();
       expect(
-        harness.executor.listTools(scopes).map((d) => d.name).sort(),
+        harness.executor
+          .listTools(scopes)
+          .map((d) => d.name)
+          .sort(),
       ).toEqual(catalogNames);
     }
 
@@ -961,10 +970,7 @@ describe('Workbench Agent parity matrix (plan 9.6)', () => {
     expect(publicationValue?.status).toBe('current');
 
     // Independent hash check: the bytes on disk equal the publication hash.
-    const novelPath = join(
-      harness.root,
-      publicationValue?.relativeOutputPath ?? 'output/novel.md',
-    );
+    const novelPath = join(harness.root, publicationValue?.relativeOutputPath ?? 'output/novel.md');
     const novelBytes = readFileSync(novelPath);
     expect(novelBytes.byteLength).toBe(publicationValue?.byteLength);
     expect(sha256Hex(novelBytes)).toBe(publicationValue?.novelHash);
@@ -1021,9 +1027,7 @@ describe('Workbench Agent parity matrix (plan 9.6)', () => {
       expectedWorkspaceDigest: strictEdit.workspaceDigest,
       message: 'enable strict release policy',
     })) as SubmitWire;
-    await waitForOperation(executor, strictSubmit.receipt?.operationId as string, [
-      'completed',
-    ]);
+    await waitForOperation(executor, strictSubmit.receipt?.operationId as string, ['completed']);
     const strictSourceHash = session.source?.sourceHash;
     expect(strictSourceHash).not.toBe(sourceAfterChain);
 
@@ -1399,9 +1403,7 @@ describe('Workbench Agent parity matrix (plan 9.6)', () => {
       // capability gate under the builtin grant: poll the durable operation
       // until terminal and require SUCCESS — a missing grant fails prepare
       // with DENIED:NOT_FOUND.
-      let renderOp:
-        | { kind: string; status: string; errorCode: string | null }
-        | undefined;
+      let renderOp: { kind: string; status: string; errorCode: string | null } | undefined;
       for (let attempt = 0; attempt < 300; attempt += 1) {
         const operations = await fetch(
           `${second.endpoint}/api/v1/projects/agent-project/authoring/operations`,
@@ -1410,9 +1412,7 @@ describe('Workbench Agent parity matrix (plan 9.6)', () => {
         const body = (await operations.json()) as {
           operations: readonly { kind: string; status: string; errorCode: string | null }[];
         };
-        const candidate = [...body.operations]
-          .reverse()
-          .find((entry) => entry.kind === 'render');
+        const candidate = [...body.operations].reverse().find((entry) => entry.kind === 'render');
         if (
           candidate !== undefined &&
           candidate.status !== 'queued' &&

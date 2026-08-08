@@ -107,7 +107,7 @@ async function decideGateIfOpen(
   decision: 'waived' | 'rejected' | 'accepted',
 ): Promise<void> {
   const gate = await manager.getGate(gateId);
-  if (!gate || gate.status !== 'open') return;
+  if (gate?.status !== 'open') return;
   await manager.decideGate(
     {
       gateId,

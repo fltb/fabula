@@ -7,7 +7,7 @@
 // Events without narrativeChecklist are skipped (backward compatible).
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { checklistResultSchema } from '../schemas/narrative-checklist.js';
 import type { PostRenderInput, ValidationIssue, Validator } from '../types/index.js';
 import { makeIssue } from './base.js';

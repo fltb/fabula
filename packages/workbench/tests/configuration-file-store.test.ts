@@ -30,7 +30,7 @@ async function tempHome(): Promise<string> {
 }
 
 function baseConfiguration(
-  root: string,
+  _root: string,
   overrides: Partial<WorkbenchConfigurationV1> = {},
 ): WorkbenchConfigurationV1 {
   return {
@@ -100,7 +100,7 @@ describe('configuration file store', () => {
     const home = await tempHome();
     const store = new ConfigurationFileStore({ filePath: join(home, 'config', 'workbench.yaml') });
     const configuration = baseConfiguration(await tempHome());
-    const revision = await store.write(configuration);
+    const _revision = await store.write(configuration);
 
     const info = await stat(store.filePath);
     expect(info.isFile()).toBe(true);
@@ -230,7 +230,12 @@ describe('configuration file store', () => {
     expect(bad.ok).toBe(false);
     if (!bad.ok) {
       expect(bad.diagnostics.map((d) => d.code)).toEqual(
-        expect.arrayContaining(['CONFIG_INVALID', 'CONFIG_INVALID', 'CONFIG_INVALID', 'CONFIG_INVALID']),
+        expect.arrayContaining([
+          'CONFIG_INVALID',
+          'CONFIG_INVALID',
+          'CONFIG_INVALID',
+          'CONFIG_INVALID',
+        ]),
       );
     }
   });

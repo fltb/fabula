@@ -91,7 +91,9 @@ function openBrowser(url) {
         ? { command: process.env.COMSPEC ?? 'cmd', args: ['/c', 'start', '', url] }
         : { command: 'xdg-open', args: [url] };
   const handle = spawn(opener.command, opener.args, { stdio: 'ignore', detached: true });
-  handle.on('error', (error) => console.warn(`[workbench] could not open browser: ${error.message}`));
+  handle.on('error', (error) =>
+    console.warn(`[workbench] could not open browser: ${error.message}`),
+  );
   handle.unref();
 }
 

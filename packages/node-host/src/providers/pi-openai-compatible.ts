@@ -8,18 +8,15 @@
 // Never reads process.env.
 // ============================================================================
 
+import type { Message } from '@earendil-works/pi-ai';
 import {
-  LLMError,
   type CompletionRequest,
   type CompletionResponse,
+  LLMError,
   type LLMProvider,
   type TaskType,
 } from '@novalistically/core';
-import type { Message } from '@earendil-works/pi-ai';
-import {
-  createPiProviderStack,
-  type PiProviderStack,
-} from './pi-provider.js';
+import { createPiProviderStack, type PiProviderStack } from './pi-provider.js';
 
 export interface PiOpenAICompatibleProviderOptions {
   readonly baseURL?: string | null;
@@ -62,7 +59,8 @@ export class PiOpenAICompatibleProvider implements LLMProvider {
     const apiKey = this.#options.apiKey ?? '';
     if (!apiKey) throw new LLMError('apiKey is required', { provider: this.name });
     const model = this.#stack.models.getModel('pi-provider', modelId);
-    if (model === undefined) throw new LLMError(`Model ${modelId} not found`, { provider: this.name });
+    if (model === undefined)
+      throw new LLMError(`Model ${modelId} not found`, { provider: this.name });
     try {
       const result = await this.#stack.models.completeSimple(
         model,
@@ -99,10 +97,17 @@ export class PiOpenAICompatibleProvider implements LLMProvider {
           totalTokens: result.usage.input + result.usage.output,
         },
         finishReason:
-          result.stopReason === 'error' ? 'error' : result.stopReason === 'length' ? 'length' : 'stop',
+          result.stopReason === 'error'
+            ? 'error'
+            : result.stopReason === 'length'
+              ? 'length'
+              : 'stop',
       };
     } catch (error) {
-      throw new LLMError(`pi-ai error: ${(error as Error).message}`, { provider: this.name, cause: error });
+      throw new LLMError(`pi-ai error: ${(error as Error).message}`, {
+        provider: this.name,
+        cause: error,
+      });
     }
   }
 

@@ -75,7 +75,7 @@ function readVarUint(bytes: Uint8Array, cursor: { offset: number }): number {
   }
 }
 
-function encodeSyncFrame(syncType: number, payload: Uint8Array): Uint8Array {
+function encodeSyncFrame(syncType: number, payload: Uint8Array): Uint8Array<ArrayBuffer> {
   const header: number[] = [];
   writeVarUint(header, MESSAGE_SYNC);
   writeVarUint(header, syncType);
@@ -170,9 +170,7 @@ const REPLACE_WRITE_TIMEOUT_MS = 10_000;
  * update is sent and persisted Host-side. Resolves after the update has been
  * handed to the socket; rejects on ticket/connection/sync failures.
  */
-export function replaceWorkingDocumentText(
-  input: ReplaceWorkingDocumentTextInput,
-): Promise<void> {
+export function replaceWorkingDocumentText(input: ReplaceWorkingDocumentTextInput): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     const descriptor: SourceStudioDocumentDescriptorV1 = {
       projectId: input.projectId,

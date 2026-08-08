@@ -1,15 +1,15 @@
-import { cleanup, render, screen, waitFor, within } from '@solidjs/testing-library';
+import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { AgentChat } from '../../src/client/AgentChat.js';
 import type { AgentChatClient } from '../../src/client/agent-chat-client.js';
 import type {
   AgentChatConversationViewV1,
+  AgentChatMessageViewV1,
   AgentChatProgressEventV1,
-  AgentChatRunHistoryEntryV1,
   AgentChatRunViewV1,
   AgentChatToolCallReceiptV1,
-  AgentChatMessageViewV1,
+  AgentViewContextV1,
 } from '../../src/contracts/index.js';
 
 afterEach(() => cleanup());
@@ -70,7 +70,7 @@ const assistantMessage: AgentChatMessageViewV1 = {
 };
 
 function stubClient(overrides: Partial<AgentChatClient> = {}): AgentChatClient & {
-  readonly sent: Array<{ message: string }>;
+  readonly sent: Array<{ message: string; context?: AgentViewContextV1 }>;
   readonly cancelled: string[];
   readonly retried: string[];
   readonly created: string[];
@@ -80,7 +80,7 @@ function stubClient(overrides: Partial<AgentChatClient> = {}): AgentChatClient &
     listener: (event: AgentChatProgressEventV1) => void;
   }>;
 } {
-  const sent: Array<{ message: string }> = [];
+  const sent: Array<{ message: string; context?: AgentViewContextV1 }> = [];
   const cancelled: string[] = [];
   const retried: string[] = [];
   const created: string[] = [];
@@ -95,8 +95,8 @@ function stubClient(overrides: Partial<AgentChatClient> = {}): AgentChatClient &
       return conversation;
     },
     listConversations: async () => [conversation],
-    sendMessage: async (_projectId, _conversationId, message) => {
-      sent.push({ message });
+    sendMessage: async (_projectId, _conversationId, message, context) => {
+      sent.push({ message, ...(context === undefined ? {} : { context }) });
       return runningRun;
     },
     history: async (_projectId, conversationId) => {
@@ -311,5 +311,53 @@ describe('AgentChat surface', () => {
       expect(screen.getByTestId('agent-chat-error')).toHaveTextContent('AGENT_CHAT_QUEUE_FULL');
     });
     expect(screen.getByTestId('agent-chat-input')).toBeEnabled();
+  });
+  it('renders the context strip and passes the view context to sendMessage', async () => {
+    const client = stubClient({ listConversations: async () => [] });
+    const user = userEvent.setup();
+    const context: AgentViewContextV1 = {
+      route: '/workspace/proj-a',
+      view: 'scene-map',
+      projectId: 'proj-a',
+      projectName: '双城后转',
+      actions: ['查看场景', '提交场景'],
+    };
+    render(() => <AgentChat projectId="proj-a" client={client} context={context} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('agent-chat-welcome')).toBeInTheDocument();
+    });
+    const strip = screen.getByTestId('agent-context-strip');
+    expect(strip).toHaveTextContent('当前视图: 场景图');
+    expect(strip).toHaveTextContent('项目: 双城后转');
+    expect(strip).toHaveTextContent('可执行: 查看场景、提交场景');
+    await user.click(screen.getByTestId('agent-chat-welcome-card-0'));
+    await user.click(screen.getByTestId('agent-chat-send'));
+    await waitFor(() => {
+      expect(client.sent).toEqual([{ message: '查看项目当前状态并告诉我下一步', context }]);
+    });
+  });
+
+  it('omits the context strip when no context is supplied', async () => {
+    const client = stubClient();
+    render(() => <AgentChat projectId="proj-a" client={client} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('agent-chat-conversation-id')).toHaveTextContent('conv-1');
+    });
+    expect(screen.queryByTestId('agent-context-strip')).not.toBeInTheDocument();
+  });
+
+  it('collapses and expands the panel body via the header toggle', async () => {
+    const client = stubClient();
+    const user = userEvent.setup();
+    render(() => <AgentChat projectId="proj-a" client={client} />);
+    await waitFor(() => {
+      expect(screen.getByTestId('agent-chat-input')).toBeInTheDocument();
+    });
+    const toggle = screen.getByTestId('agent-panel-toggle');
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await user.click(toggle);
+    expect(screen.queryByTestId('agent-chat-input')).not.toBeInTheDocument();
+    await user.click(screen.getByTestId('agent-panel-toggle'));
+    expect(screen.getByTestId('agent-chat-input')).toBeInTheDocument();
   });
 });

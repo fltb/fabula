@@ -15,7 +15,7 @@ import { MiniMap } from '@logicflow/extension';
 import { createEffect, onCleanup, onMount } from 'solid-js';
 import { type GraphCanvasModelV1, toLogicFlowData } from './graph-view-model';
 
-import '@logicflow/core/dist/style/index.css';
+import '@logicflow/core/lib/style/index.css';
 import '@logicflow/extension/lib/style/index.css';
 
 /** Register the minimap extension once; instances opt in per canvas. */

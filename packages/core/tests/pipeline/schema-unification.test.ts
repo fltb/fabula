@@ -7,7 +7,7 @@
 // ============================================================================
 
 import { describe, expect, it } from 'vitest';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { parseAnalysisJSON, parseAnalysisJSONWithErrors } from '../../src/schemas/analysis.js';
 import { analysisContentSchema } from '../../src/validator/index.js';
 import { makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';

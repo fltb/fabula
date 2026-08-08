@@ -9,22 +9,13 @@
 // executor, model and operation queue are deterministic stubs.
 // ============================================================================
 
-import { AssistantMessageEventStream, type Api, type Model } from '@earendil-works/pi-ai';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
-import {
-  assistantPartial,
-  doneEvent,
-  scriptedStream,
-  textDelta,
-  toolCallEnd,
-} from './helpers/scripted-stream.js';
+import { type Api, AssistantMessageEventStream, type Model } from '@earendil-works/pi-ai';
 import { afterAll, describe, expect, it } from 'vitest';
 import type { ProjectAccessRole } from '../src/contracts/configuration.js';
 import { PROJECT_ACCESS_ROLE_GRANTS } from '../src/contracts/configuration.js';
 import type {
   AgentConversationRecordV1,
-  AgentRunRecordV1,
-  AgentToolCallRecordV1,
   ProjectOperationRecordV1,
 } from '../src/contracts/persistence.js';
 import type {
@@ -44,6 +35,13 @@ import type {
 } from '../src/host/operation-service.js';
 import { type AgentStore, createAgentStore } from '../src/persistence/agent-store.js';
 import { createRealPersistence } from './helpers/real-persistence.js';
+import {
+  assistantPartial,
+  doneEvent,
+  scriptedStream,
+  textDelta,
+  toolCallEnd,
+} from './helpers/scripted-stream.js';
 
 const harnesses: ReturnType<typeof createRealPersistence>[] = [];
 afterAll(async () => {
@@ -156,27 +154,23 @@ function toolTurn(
 function textTurn(text: string): AssistantMessageEventStream {
   const final = assistantPartial([{ type: 'text', text }]);
   return scriptedStream(
-    [
-      { type: 'start', partial: final },
-      textDelta(text, final),
-      doneEvent('stop', final),
-    ],
+    [{ type: 'start', partial: final }, textDelta(text, final), doneEvent('stop', final)],
     final,
   );
 }
-
 function finishTurn(): AssistantMessageEventStream {
   const final = assistantPartial([]);
   return scriptedStream([doneEvent('stop', final)], final);
 }
 
-export interface ScriptedAgentModel {
+interface ScriptedAgentModel {
   readonly model: Model<Api>;
   readonly streamFn: StreamFn;
   readonly script: Array<() => AssistantMessageEventStream>;
   readonly calls: Array<{
     readonly tools: readonly { name: string }[];
     readonly messages: readonly unknown[];
+    readonly systemPrompt: string;
   }>;
 }
 
@@ -185,10 +179,15 @@ function scriptedModel(script: Array<() => AssistantMessageEventStream> = []): S
   const calls: Array<{
     readonly tools: readonly { name: string }[];
     readonly messages: readonly unknown[];
+    readonly systemPrompt: string;
   }> = [];
   const streamFn: StreamFn = (_model, context) => {
     // Snapshot: the service mutates the same messages array across turns.
-    calls.push({ tools: context.tools ?? [], messages: [...context.messages] });
+    calls.push({
+      tools: context.tools ?? [],
+      messages: [...context.messages],
+      systemPrompt: context.systemPrompt,
+    });
     const produce = script.shift() ?? finishTurn;
     return produce();
   };
@@ -388,6 +387,33 @@ describe('WorkbenchAgentRunService run loop', () => {
     expect(h.executorCalls[0]?.caller.grant.scopes).toEqual(
       PROJECT_ACCESS_ROLE_GRANTS.maintainer.scopes,
     );
+  });
+
+  it('folds the caller view context into the run system prompt', async () => {
+    const h = harness();
+    const conversation = await createConversation(h);
+    h.model.script.push(() => textTurn('ok'));
+    await h.service.sendMessage({
+      conversationId: conversation.conversationId,
+      message: 'hello',
+      principal: PRINCIPAL,
+      context: {
+        route: '/workspace/p1',
+        view: 'scene-map',
+        projectId: 'p1',
+        projectName: '双城后转',
+        selection: 'scene:E02',
+        visible: ['场景列表'],
+        actions: ['提交场景'],
+      },
+    });
+    await h.operations.runEnqueued(0);
+    const system = h.model.calls[0]?.systemPrompt ?? '';
+    expect(system).toContain('Current caller view');
+    expect(system).toContain('view: scene-map');
+    expect(system).toContain('project: 双城后转');
+    expect(system).toContain('selection: scene:E02');
+    expect(system).toContain('actions available: 提交场景');
   });
 
   it('publishes progress only after records persist (store-first ordering)', async () => {

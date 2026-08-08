@@ -2,7 +2,7 @@
 // Novalistically — Shared primitive Zod schemas used by entity schemas
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Placeholder pattern — rejected in value fields

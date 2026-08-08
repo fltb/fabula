@@ -30,7 +30,7 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { type Browser, expect, type Page, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 import {
   DEFAULT_BOOTSTRAP_PASSWORD,
   type HostFixture,
@@ -133,7 +133,7 @@ async function expandOperationCenter(page: Page): Promise<void> {
 }
 
 /** Read the coordinator's working digest; the MCP submit CASes against it. */
-async function currentWorkspaceDigest(fixture: HostFixture): Promise<string> {
+async function _currentWorkspaceDigest(fixture: HostFixture): Promise<string> {
   const state = await fixture.fetchJson<unknown>(
     `/api/v1/projects/${fixture.projectId}/authoring/state`,
   );

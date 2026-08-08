@@ -30,7 +30,7 @@ async function projectRoot(projectId = 'demo'): Promise<string> {
 }
 
 function baseConfiguration(
-  root: string,
+  _root: string,
   overrides: Partial<WorkbenchConfigurationV1> = {},
 ): WorkbenchConfigurationV1 {
   return {

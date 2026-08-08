@@ -6,7 +6,7 @@
 // Maps are serialized as records for JSON/YAML compatibility.
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 // ——— Entity Type Ref ———
 

@@ -29,8 +29,6 @@ describe('SceneCanvas adoption disclosure', () => {
   it('does not offer an adoption action without a released revision', () => {
     render(() => <SceneCanvas adoption={null} />);
     expect(screen.getByText('No released scene revision')).toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: '收下这版' }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '收下这版' })).not.toBeInTheDocument();
   });
 });

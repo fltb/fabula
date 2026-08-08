@@ -1,7 +1,7 @@
 // ============================================================================
 // Novalistically — Validator System Types (§7.4.15)
 // ============================================================================
-import type { z } from 'zod';
+import type { z } from 'zod/v3';
 import type { SourceDiagnosticV1 } from '../contracts/source.js';
 import type { StoryOrderIndex } from '../state/dag.js';
 import type { AnalysisResult } from './analysis.js';

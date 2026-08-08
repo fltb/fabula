@@ -2,7 +2,7 @@
 // Novalistically — Source Context Zod Schemas (S4)
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { SourceContext, SourceContextEntry } from '../types/source-context.ts';
 
 // ── SourceContextEntry Schema ─────────────────────────────────────────────────

@@ -17,21 +17,13 @@
 
 import { createHash, randomBytes } from 'node:crypto';
 import { type FSWatcher, mkdirSync, watch } from 'node:fs';
-import {
-  chmod,
-  mkdir,
-  readFile,
-  rename,
-  stat,
-  unlink,
-  writeFile,
-} from 'node:fs/promises';
+import { chmod, mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import {
   WORKBENCH_CONFIGURATION_VERSION,
   type WorkbenchAgentConfigurationV1,
-  type WorkbenchConfigurationVersion,
   type WorkbenchConfigurationV1,
+  type WorkbenchConfigurationVersion,
   type WorkbenchNetworkConfigurationV1,
   type WorkbenchOperationLimitsV1,
   type WorkbenchProjectConfigurationV1,
@@ -42,7 +34,7 @@ import {
   type WorkbenchTrustedPluginConfigurationV1,
 } from '@novalistically/workbench-protocol';
 import YAML from 'yaml';
-import { type ConfigOperationDiagnosticV1 } from '../contracts/configuration.js';
+import type { ConfigOperationDiagnosticV1 } from '../contracts/configuration.js';
 
 // ─── Host home resolution ────────────────────────────────────────────────────
 
@@ -668,10 +660,7 @@ export function validateConfigurationShape(value: unknown): ConfigurationShapeRe
         providers[profileId] = entry;
       } else if (kind !== 'pi' && kind !== null) {
         diagnostics.push(
-          diagnostic(
-            'CONFIG_INVALID',
-            `Unsupported provider kind "${kind}"; only "pi" is valid.`,
-          ),
+          diagnostic('CONFIG_INVALID', `Unsupported provider kind "${kind}"; only "pi" is valid.`),
         );
       }
     }

@@ -2,7 +2,7 @@
 // Novalistically — Item Definition Schema
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 export const itemDefinitionSchema = z
   .object({

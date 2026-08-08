@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+
 /**
  * WorkbenchAgentRunService (plan 9.4): the built-in Agent's run loop.
  *
@@ -33,6 +34,15 @@ import { createHash, randomUUID } from 'node:crypto';
  * provider keys, raw arguments, or raw tool results.
  */
 
+import {
+  Agent,
+  type AgentEvent,
+  type AgentMessage,
+  type AgentTool,
+  type StreamFn,
+} from '@earendil-works/pi-agent-core';
+import type { Api, Model } from '@earendil-works/pi-ai';
+import { type TSchema, Type } from '@earendil-works/pi-ai';
 import type {
   AgentChatConversationViewV1,
   AgentChatHistoryV1,
@@ -41,6 +51,7 @@ import type {
   AgentChatRunHistoryEntryV1,
   AgentChatRunViewV1,
   AgentChatToolCallReceiptV1,
+  AgentViewContextV1,
 } from '../../contracts/agent-chat.js';
 import {
   AGENT_CHAT_CONTRACT_VERSION,
@@ -56,9 +67,6 @@ import type {
   AgentRunRecordV1,
   AgentToolCallRecordV1,
 } from '../../contracts/persistence.js';
-import { Agent, type AgentEvent, type AgentMessage, type AgentTool, type StreamFn } from '@earendil-works/pi-agent-core';
-import { Type, type TSchema } from '@earendil-works/pi-ai';
-import type { Api, Model } from '@earendil-works/pi-ai';
 import type { AgentStore } from '../../persistence/agent-store.js';
 import type {
   ProjectOperationRunnerResult,
@@ -125,6 +133,8 @@ export interface SendAgentMessageInput {
   readonly conversationId: string;
   readonly message: string;
   readonly principal: ProjectToolExecutorPrincipal;
+  /** Caller-view snapshot folded into the run's system prompt. */
+  readonly context?: AgentViewContextV1;
 }
 
 export type CancelAgentRunOutcome =
@@ -166,16 +176,34 @@ export interface WorkbenchAgentRunService {
   close(): void;
 }
 
+/** Deterministic system prompt; lists exactly the tools the model may call. */
 const RUN_RECORD_WAIT_ATTEMPTS = 100;
 const RUN_RECORD_WAIT_INTERVAL_MS = 20;
 
-/** Deterministic system prompt; lists exactly the tools the model may call. */
 export function buildAgentSystemPrompt(
   projectId: string,
   role: ProjectAccessRole,
   tools: readonly AgentTool[],
+  context?: AgentViewContextV1,
 ): string {
   const lines = tools.map((tool) => `- ${tool.name}: ${tool.description}`);
+  const view =
+    context === undefined
+      ? []
+      : [
+          '',
+          'Current caller view (answer against this, do not guess):',
+          `- route: ${context.route}`,
+          `- view: ${context.view}`,
+          ...(context.projectName === undefined ? [] : [`- project: ${context.projectName}`]),
+          ...(context.selection === undefined ? [] : [`- selection: ${context.selection}`]),
+          ...(context.visible === undefined || context.visible.length === 0
+            ? []
+            : [`- visible: ${context.visible.join(', ')}`]),
+          ...(context.actions === undefined || context.actions.length === 0
+            ? []
+            : [`- actions available: ${context.actions.join(', ')}`]),
+        ];
   return [
     `You are the Fabula Workbench authoring agent for project "${projectId}" (role: ${role}).`,
     'You may call ONLY the tools listed below; each call must use the documented input schema.',
@@ -184,6 +212,7 @@ export function buildAgentSystemPrompt(
     '',
     'Available tools:',
     ...lines,
+    ...view,
   ].join('\n');
 }
 
@@ -381,7 +410,7 @@ export function createWorkbenchAgentRunService(
       label: definition.name,
       // The bounded summary is computed here; details carry {ok, errorCode,
       // summary} so subscribers persist the sanitized record.
-      execute: async (toolCallId: string, params: unknown) => {
+      execute: async (_toolCallId: string, params: unknown) => {
         const result = await executor.callTool(definition.name, caller, params);
         const summary = resultSummaryOf(result);
         return {
@@ -392,7 +421,7 @@ export function createWorkbenchAgentRunService(
       },
     }));
     const toolNames = new Set(tools.map((t) => t.name));
-    const system = buildAgentSystemPrompt(projectId, principal.role, tools);
+    const system = buildAgentSystemPrompt(projectId, principal.role, tools, input.context);
 
     let failure: { code: AgentRunFailureCode; message: string } | null = null;
     let toolCallsUsed = 0;

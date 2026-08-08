@@ -5,6 +5,7 @@
  * mutations are enforced server-side by the project role gate.
  */
 
+import type { AgentChatConversationListResultV1 } from '../contracts/agent-chat.js';
 import {
   BROWSER_AGENT_CONVERSATION_HISTORY_PATH,
   BROWSER_AGENT_CONVERSATION_RUNS_PATH,
@@ -14,7 +15,6 @@ import {
   BROWSER_AGENT_RUN_PROGRESS_PATH,
   BROWSER_AGENT_RUN_RETRY_PATH,
 } from '../contracts/agent-chat.js';
-import type { AgentChatConversationListResultV1 } from '../contracts/agent-chat.js';
 import type { BrowserApiErrorCode, BrowserApiErrorV1 } from '../contracts/browser-api.js';
 import { BROWSER_SESSION_HEADER } from '../contracts/browser-api.js';
 import type {
@@ -25,6 +25,7 @@ import type {
   AgentChatProgressEventV1,
   AgentChatRunViewV1,
   AgentChatSendMessageResultV1,
+  AgentViewContextV1,
 } from '../contracts/index.js';
 import { isRecord } from './authoring-client.js';
 import type { BrowserFetch } from './browser-read-client.js';
@@ -71,7 +72,6 @@ const AGENT_CHAT_ERROR_CODES: Readonly<Record<BrowserApiErrorCode, true>> = {
   PROJECT_IMPORT_NOT_FOUND: true,
   PROJECT_IMPORT_INVALID: true,
   PROJECT_IMPORT_CONFLICT: true,
-
 };
 
 /** Typed non-2xx failure from the guarded Host Agent chat surface. */
@@ -100,6 +100,7 @@ export interface AgentChatClient {
     projectId: string,
     conversationId: string,
     message: string,
+    context?: AgentViewContextV1,
   ): Promise<AgentChatRunViewV1>;
   /** Durable history of one conversation (runs + tool-call receipts + message projection). */
   history(projectId: string, conversationId: string): Promise<AgentChatHistoryV1>;
@@ -210,13 +211,13 @@ export function createAgentChatClient(options: AgentChatClientOptions = {}): Age
       );
       return result.conversations;
     },
-    async sendMessage(projectId, conversationId, message) {
+    async sendMessage(projectId, conversationId, message, context) {
       const result = await post<AgentChatSendMessageResultV1>(
         pathFor(BROWSER_AGENT_CONVERSATION_RUNS_PATH, projectId).replace(
           ':conversationId',
           encodeURIComponent(conversationId),
         ),
-        { version: 1, message },
+        { version: 1, message, ...(context === undefined ? {} : { context }) },
       );
       return result.run;
     },

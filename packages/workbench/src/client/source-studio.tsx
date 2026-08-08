@@ -465,7 +465,10 @@ export function SourceStudio(props: SourceStudioProps) {
                 >
                   <div class="workspace-state workspace-state-ready">
                     <p class="region-kicker">Accepted identity</p>
-                    <HashChip value={authoring().acceptedSourceHash} fallback="No accepted source yet" />
+                    <HashChip
+                      value={authoring().acceptedSourceHash}
+                      fallback="No accepted source yet"
+                    />
                     <p class="screen-note">
                       Last-valid source hash; this does not change while you type.
                     </p>
@@ -519,7 +522,7 @@ export function SourceStudio(props: SourceStudioProps) {
                 </Show>
               </header>
               <Show when={creating()}>
-                <div
+                <section
                   class="grid gap-2 border border-[var(--wb-border)] p-3"
                   aria-label="Create working document"
                 >
@@ -567,7 +570,7 @@ export function SourceStudio(props: SourceStudioProps) {
                       Cancel
                     </button>
                   </div>
-                </div>
+                </section>
               </Show>
               <Show when={mutationError() !== null}>
                 <p class="diagnostic diagnostic-error" role="alert" data-mutation-error>
@@ -661,7 +664,7 @@ export function SourceStudio(props: SourceStudioProps) {
                             </button>
                           </Show>
                           <Show when={movingId() === descriptor.documentId}>
-                            <div
+                            <section
                               class="grid gap-2 border border-[var(--wb-border)] p-3"
                               aria-label={`Move ${descriptor.documentId}`}
                             >
@@ -694,7 +697,7 @@ export function SourceStudio(props: SourceStudioProps) {
                                   Cancel
                                 </button>
                               </div>
-                            </div>
+                            </section>
                           </Show>
                           <Show when={props.onDeleteDocument !== undefined}>
                             <button
@@ -710,7 +713,7 @@ export function SourceStudio(props: SourceStudioProps) {
                             </button>
                           </Show>
                           <Show when={confirmingDeleteId() === descriptor.documentId}>
-                            <div
+                            <section
                               class="flex flex-wrap items-center gap-2 border border-[var(--wb-border)] p-3"
                               aria-label={`Delete ${descriptor.documentId}`}
                             >
@@ -733,7 +736,7 @@ export function SourceStudio(props: SourceStudioProps) {
                               >
                                 Cancel
                               </button>
-                            </div>
+                            </section>
                           </Show>
                         </li>
                       )}

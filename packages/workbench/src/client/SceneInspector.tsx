@@ -1,5 +1,5 @@
-import { For, Show } from 'solid-js';
 import type { DiffResult } from '@novalistically/core/tooling';
+import { For, Show } from 'solid-js';
 import { PROJECT_ACCESS_ROLE_GRANTS } from '../contracts/configuration.js';
 import type {
   ProjectAccessRole,
@@ -162,14 +162,15 @@ function SceneInspectorBody(props: {
     return '未收下';
   };
   const adoptionCandidate = () =>
-    props.adoption !== null && props.adoption !== undefined &&
+    props.adoption !== null &&
+    props.adoption !== undefined &&
     props.adoption.eventId === detail().eventId
       ? props.adoption
       : null;
   const canAdopt = () =>
     detail().renderStatus === 'unadopted' &&
     adoptionCandidate() !== null &&
-    adoptionCandidate()!.released &&
+    adoptionCandidate()?.released &&
     props.onRequestAdoption !== undefined;
 
   return (
@@ -181,18 +182,18 @@ function SceneInspectorBody(props: {
           <h3>{row()?.title ?? detail().eventId}</h3>
         </div>
         <div class="scene-inspector-chips">
-          <Show when={row() !== null && row()!.sceneType.length > 0}>
-            <span class="scene-chip">{row()!.sceneType}</span>
+          <Show when={row() !== null && row()?.sceneType.length > 0}>
+            <span class="scene-chip">{row()?.sceneType}</span>
           </Show>
           <Show when={detail().discourse.discourseMode !== null}>
             <span class="scene-chip scene-chip-discourse">{detail().discourse.discourseMode}</span>
           </Show>
-          <Show when={row() !== null && row()!.storyTime.length > 0}>
-            <span class="scene-chip">{row()!.storyTime}</span>
+          <Show when={row() !== null && row()?.storyTime.length > 0}>
+            <span class="scene-chip">{row()?.storyTime}</span>
           </Show>
           <Show when={row() !== null}>
             <span class="scene-chip">
-              CH.{row()!.coordinate.chapter} · #{row()!.coordinate.narrativeOrder}
+              CH.{row()?.coordinate.chapter} · #{row()?.coordinate.narrativeOrder}
             </span>
           </Show>
         </div>
@@ -210,7 +211,8 @@ function SceneInspectorBody(props: {
         </div>
         <Show when={detail().stale}>
           <p class="scene-inspector-warning">
-            该场景的上下文指纹已变化（frontmatter sceneHash ≠ 当前编译 sceneHash）。重新渲染不会静默覆盖手改散文。
+            该场景的上下文指纹已变化（frontmatter sceneHash ≠ 当前编译
+            sceneHash）。重新渲染不会静默覆盖手改散文。
           </p>
         </Show>
         <dl class="scene-inspector-meta">
@@ -252,7 +254,8 @@ function SceneInspectorBody(props: {
         </div>
         <Show when={detail().renderStatus === 'unadopted' && adoptionCandidate() === null}>
           <p class="scene-inspector-note">
-            渲染该场景以产生 released revision 后再采纳；若已存在 released revision，选中行后会显示采纳预览。
+            渲染该场景以产生 released revision 后再采纳；若已存在 released
+            revision，选中行后会显示采纳预览。
           </p>
         </Show>
         <Show when={props.renderError !== null && props.renderError !== undefined}>
@@ -296,7 +299,9 @@ function SceneInspectorBody(props: {
                           <Show
                             when={attributeRow.before !== null}
                             fallback={
-                              <span class="scene-diff-after">+ {formatValue(attributeRow.after)}</span>
+                              <span class="scene-diff-after">
+                                + {formatValue(attributeRow.after)}
+                              </span>
                             }
                           >
                             <span class="scene-diff-before">
@@ -322,7 +327,7 @@ function SceneInspectorBody(props: {
           </table>
         </Show>
         <Show when={hints().length > 0}>
-          <div class="scene-narrative-hint" aria-label="Narrative hints">
+          <div class="scene-narrative-hint" role="note" aria-label="Narrative hints">
             <span class="scene-narrative-tag">narrativeHint</span>
             <ul>
               <For each={hints()}>{(hint) => <li>{hint}</li>}</For>
@@ -435,15 +440,21 @@ function SceneInspectorBody(props: {
           <dl class="scene-hash-list">
             <div>
               <dt>stateBefore</dt>
-              <dd title={detail().hashes.stateBeforeHash}>{shortHash(detail().hashes.stateBeforeHash)}</dd>
+              <dd title={detail().hashes.stateBeforeHash}>
+                {shortHash(detail().hashes.stateBeforeHash)}
+              </dd>
             </div>
             <div>
               <dt>stateAfter</dt>
-              <dd title={detail().hashes.stateAfterHash}>{shortHash(detail().hashes.stateAfterHash)}</dd>
+              <dd title={detail().hashes.stateAfterHash}>
+                {shortHash(detail().hashes.stateAfterHash)}
+              </dd>
             </div>
             <div>
               <dt>worldHash</dt>
-              <dd title={detail().hashes.worldStateHash}>{shortHash(detail().hashes.worldStateHash)}</dd>
+              <dd title={detail().hashes.worldStateHash}>
+                {shortHash(detail().hashes.worldStateHash)}
+              </dd>
             </div>
             <div>
               <dt>knowledgeHash</dt>
@@ -459,7 +470,9 @@ function SceneInspectorBody(props: {
             </div>
             <div>
               <dt>discourseHash</dt>
-              <dd title={detail().hashes.discourseHash}>{shortHash(detail().hashes.discourseHash)}</dd>
+              <dd title={detail().hashes.discourseHash}>
+                {shortHash(detail().hashes.discourseHash)}
+              </dd>
             </div>
             <div>
               <dt>source</dt>

@@ -346,7 +346,7 @@ describe('AgentCapabilityService over the real persistence worker', () => {
     // The upsert is idempotent: a re-pair with a fresh scope set and expiry
     // overwrites the previous row, and the gate immediately honors the new
     // values (and stops honoring the old ones).
-    const rePersisted = await service.persistGrant({
+    const _rePersisted = await service.persistGrant({
       capabilityId: 'device:device-1',
       userId: 'u1',
       projectId: 'p1',

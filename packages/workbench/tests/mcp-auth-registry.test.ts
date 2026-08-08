@@ -191,7 +191,7 @@ function makeProjection(source: ProjectSourceSnapshotV1 | null): ProjectSessionP
  * working exactly as before.
  */
 function fakeRuntime(
-  source: ProjectSourceSnapshotV1 | null,
+  _source: ProjectSourceSnapshotV1 | null,
   overrides: {
     readonly readAcceptedScene?: (input: {
       readonly projectId: string;

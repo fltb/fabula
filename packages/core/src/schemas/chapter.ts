@@ -2,7 +2,7 @@
 // Novalistically — Chapter Metadata & Scene Metadata Schemas
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { styleGuidanceSchema } from './primitives.js';
 
 export const chapterMetadataSchema = z

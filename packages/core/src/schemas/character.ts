@@ -2,7 +2,7 @@
 // Novalistically — Character Definition Schema
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 export const characterDefinitionSchema = z
   .object({

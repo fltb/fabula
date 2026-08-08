@@ -3,12 +3,12 @@ import userEvent from '@testing-library/user-event';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App, type HostStatus } from '../../src/client/App';
+import type { AgentChatClient } from '../../src/client/agent-chat-client.js';
 import type {
   BrowserPublicationListV1,
   BrowserReviewGateListV1,
   BrowserReviewListV1,
 } from '../../src/contracts/browser-api';
-import type { AgentChatClient } from '../../src/client/agent-chat-client.js';
 
 const navigationLabels = [
   'Project Home',
@@ -176,7 +176,7 @@ describe('Workbench named navigation', () => {
 });
 
 describe('Workbench feature-gated views', () => {
-  it('shows only the four always-on views and no Agent UI without Host features', () => {
+  it('shows only the four always-on views and an empty Agent shelf without Host features', () => {
     render(() => <App />);
     const navigation = screen.getByRole('navigation', { name: 'Workbench views' });
     for (const label of navigationLabels) {
@@ -188,9 +188,14 @@ describe('Workbench feature-gated views', () => {
     expect(
       within(navigation).queryByRole('button', { name: 'Publication' }),
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Open Agent Shelf' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Close Agent Shelf' })).not.toBeInTheDocument();
-    expect(screen.queryByTestId('agent-shelf')).not.toBeInTheDocument();
+    // The global Agent drawer still renders (open by default) with the
+    // no-project guidance panel; the chat surface itself is absent.
+    expect(screen.getByTestId('agent-shelf')).toBeInTheDocument();
+    expect(screen.getByTestId('agent-drawer-guidance')).toHaveTextContent(
+      '选择一个项目后,Agent 将在这里就绪',
+    );
+    expect(screen.queryByTestId('agent-chat-input')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close Agent Shelf' })).toBeInTheDocument();
   });
 
   it('derives the visible views from Host-supplied features', () => {
@@ -212,43 +217,65 @@ describe('Workbench feature-gated views', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('offers the Agent Chat view only when the agent-chat feature is present', () => {
-    const { unmount } = render(() => <App features={['project-home', 'agent-chat']} />);
+  it('never offers an Agent Chat navigation view', () => {
+    render(() => <App features={['project-home', 'agent-chat']} />);
     const navigation = screen.getByRole('navigation', { name: 'Workbench views' });
-    expect(within(navigation).getByRole('button', { name: 'Agent Chat' })).toBeInTheDocument();
-    unmount();
-
-    render(() => <App features={['project-home', 'review-hub']} />);
-    const hidden = screen.getByRole('navigation', { name: 'Workbench views' });
-    expect(within(hidden).queryByRole('button', { name: 'Agent Chat' })).not.toBeInTheDocument();
+    expect(
+      within(navigation).queryByRole('button', { name: 'Agent Chat' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId('agent-shelf')).toBeInTheDocument();
   });
 
-  it('renders the Agent Chat surface only when the feature and surface are both present', async () => {
+  it('renders the Agent Chat drawer whenever the chat surface is supplied', async () => {
     const client = stubAgentChatClient();
-
-    const user = userEvent.setup();
     render(() => (
       <App
         hostStatus="ready"
-        initialView="agent-chat"
         features={['project-home', 'agent-chat']}
         agentChat={{ projectId: 'project-a', client }}
       />
     ));
-    expect(screen.getByRole('heading', { level: 1, name: 'Agent Chat' })).toBeInTheDocument();
-    expect(screen.getByTestId('agent-chat-input')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('agent-chat-input')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('agent-shelf')).toBeInTheDocument();
 
     cleanup();
     render(() => (
       <App
         hostStatus="ready"
-        initialView="agent-chat"
         features={['project-home']}
         agentChat={{ projectId: 'project-a', client }}
       />
     ));
-    expect(screen.getByRole('heading', { level: 1, name: 'Project Home' })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('agent-chat-input')).toBeInTheDocument();
+    });
+
+    cleanup();
+    render(() => <App hostStatus="ready" features={['project-home']} agentChat={null} />);
+    expect(screen.getByTestId('agent-drawer-guidance')).toBeInTheDocument();
     expect(screen.queryByTestId('agent-chat-input')).not.toBeInTheDocument();
+  });
+
+  it('collapses and reopens the Agent drawer from the shell controls', async () => {
+    const client = stubAgentChatClient();
+    const user = userEvent.setup();
+    render(() => (
+      <App
+        hostStatus="ready"
+        features={['project-home', 'agent-chat']}
+        agentChat={{ projectId: 'project-a', client }}
+      />
+    ));
+    await waitFor(() => {
+      expect(screen.getByTestId('agent-chat-input')).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole('button', { name: 'Close Agent Shelf' }));
+    expect(screen.queryByTestId('agent-shelf')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Open Agent Shelf' }).length).toBeGreaterThan(0);
+    await user.click(screen.getAllByRole('button', { name: 'Open Agent Shelf' })[0]!);
+    expect(screen.getByTestId('agent-shelf')).toBeInTheDocument();
   });
 
   it('never offers a hidden view and clicking a visible view activates it', async () => {

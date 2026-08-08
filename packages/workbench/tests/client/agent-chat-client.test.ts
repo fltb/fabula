@@ -98,7 +98,7 @@ describe('createAgentChatClient', () => {
 
   it('never includes the message or run ids as query material (project-scoped routes only)', async () => {
     const requested: string[] = [];
-    const fetch: BrowserFetch = async (input, init) => {
+    const fetch: BrowserFetch = async (input, _init) => {
       const url = String(input);
       requested.push(url);
       return json({ version: 1, message: 'secret words', run });

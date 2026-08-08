@@ -10,11 +10,7 @@ import type {
 } from '@novalistically/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ProjectOperationRecordV1 } from '../src/contracts/persistence.js';
-import type {
-  AgentCapabilityCheckResult,
-  AgentCapabilityService,
-  CheckCapabilityInput,
-} from '../src/host/agent/index.js';
+import type { AgentCapabilityCheckResult, CheckCapabilityInput } from '../src/host/agent/index.js';
 import { createProjectCoreRuntime } from '../src/host/core-runtime.js';
 import {
   createProjectOperationService,
@@ -90,7 +86,7 @@ function createTestSession(projectId: string): ProjectSession {
         ({ events: snapshot.documents.length }) as unknown as ProjectCompilation,
     }),
     capabilities: {
-      checkGrant: async (input: CheckCapabilityInput) =>
+      checkGrant: async (_input: CheckCapabilityInput) =>
         allowedVerdict('user-1', projectId, ['scene:edit']),
     },
     audit: { record: () => undefined },

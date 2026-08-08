@@ -111,6 +111,29 @@ export interface AgentChatRunViewV1 {
 export interface AgentChatSendMessageRequestV1 {
   readonly version: AgentChatContractVersion;
   readonly message: string;
+  /** Optional caller-view snapshot folded into the run's system prompt. */
+  readonly context?: AgentViewContextV1;
+}
+
+/**
+ * Secret-free snapshot of what the caller is looking at. The Host folds it
+ * into the run's system prompt so the agent answers against the current
+ * view instead of guessing. `selection`/`visible`/`actions` are bounded
+ * display strings; never paths, credentials, or document bodies.
+ */
+export interface AgentViewContextV1 {
+  /** Current browser route, e.g. `/workspace/project-a`. */
+  readonly route: string;
+  /** Current surface name, e.g. `scene-map`, `projects`, `admin`. */
+  readonly view: string;
+  readonly projectId?: string;
+  readonly projectName?: string;
+  /** Current selection, e.g. `scene:E02`. */
+  readonly selection?: string;
+  /** What the current view can show, e.g. `['场景列表', '审校门禁']`. */
+  readonly visible?: readonly string[];
+  /** Actions available in the current context, e.g. `['提交场景', '收下这版']`. */
+  readonly actions?: readonly string[];
 }
 
 export interface AgentChatSendMessageResultV1 {

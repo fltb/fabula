@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 const nonEmptyString = z.string().trim().min(1);
 const hashSchema = z.string().regex(/^[a-f0-9]{64}$/);

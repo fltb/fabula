@@ -19,15 +19,15 @@ import {
   type BrowserSessionPrincipalV1,
 } from '../contracts/browser-api.js';
 import type { SceneRenderTriggerResultV1 } from '../contracts/scene.js';
-import type { HostListenerEnv } from './listener.js';
 import {
-  errorResponse,
-  type BrowserProjectAuthorization,
   type BrowserPrincipalResolver,
+  type BrowserProjectAuthorization,
   type BrowserProjectCatalog,
+  errorResponse,
 } from './browser-read-api.js';
-import type { HostServer } from './server.js';
+import type { HostListenerEnv } from './listener.js';
 import type { ProjectAccessRequiredRole, ProjectAccessService } from './project-access-service.js';
+import type { HostServer } from './server.js';
 
 /** One render-trigger outcome: the safe result or a typed browser error. */
 export type BrowserSceneRenderOutcome =
@@ -77,7 +77,11 @@ class BrowserSceneApiImpl {
     c: Context<HostListenerEnv>,
     requiredRole: ProjectAccessRequiredRole = 'reader',
   ): Promise<
-    | { readonly ok: true; readonly principal: BrowserSessionPrincipalV1; readonly projectId: string }
+    | {
+        readonly ok: true;
+        readonly principal: BrowserSessionPrincipalV1;
+        readonly projectId: string;
+      }
     | { readonly ok: false; readonly response: Response }
   > {
     const resolution = await this.options.principal.resolve(c.req.raw);
@@ -96,7 +100,10 @@ class BrowserSceneApiImpl {
     if (!isNonEmptyString(projectId)) {
       return {
         ok: false,
-        response: errorResponse('PROJECT_NOT_FOUND', "The project is not in this session's catalog."),
+        response: errorResponse(
+          'PROJECT_NOT_FOUND',
+          "The project is not in this session's catalog.",
+        ),
       };
     }
     const authorized =
@@ -116,14 +123,20 @@ class BrowserSceneApiImpl {
     if (!authorized) {
       return {
         ok: false,
-        response: errorResponse('PROJECT_MISMATCH', 'The session is not authorized for this project.'),
+        response: errorResponse(
+          'PROJECT_MISMATCH',
+          'The session is not authorized for this project.',
+        ),
       };
     }
     const projects = await this.options.catalog.listProjects(resolution.principal);
     if (!projects.some((project) => project.projectId === projectId)) {
       return {
         ok: false,
-        response: errorResponse('PROJECT_NOT_FOUND', "The project is not in this session's catalog."),
+        response: errorResponse(
+          'PROJECT_NOT_FOUND',
+          "The project is not in this session's catalog.",
+        ),
       };
     }
     return { ok: true, principal: resolution.principal, projectId };
@@ -170,7 +183,11 @@ export function createBrowserSceneApi(options: BrowserSceneApiOptions): BrowserS
   const api = new BrowserSceneApiImpl(options);
   return {
     register(host) {
-      host.registerMutationRoute('POST', BROWSER_PROJECT_SCENE_RENDER_PATH, sceneRenderHandler(api));
+      host.registerMutationRoute(
+        'POST',
+        BROWSER_PROJECT_SCENE_RENDER_PATH,
+        sceneRenderHandler(api),
+      );
     },
   };
 }

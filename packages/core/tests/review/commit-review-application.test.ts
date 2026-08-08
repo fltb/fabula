@@ -112,7 +112,7 @@ function candidateSet(overrides?: Partial<EditorialCandidateSetV1>): EditorialCa
   };
 }
 
-function reviewComment(id: string, targetId: string): ReviewComment {
+function _reviewComment(id: string, targetId: string): ReviewComment {
   return {
     id,
     author: 'human',

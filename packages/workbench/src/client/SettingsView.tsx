@@ -1,7 +1,7 @@
 import { createSignal, For, onMount, Show } from 'solid-js';
 import type { ProjectAccessRole } from '../contracts/index.js';
-import { createAdminClient, type AdminClient } from './admin/admin-client.js';
-import { providerPresets, type ProviderPreset } from './provider-presets.js';
+import { type AdminClient, createAdminClient } from './admin/admin-client.js';
+import { type ProviderPreset, providerPresets } from './provider-presets.js';
 
 export interface SettingsViewProps {
   readonly projectId?: string | null;
@@ -174,7 +174,9 @@ export function SettingsView(props: SettingsViewProps) {
           选择一家供应商并填写 API 密钥，AI 写作功能就会使用它生成小说内容。
         </p>
         <div class="settings-status" data-testid="settings-status">
-          <span class={configured() ? 'settings-status-dot is-configured' : 'settings-status-dot'} />
+          <span
+            class={configured() ? 'settings-status-dot is-configured' : 'settings-status-dot'}
+          />
           {configured()
             ? `已配置（${configuredEndpoint() ?? '未知端点'} · ${configuredModel() ?? '未知模型'}）`
             : '尚未配置可用的 AI 服务'}

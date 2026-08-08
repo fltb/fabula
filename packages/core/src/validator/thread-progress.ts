@@ -2,7 +2,7 @@
 // ThreadProgressValidator — Verify narrative threads are advanced in prose
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type {
   PostRenderInput,
   PreRenderInput,

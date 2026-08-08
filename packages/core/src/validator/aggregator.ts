@@ -2,7 +2,7 @@
 // ResultAggregator — Collect, grade, and output validation results
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { ConfigError } from '../errors.ts';
 import { canonicalJson, computeSha256Hex } from '../render/scene-contract.ts';
 import type {

@@ -796,7 +796,9 @@ describe('admin configuration domains', () => {
     it('accepts a discovered plugin whose module is missing from disk only after it is removed', async () => {
       // A discovered entry with a null moduleHash can never match; clearing the
       // allowlist to an empty array is still allowed.
-      const h = createConfigHarness({ discoveredPlugins: [{ ...discovered[0]!, moduleHash: null }] });
+      const h = createConfigHarness({
+        discoveredPlugins: [{ ...discovered[0]!, moduleHash: null }],
+      });
       const rejected = await h.server.app.request('/api/v1/admin/config/advanced', {
         method: 'PUT',
         headers: { host: '127.0.0.1', 'content-type': 'application/json' },

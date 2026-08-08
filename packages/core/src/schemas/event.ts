@@ -2,7 +2,7 @@
 // Novalistically — Event File Schema
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { JsonValue } from '../contracts/json.js';
 import { anachronySchema, voiceProfileSchema } from './discourse.js';
 import { durationProfileSchema } from './duration.js';

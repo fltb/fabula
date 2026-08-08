@@ -95,10 +95,11 @@ export interface LogicFlowEdgeDataV1 {
   readonly properties: Readonly<{ readonly edgeClass: WorkbenchGraphEdgeClassV1 }>;
 }
 
-/** LogicFlow `render()` input for one domain. */
+/** LogicFlow `render()` input for one domain. 2.x `GraphConfigData` requires
+ * mutable node/edge arrays (1.x tolerated readonly). */
 export interface LogicFlowGraphDataV1 {
-  readonly nodes: readonly LogicFlowNodeDataV1[];
-  readonly edges: readonly LogicFlowEdgeDataV1[];
+  nodes: LogicFlowNodeDataV1[];
+  edges: LogicFlowEdgeDataV1[];
 }
 
 /** Deep-freeze a plain JSON-safe value; already-frozen values pass through. */

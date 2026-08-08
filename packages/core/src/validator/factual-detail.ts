@@ -2,7 +2,7 @@
 // FactualDetailValidator — LLM-assisted detail checking
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type {
   PostRenderInput,
   PreRenderInput,

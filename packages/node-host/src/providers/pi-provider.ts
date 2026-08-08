@@ -1,14 +1,12 @@
 import {
+  type Api,
   createModels,
   createProvider,
-  type Api,
   type Model,
   type MutableModels,
   type Provider,
 } from '@earendil-works/pi-ai';
 import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy';
-
-
 
 export interface PiProviderStack {
   readonly models: MutableModels;

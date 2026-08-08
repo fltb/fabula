@@ -1,3 +1,4 @@
+import type { BrowserProjectRoleV1 } from '../contracts/browser-api.js';
 import {
   BROWSER_GRAPH_ROUTE_QUERY,
   BROWSER_PROJECT_CAPABILITIES_PATH,
@@ -5,21 +6,20 @@ import {
   BROWSER_PROJECT_OVERVIEW_PATH,
   BROWSER_PROJECT_REFERENCE_CONTENT_PATH,
   BROWSER_PROJECT_REFERENCE_PATH,
+  BROWSER_PROJECT_REFERENCE_RETRY_PATH,
   BROWSER_PROJECT_REFERENCES_IMPORT_PATH,
   BROWSER_PROJECT_REFERENCES_PATH,
-  BROWSER_PROJECT_REFERENCE_RETRY_PATH,
   BROWSER_PROJECT_ROLE_PATH,
+  BROWSER_PROJECT_SCENE_ADOPTION_PATH,
   BROWSER_PROJECT_SCENE_MAP_PATH,
   BROWSER_PROJECT_SCENE_PATH,
   BROWSER_PROJECT_SCENE_RENDER_PATH,
-  BROWSER_PROJECT_SCENE_ADOPTION_PATH,
   BROWSER_PROJECTS_PATH,
-  BROWSER_SESSION_HEADER,
-  BROWSER_SESSION_PATH,
   BROWSER_SCENE_ADOPTION_EVENT_QUERY,
   BROWSER_SCENE_ADOPTION_REVISION_QUERY,
+  BROWSER_SESSION_HEADER,
+  BROWSER_SESSION_PATH,
 } from '../contracts/browser-api.js';
-import type { BrowserProjectRoleV1 } from '../contracts/browser-api.js';
 import type {
   BrowserApiErrorV1,
   BrowserGraphRouteSelectorV1,
@@ -208,7 +208,9 @@ export function createBrowserReadClient(options: BrowserReadClientOptions = {}):
     const sessionId = options.getSessionId?.();
     const combined = new Headers({ accept: 'application/json' });
     if (headers !== undefined) {
-      new Headers(headers).forEach((value, key) => combined.set(key, value));
+      new Headers(headers).forEach((value, key) => {
+        combined.set(key, value);
+      });
     }
     if (typeof sessionId === 'string' && sessionId.length > 0) {
       combined.set(BROWSER_SESSION_HEADER, sessionId);
@@ -269,10 +271,7 @@ export function createBrowserReadClient(options: BrowserReadClientOptions = {}):
         form.append('displayName', metadata.displayName);
       }
       return mutate(
-        BROWSER_PROJECT_REFERENCES_IMPORT_PATH.replace(
-          ':projectId',
-          encodeURIComponent(projectId),
-        ),
+        BROWSER_PROJECT_REFERENCES_IMPORT_PATH.replace(':projectId', encodeURIComponent(projectId)),
         'POST',
         form,
       );

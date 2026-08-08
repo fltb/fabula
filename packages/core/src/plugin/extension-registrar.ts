@@ -17,7 +17,7 @@
 //     validate → submit.
 // ============================================================================
 
-import type { ZodType } from 'zod';
+import type { ZodType } from 'zod/v3';
 import type { JsonValue, SourceDiagnosticV1 } from '../contracts/index.js';
 
 /** One enabled plugin's extension namespace contract. */

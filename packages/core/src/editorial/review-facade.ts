@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { CoreExecutionRepository } from '../ports/execution-repository.ts';
 import { ReviewManager } from '../review/manager.ts';
 import type { CommentFilter } from '../review/types.ts';

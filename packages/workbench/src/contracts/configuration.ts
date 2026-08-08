@@ -58,6 +58,7 @@ import type {
   WorkbenchConfigurationV1,
   WorkbenchConfigurationVersion,
 } from '@novalistically/workbench-protocol';
+
 export type {
   WorkbenchAgentConfigurationV1,
   WorkbenchConfigurationV1,

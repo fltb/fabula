@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from '@solidjs/testing-library';
+import { cleanup, render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ReviewHub } from '../../src/client/ReviewHub.js';

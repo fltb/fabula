@@ -2,7 +2,7 @@
 // Validator shared schemas — used by multiple validators
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 export const matchLevelSchema = z.enum(['exact', 'similar', 'absent', 'contradicted']);
 

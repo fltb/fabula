@@ -19,7 +19,7 @@ const SNAPSHOT = materializeFixtureSnapshot(
   path.resolve(import.meta.dirname, '..', '..', '..', 'fixtures', 'arcane-aftermath'),
 );
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { assembleNovel, countNarrativeText } from '../src/assembler/index.js';
 import { ContextCompiler } from '../src/context/index.js';
 import type { ProjectData } from '../src/entity/index.js';

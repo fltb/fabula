@@ -1,5 +1,5 @@
-import { type Api, type Model } from '@earendil-works/pi-ai';
-import { type StreamFn } from '@earendil-works/pi-agent-core';
+import type { StreamFn } from '@earendil-works/pi-agent-core';
+import type { Api, Model } from '@earendil-works/pi-ai';
 import { createPiProviderStack } from '@novalistically/node-host';
 
 export interface PiAgentModel {

@@ -28,7 +28,6 @@ import {
   type BrowserPublicationListV1,
   type BrowserPublicationReadResultV1,
   type BrowserPublicationRecordV1,
-  type BrowserPublishRequestV1,
   type BrowserPublishResultV1,
   type BrowserSessionPrincipalV1,
 } from '../contracts/browser-api.js';

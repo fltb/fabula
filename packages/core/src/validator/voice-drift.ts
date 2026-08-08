@@ -2,7 +2,7 @@
 // VoiceDriftDetector — Consumes Pass 2 AnalysisResult narrativeChecks
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type {
   PostRenderInput,
   PreRenderInput,

@@ -22,9 +22,9 @@ import { renderNovel } from '../../core/dist/editorial.js';
 import { sanitizeError } from '../../core/dist/index.js';
 import { provenanceManifestSchema, responseReferenceSchema } from '../../core/dist/tooling.js';
 import {
-  PiOpenAICompatibleProvider,
   createFileCoreRuntimeServices,
   FileProjectSourceLoader,
+  PiOpenAICompatibleProvider,
 } from '../../node-host/dist/index.js';
 import { buildLiveSmokeRecord, collectReferenceIssueIdentities } from '../dist/index.js';
 

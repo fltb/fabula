@@ -84,7 +84,13 @@ const VALENCE_OPTIONS: readonly string[] = [
 ];
 
 /** Valid sceneType values from the EventFile schema. */
-const SCENE_TYPE_OPTIONS: readonly string[] = ['linear', 'flashback', 'flashforward', 'dream', 'parallel'];
+const SCENE_TYPE_OPTIONS: readonly string[] = [
+  'linear',
+  'flashback',
+  'flashforward',
+  'dream',
+  'parallel',
+];
 
 /** One scene-card edit draft: the 6 editable fields of the event YAML. */
 interface SceneEditDraft {
@@ -167,8 +173,8 @@ function rowTone(row: SceneSummaryRowV1): RowRenderTone {
 /** First–last event ids of a chapter's rows, e.g. `E01–E09`. */
 function chapterEventRange(chapter: SceneMapViewV1['chapters'][number]): string {
   if (chapter.scenes.length === 0) return '—';
-  const first = chapter.scenes[0]!.eventId;
-  const last = chapter.scenes[chapter.scenes.length - 1]!.eventId;
+  const first = chapter.scenes[0]?.eventId;
+  const last = chapter.scenes[chapter.scenes.length - 1]?.eventId;
   return first === last ? first : `${first}–${last}`;
 }
 
@@ -186,7 +192,10 @@ function threadTone(status: string | null | undefined): string {
   return '';
 }
 
-function SceneMapEmpty(props: { readonly mapError?: string | null; readonly onRefresh?: () => void }) {
+function SceneMapEmpty(props: {
+  readonly mapError?: string | null;
+  readonly onRefresh?: () => void;
+}) {
   return (
     <section class="screen-empty" aria-live="polite">
       <Show
@@ -255,7 +264,8 @@ export function SceneMap(props: SceneMapProps) {
   const storyTimeOptions = (): string[] => {
     const options: string[] = [];
     for (const scene of allScenes()) {
-      if (scene.storyTime.length > 0 && !options.includes(scene.storyTime)) options.push(scene.storyTime);
+      if (scene.storyTime.length > 0 && !options.includes(scene.storyTime))
+        options.push(scene.storyTime);
     }
     const current = editDraft()?.storyTime ?? '';
     if (current.length > 0 && !options.includes(current)) options.push(current);
@@ -328,7 +338,11 @@ export function SceneMap(props: SceneMapProps) {
       return;
     }
     const { eventYaml, eventDocumentId } = detail;
-    if (typeof eventYaml !== 'string' || eventYaml.length === 0 || typeof eventDocumentId !== 'string') {
+    if (
+      typeof eventYaml !== 'string' ||
+      eventYaml.length === 0 ||
+      typeof eventDocumentId !== 'string'
+    ) {
       setEditError('该场景没有可编辑的工作区文档（可用 Source Studio 创建）。');
       return;
     }
@@ -359,11 +373,12 @@ export function SceneMap(props: SceneMapProps) {
     merged.title = draft.title.trim();
     merged.sceneBrief = brief.length > 0 ? brief : (parsed.sceneBrief ?? '');
     merged.beats =
-      beats.length > 0 ? beats : (Array.isArray(parsed.beats) ? (parsed.beats as unknown[]) : []);
+      beats.length > 0 ? beats : Array.isArray(parsed.beats) ? (parsed.beats as unknown[]) : [];
     if (draft.valence.length > 0) merged.emotionalValence = draft.valence;
     else delete merged.emotionalValence;
     if (draft.storyTime.length > 0) merged.storyTime = draft.storyTime;
-    merged.sceneType = draft.sceneType.length > 0 ? draft.sceneType : (parsed.sceneType ?? 'linear');
+    merged.sceneType =
+      draft.sceneType.length > 0 ? draft.sceneType : (parsed.sceneType ?? 'linear');
     const nextYaml = YAML.stringify(merged);
     setEditBusy(true);
     setEditError(null);
@@ -433,7 +448,7 @@ export function SceneMap(props: SceneMapProps) {
         <div class="scene-map-layout">
           <div class="scene-map-main">
             <Show
-              when={props.map!.chapters.length > 0}
+              when={props.map?.chapters.length > 0}
               fallback={
                 <section class="screen-empty" aria-live="polite">
                   <h3>No scenes compiled</h3>
@@ -441,7 +456,7 @@ export function SceneMap(props: SceneMapProps) {
                 </section>
               }
             >
-              <For each={props.map!.chapters}>
+              <For each={props.map?.chapters}>
                 {(chapter) => (
                   <section class="scene-chapter" aria-labelledby={`chapter-${chapter.chapterId}`}>
                     <header class="scene-chapter-head">
@@ -468,9 +483,9 @@ export function SceneMap(props: SceneMapProps) {
                             >
                               <div
                                 class="scene-row"
-                                role="button"
-                                tabindex="0"
-                                aria-pressed={selected}
+                                role="option"
+                                tabIndex={0}
+                                aria-selected={selected}
                                 aria-label={`Scene ${scene.eventId} ${scene.title}`}
                                 onClick={() => selectScene(scene.eventId)}
                                 onKeyDown={(event) => {
@@ -542,11 +557,12 @@ export function SceneMap(props: SceneMapProps) {
                                   </div>
                                 </div>
                               </div>
-                            <Show
-                              when={editingEventId() === scene.eventId ? editDraft() : null}
-                            >
+                              <Show when={editingEventId() === scene.eventId ? editDraft() : null}>
                                 {(draft) => (
-                                  <div class="scene-edit-form" aria-label={`编辑场景 ${scene.eventId}`}>
+                                  <section
+                                    class="scene-edit-form"
+                                    aria-label={`编辑场景 ${scene.eventId}`}
+                                  >
                                     <div class="scene-edit-grid">
                                       <label class="scene-edit-field">
                                         <span>标题</span>
@@ -581,7 +597,10 @@ export function SceneMap(props: SceneMapProps) {
                                         >
                                           <option value="">（不指定）</option>
                                           {valenceOptions().map((option) => (
-                                            <option value={option} selected={option === draft().valence}>
+                                            <option
+                                              value={option}
+                                              selected={option === draft().valence}
+                                            >
                                               {option}
                                             </option>
                                           ))}
@@ -597,7 +616,10 @@ export function SceneMap(props: SceneMapProps) {
                                         >
                                           <option value="">（保留原值）</option>
                                           {storyTimeOptions().map((option) => (
-                                            <option value={option} selected={option === draft().storyTime}>
+                                            <option
+                                              value={option}
+                                              selected={option === draft().storyTime}
+                                            >
                                               {option}
                                             </option>
                                           ))}
@@ -612,7 +634,10 @@ export function SceneMap(props: SceneMapProps) {
                                           aria-label={`场景类型 ${scene.eventId}`}
                                         >
                                           {sceneTypeOptions().map((option) => (
-                                            <option value={option} selected={option === draft().sceneType}>
+                                            <option
+                                              value={option}
+                                              selected={option === draft().sceneType}
+                                            >
                                               {option}
                                             </option>
                                           ))}
@@ -647,7 +672,7 @@ export function SceneMap(props: SceneMapProps) {
                                         {editError()}
                                       </p>
                                     </Show>
-                                  </div>
+                                  </section>
                                 )}
                               </Show>
                             </li>
@@ -661,9 +686,9 @@ export function SceneMap(props: SceneMapProps) {
 
               <Show
                 when={
-                  props.map!.strips.threadProgress.length +
-                    props.map!.strips.emotionalValence.length +
-                    props.map!.strips.greyLines.length >
+                  props.map?.strips.threadProgress.length +
+                    props.map?.strips.emotionalValence.length +
+                    props.map?.strips.greyLines.length >
                   0
                 }
               >
@@ -687,7 +712,8 @@ export function SceneMap(props: SceneMapProps) {
                                   CH.{chapterByEventId().get(point.eventId) ?? '—'}
                                 </span>
                                 <span class="scene-strip-val">
-                                  {point.eventId} {stripText(point.advancement ?? point.phase ?? point.status)}
+                                  {point.eventId}{' '}
+                                  {stripText(point.advancement ?? point.phase ?? point.status)}
                                 </span>
                               </div>
                             )}
@@ -697,14 +723,14 @@ export function SceneMap(props: SceneMapProps) {
                     )}
                   </For>
 
-                  <Show when={props.map!.strips.emotionalValence.length > 0}>
+                  <Show when={props.map?.strips.emotionalValence.length > 0}>
                     <div class="scene-strip">
                       <div class="scene-strip-head">
                         <h4>情感弧线</h4>
                         <span class="scene-strip-desc">emotionalValence 全书序列</span>
                       </div>
                       <div class="scene-strip-track">
-                        <For each={props.map!.strips.emotionalValence}>
+                        <For each={props.map?.strips.emotionalValence}>
                           {(point) => (
                             <div
                               class={`scene-strip-cell scene-strip-ch-group${
@@ -729,7 +755,7 @@ export function SceneMap(props: SceneMapProps) {
                     </div>
                   </Show>
 
-                  <For each={props.map!.strips.greyLines}>
+                  <For each={props.map?.strips.greyLines}>
                     {(series) => (
                       <div class="scene-strip">
                         <div class="scene-strip-head">

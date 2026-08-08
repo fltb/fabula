@@ -2,7 +2,7 @@
 // Novalistically — STATE-2 Relationship Type & Transaction Zod Schemas
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 // ——— RelationshipRoleDefinition ———
 

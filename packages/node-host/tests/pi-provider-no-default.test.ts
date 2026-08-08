@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  createPiProviderStack,
-  PiOpenAICompatibleProvider,
-} from '../src/index.js';
+import { createPiProviderStack, PiOpenAICompatibleProvider } from '../src/index.js';
 
 describe('pi provider no-default runtime', () => {
   it('throws when baseURL/model are missing instead of defaulting', () => {

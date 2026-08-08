@@ -28,7 +28,7 @@ import {
   ResultAggregator,
   setCachedRender,
 } from '@novalistically/core/tooling';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { makePreInput } from './context-helper.js';
 
 type CatalogAttribute = EntityTypeCatalog['types'][string]['attributes'][string];

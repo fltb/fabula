@@ -7,7 +7,7 @@
 // - Cross-scene changes detected from input.events in validatePre
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type {
   PostRenderInput,
   PreRenderInput,

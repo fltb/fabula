@@ -12,9 +12,9 @@
 // ============================================================================
 
 import {
-  AssistantMessageEventStream,
   type AssistantMessage,
   type AssistantMessageEvent,
+  AssistantMessageEventStream,
   type ToolCall,
 } from '@earendil-works/pi-ai';
 

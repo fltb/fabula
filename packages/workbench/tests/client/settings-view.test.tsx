@@ -1,11 +1,16 @@
 import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SettingsView } from '../../src/client/SettingsView';
 import type { ProviderPreset } from '../../src/client/provider-presets';
+import { SettingsView } from '../../src/client/SettingsView';
 
 const presets: ProviderPreset[] = [
-  { id: 'deepseek', label: 'deepseek', baseUrl: 'https://api.deepseek.com/v1', modelHint: 'deepseek-chat' },
+  {
+    id: 'deepseek',
+    label: 'deepseek',
+    baseUrl: 'https://api.deepseek.com/v1',
+    modelHint: 'deepseek-chat',
+  },
   { id: 'openai', label: 'openai', baseUrl: 'https://api.openai.com/v1', modelHint: 'gpt-4o' },
 ];
 

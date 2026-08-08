@@ -2,7 +2,7 @@
 // Novalistically — STATE-6: Rule Schema Definitions (Zod)
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 // ——— Identity schemas ———
 

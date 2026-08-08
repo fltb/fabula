@@ -2,7 +2,7 @@
 // Zod schema example generator — produces deterministic JSON values from Zod schemas
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 /**
  * Generate a deterministic JSON example from a Zod schema.

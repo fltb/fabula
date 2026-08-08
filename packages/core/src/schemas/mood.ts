@@ -7,7 +7,7 @@
 // runtime validation and a TypeScript type for static usage.
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 export const moodDefinitionSchema = z
   .object({

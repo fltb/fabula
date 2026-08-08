@@ -8,7 +8,7 @@
 //   (see types/discourse.ts header for full list)
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { DisclosureAction, NarratorProfile } from '../types/discourse.js';
 
 // ─── Discourse Position ──────────────────────────────────────────────────────

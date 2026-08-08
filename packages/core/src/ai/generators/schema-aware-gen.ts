@@ -9,7 +9,7 @@
 // ============================================================================
 
 import YAML from 'yaml';
-import type { ZodError, ZodSchema } from 'zod';
+import type { ZodError, ZodSchema } from 'zod/v3';
 
 // ── Retry configuration ──────────────────────────────────────────────────────
 

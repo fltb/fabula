@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { analysisResultSchema } from './analysis.js';
 
 const schemaVersion = z.literal(1);

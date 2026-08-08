@@ -353,7 +353,8 @@ export function ReferencesView(props: ReferencesViewProps) {
         }
       >
         {(catalog) => (
-          <div
+          <section
+            aria-labelledby="references-list-heading"
             class={`reference-list-section${dragging() ? ' reference-dragging' : ''}`}
             data-testid="references-list-section"
             onDragOver={(event) => {
@@ -524,7 +525,7 @@ export function ReferencesView(props: ReferencesViewProps) {
                 </p>
               </Show>
             </Show>
-          </div>
+          </section>
         )}
       </Show>
 

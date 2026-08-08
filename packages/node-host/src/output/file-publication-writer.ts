@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdir, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 /** Canonical publication id: the assembled novel for the trunk route. */
@@ -48,7 +48,9 @@ export function assertSafePublicationRelativePath(relativePath: string): void {
     throw new PublicationPathError('publication relative path must not be empty');
   }
   if (path.isAbsolute(relativePath) || /^[A-Za-z]:[\\/]/.test(relativePath)) {
-    throw new PublicationPathError(`publication relative path must not be absolute: ${relativePath}`);
+    throw new PublicationPathError(
+      `publication relative path must not be absolute: ${relativePath}`,
+    );
   }
   const parts = relativePath.split(/[\\/]/);
   if (parts.some((part) => part === '..' || part === '.')) {
@@ -67,7 +69,7 @@ export function assertSafePublicationRelativePath(relativePath: string): void {
  * before a newline) are preserved.
  */
 export function normalizePublicationMarkdown(text: string): string {
-  return text.replace(/\r\n/g, '\n').replace(/\n+$/, '') + '\n';
+  return `${text.replace(/\r\n/g, '\n').replace(/\n+$/, '')}\n`;
 }
 
 /** sha256 of the normalized publication markdown bytes. */
@@ -109,7 +111,10 @@ export class FilePublicationWriter {
     const absolutePath = path.join(this.#projectRoot, ...relativeOutputPath.split('/'));
     const directory = path.dirname(absolutePath);
     await mkdir(directory, { recursive: true });
-    const tempPath = path.join(directory, `.${path.basename(absolutePath)}.${randomBytes(6).toString('hex')}.tmp`);
+    const tempPath = path.join(
+      directory,
+      `.${path.basename(absolutePath)}.${randomBytes(6).toString('hex')}.tmp`,
+    );
     try {
       await writeFile(tempPath, content, 'utf8');
       await rename(tempPath, absolutePath);
@@ -119,5 +124,4 @@ export class FilePublicationWriter {
     }
     return { relativeOutputPath, sha256, byteLength };
   }
-
 }

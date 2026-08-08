@@ -1558,7 +1558,7 @@ describe('nova_publish and nova_publication_*', () => {
       projectId: 'p1',
       publish:
         overrides.publish ??
-        (async (input, caller) => ({
+        (async (_input, caller) => ({
           enqueue: {
             status: 'queued',
             operationHandle: 'op-publish',

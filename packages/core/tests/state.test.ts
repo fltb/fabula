@@ -1882,7 +1882,7 @@ describe('canonical snapshot bridge', () => {
     return [e1, e2, e3];
   }
 
-  const REPLAY_OPTIONS = { initialFacts: INITIAL_FACTS };
+  const _REPLAY_OPTIONS = { initialFacts: INITIAL_FACTS };
 
   function emptyState(age = 0): WorldState {
     return {

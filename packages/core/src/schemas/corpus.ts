@@ -15,7 +15,7 @@
 //    ellipsis MUST be split (schema enforces single storyTime)
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type {
   NarrativeNode as CorpusNode,
   NarrativeEllipsis,

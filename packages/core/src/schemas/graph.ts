@@ -7,7 +7,7 @@
 // same-name schemas in integration.ts.
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { SceneStoryCoordinate, StoryCoordinate } from '../types/entity.js';
 import type { EffectiveCoordinate, GraphReadResolution } from '../types/graph.js';
 import { branchPathV1Schema, branchSetV1Schema } from './editorial.ts';

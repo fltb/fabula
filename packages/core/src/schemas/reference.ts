@@ -2,7 +2,7 @@
 // Novalistically — INTEGRATION-2: Reference Eligibility Zod Schemas
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 export const referenceModeSchema = z.enum(['identity', 'live', 'historical']);
 

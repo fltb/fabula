@@ -2,7 +2,7 @@
 // Novalistically — S7b: Story IR — Zod Schema Definitions
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 // ─── StructuralFunction ─────────────────────────────────────────────────────
 

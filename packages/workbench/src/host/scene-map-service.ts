@@ -14,8 +14,6 @@
  */
 
 import { createHash } from 'node:crypto';
-import { showEntity } from '@novalistically/core';
-import type { DiffResult } from '@novalistically/core/tooling';
 import {
   type AcceptedSceneRecord,
   type CoreExecutionRepository,
@@ -25,7 +23,9 @@ import {
   type ProjectSourceSnapshotV1,
   type ReadResult,
   type StoryTimestamp,
+  showEntity,
 } from '@novalistically/core';
+import type { DiffResult } from '@novalistically/core/tooling';
 import YAML from 'yaml';
 import type { WorkbenchGraphEdgeV1 } from '../contracts/graph.js';
 import type {
@@ -35,7 +35,6 @@ import type {
   SceneDiscourseProjectionV1,
   SceneEmotionalValencePointV1,
   SceneGreyLineAppearanceV1,
-  SceneGreyLineSeriesV1,
   SceneMapChapterV1,
   SceneMapStripsV1,
   SceneMapViewV1,
@@ -161,7 +160,10 @@ function adoptedSceneFor(
 const ENTITY_DIFF_PREFIX = 'entity:';
 
 /** Story-graph edges adjacent to one scene. */
-function graphEdgesFor(source: ProjectSourceSnapshotV1, eventId: string): readonly WorkbenchGraphEdgeV1[] {
+function graphEdgesFor(
+  source: ProjectSourceSnapshotV1,
+  eventId: string,
+): readonly WorkbenchGraphEdgeV1[] {
   try {
     return projectCanonicalGraphRuntime(source).story.edges.filter(
       (edge) => edge.predecessor === eventId || edge.dependent === eventId,
@@ -182,7 +184,11 @@ function hashesFor(
 ): SceneContractHashesV1 {
   const before = compilation.boundaries.stateBeforeByEventId.get(eventId) ?? {};
   const after = compilation.boundaries.stateAfterByEventId.get(eventId) ?? {};
-  const beforeState = before as { epistemicLedger?: unknown; propositionCatalog?: unknown; commonGround?: unknown };
+  const beforeState = before as {
+    epistemicLedger?: unknown;
+    propositionCatalog?: unknown;
+    commonGround?: unknown;
+  };
   const worldStateHash = sha256Hex(canonicalJson(before));
   const knowledgeStateHash = sha256Hex(
     canonicalJson({
@@ -283,9 +289,7 @@ export async function loadSceneMap(input: SceneMapServiceInput): Promise<SceneMa
       const currentSceneHash = record?.value.sceneHash ?? null;
       const stale =
         adopted &&
-        (fingerprint === null ||
-          currentSceneHash === null ||
-          currentSceneHash !== fingerprint);
+        (fingerprint === null || currentSceneHash === null || currentSceneHash !== fingerprint);
       scenes.push({
         eventId: event.id,
         title: event.title,
@@ -295,11 +299,7 @@ export async function loadSceneMap(input: SceneMapServiceInput): Promise<SceneMa
         coordinate: { chapter: chapterNum, narrativeOrder: event.narrativeOrder },
         changedCount: changedCounts.get(event.id) ?? 0,
         introCount: event.introduces?.length ?? 0,
-        renderStatus: adopted
-          ? stale
-            ? 'adopted_stale'
-            : 'adopted_current'
-          : 'unadopted',
+        renderStatus: adopted ? (stale ? 'adopted_stale' : 'adopted_current') : 'unadopted',
         stale,
         adoptedSceneHash: fingerprint,
         currentSceneHash,
@@ -430,7 +430,9 @@ export async function loadSceneDetail(
   const entityIds = [
     ...new Set(
       diff.changed
-        .map((key) => (key.startsWith(ENTITY_DIFF_PREFIX) ? key.slice(ENTITY_DIFF_PREFIX.length) : null))
+        .map((key) =>
+          key.startsWith(ENTITY_DIFF_PREFIX) ? key.slice(ENTITY_DIFF_PREFIX.length) : null,
+        )
         .filter((id): id is string => id !== null && id.length > 0),
     ),
   ];
@@ -453,9 +455,7 @@ export async function loadSceneDetail(
     }
   }
   const eventYaml =
-    eventDocumentId === null
-      ? null
-      : ((await input.workingContent?.(eventDocumentId)) ?? null);
+    eventDocumentId === null ? null : ((await input.workingContent?.(eventDocumentId)) ?? null);
   const hashes = hashesFor(compilation, source, eventId, record);
   const adopted = adoptedSceneFor(adoptionSource, eventId);
   const stale =
@@ -475,11 +475,7 @@ export async function loadSceneDetail(
       graphEdges: graphEdgesFor(source, eventId),
       hashes,
       discourse: discourseFor(compilation, source, event),
-      renderStatus: adopted.adopted
-        ? stale
-          ? 'adopted_stale'
-          : 'adopted_current'
-        : 'unadopted',
+      renderStatus: adopted.adopted ? (stale ? 'adopted_stale' : 'adopted_current') : 'unadopted',
       stale,
       adoptedSceneHash: adopted.fingerprint,
       eventYaml,

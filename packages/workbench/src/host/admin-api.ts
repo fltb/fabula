@@ -70,6 +70,7 @@ import {
   maskModel,
   resolveNetworkRequest,
   type SetupStatusBuilder,
+  writeProjectSkeleton,
 } from './setup-api.js';
 import type { RuntimeAdminPort } from './workbench-runtime.js';
 
@@ -251,6 +252,8 @@ export interface PluginDiscoveryAdminPort {
 }
 
 export interface AdminApiOptions {
+  /** Host-managed home; project skeletons are written under `<hostHome>/projects`. */
+  readonly hostHome: string;
   readonly resolver: BrowserPrincipalResolver;
   readonly configuration: ConfigurationChangeService;
   readonly auth: LocalAuthService;
@@ -688,10 +691,7 @@ function projectValidateHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
     const body = await c.req.raw.json().catch(() => null);
     const parsed = parseRequest(body, ['projectId', 'displayName']);
     if (parsed === null) {
-      return adminError(
-        'UNKNOWN_FIELD',
-        'projects/validate accepts only projectId, displayName.',
-      );
+      return adminError('UNKNOWN_FIELD', 'projects/validate accepts only projectId, displayName.');
     }
     const projectId = typeof parsed.projectId === 'string' ? parsed.projectId : '';
     const displayName = typeof parsed.displayName === 'string' ? parsed.displayName : '';
@@ -831,7 +831,14 @@ function projectCreateHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
       },
       projectId,
       owner.userId,
-    );
+    ).then(async (response) => {
+      // Best-effort managed skeleton (same contract as the setup wizard):
+      // a created project must be openable without a manual nova.yaml.
+      if (response.status < 400) {
+        await writeProjectSkeleton(api.options.hostHome, projectId, displayName).catch(() => {});
+      }
+      return response;
+    });
   };
 }
 

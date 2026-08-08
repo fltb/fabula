@@ -290,9 +290,7 @@ export function PublicationView(props: PublicationViewProps) {
     const request: BrowserPublishRequestV1 = {
       version: 1,
       projectId,
-      ...(name.length === 0
-        ? {}
-        : { branchPath: customSelector, discourseBranch: name }),
+      ...(name.length === 0 ? {} : { branchPath: customSelector, discourseBranch: name }),
       ...(title().trim().length === 0 ? {} : { title: title().trim() }),
     };
     void runMutation(() => props.onPublish?.(request));
@@ -427,7 +425,11 @@ export function PublicationView(props: PublicationViewProps) {
                     >
                       发布
                     </button>
-                    <button class="btn btn-ghost" type="button" onClick={() => setPublishOpen(false)}>
+                    <button
+                      class="btn btn-ghost"
+                      type="button"
+                      onClick={() => setPublishOpen(false)}
+                    >
                       取消
                     </button>
                   </form>
@@ -436,11 +438,7 @@ export function PublicationView(props: PublicationViewProps) {
             </div>
             <Show
               when={catalog().publications.length > 0}
-              fallback={
-                <p class="screen-note">
-                  还没有发布产物。发布已接受的章节以生成成书文件。
-                </p>
-              }
+              fallback={<p class="screen-note">还没有发布产物。发布已接受的章节以生成成书文件。</p>}
             >
               <ul class="publication-list" aria-label="发布记录">
                 <For each={catalog().publications}>

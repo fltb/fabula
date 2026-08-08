@@ -7,7 +7,7 @@
 // values, not entity attributes. Catalog functions imported for future use.
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type {
   PostRenderInput,
   PreRenderInput,

@@ -21,19 +21,18 @@
 // ============================================================================
 
 import { createHash, randomUUID } from 'node:crypto';
-
-import type { Context, Handler } from 'hono';
 import {
-  REFERENCE_MCP_LIMITS_V1,
   type McpReferencePort,
+  REFERENCE_MCP_LIMITS_V1,
   type ReferenceJobV1,
   type WorkbenchReferenceLimitsV1,
 } from '@novalistically/workbench-protocol';
+import type { Context, Handler } from 'hono';
 import {
   BROWSER_API_VERSION,
-  BROWSER_PROJECT_REFERENCES_IMPORT_PATH,
   BROWSER_PROJECT_REFERENCE_PATH,
   BROWSER_PROJECT_REFERENCE_RETRY_PATH,
+  BROWSER_PROJECT_REFERENCES_IMPORT_PATH,
   type BrowserApiErrorV1,
   type BrowserProjectReferenceDeleteResultV1,
   type BrowserProjectReferenceImportResultV1,
@@ -106,9 +105,7 @@ function nonEmptyString(value: unknown): value is string {
  */
 function portErrorResponse(cause: unknown): Response {
   const code =
-    cause instanceof Error && 'code' in cause && typeof cause.code === 'string'
-      ? cause.code
-      : null;
+    cause instanceof Error && 'code' in cause && typeof cause.code === 'string' ? cause.code : null;
   const message = cause instanceof Error ? cause.message : 'The reference operation failed.';
   switch (code) {
     case 'REFERENCE_NOT_FOUND':
@@ -130,7 +127,10 @@ function portErrorResponse(cause: unknown): Response {
 /** Map a terminal job failure (the durable job already ran) to a browser error. */
 function failedJobResponse(job: ReferenceJobV1): Response {
   if (job.errorCode === 'REFERENCE_NOT_FOUND') {
-    return errorResponse('REFERENCE_NOT_FOUND', job.errorMessage ?? 'The reference does not exist.');
+    return errorResponse(
+      'REFERENCE_NOT_FOUND',
+      job.errorMessage ?? 'The reference does not exist.',
+    );
   }
   return errorResponse(
     'REFERENCE_IMPORT_FAILED',
@@ -204,7 +204,10 @@ class BrowserReferenceApiImpl {
     if (!projects.some((project) => project.projectId === projectId)) {
       return {
         ok: false,
-        response: errorResponse('PROJECT_NOT_FOUND', 'The project is not in this session catalogue.'),
+        response: errorResponse(
+          'PROJECT_NOT_FOUND',
+          'The project is not in this session catalogue.',
+        ),
       };
     }
     return { ok: true, principal: resolution.principal, projectId };
@@ -233,21 +236,15 @@ function importHandler(api: BrowserReferenceApiImpl): Handler<HostListenerEnv> {
     try {
       body = await c.req.parseBody();
     } catch {
-      return errorResponse(
-        'REFERENCE_INVALID',
-        'The import request must be multipart/form-data.',
-      );
+      return errorResponse('REFERENCE_INVALID', 'The import request must be multipart/form-data.');
     }
     if (typeof body !== 'object' || body === null || Array.isArray(body)) {
       return errorResponse('REFERENCE_INVALID', 'The import request must be multipart/form-data.');
     }
     const form = body as Record<string, unknown>;
-    const file = form['file'];
+    const file = form.file;
     if (!(file instanceof File)) {
-      return errorResponse(
-        'REFERENCE_INVALID',
-        'A multipart file field named "file" is required.',
-      );
+      return errorResponse('REFERENCE_INVALID', 'A multipart file field named "file" is required.');
     }
     if (file.size <= 0) {
       return errorResponse('REFERENCE_INVALID', 'The uploaded file is empty.');
@@ -262,8 +259,8 @@ function importHandler(api: BrowserReferenceApiImpl): Handler<HostListenerEnv> {
     const originalName = file.name.length === 0 ? 'reference.bin' : file.name;
     const mediaType = file.type.length === 0 ? 'application/octet-stream' : file.type;
     const displayName =
-      typeof form['displayName'] === 'string' && form['displayName'].length > 0
-        ? form['displayName']
+      typeof form.displayName === 'string' && form.displayName.length > 0
+        ? form.displayName
         : displayNameFrom(originalName);
     let bytes: Uint8Array;
     try {
@@ -326,7 +323,10 @@ function deleteHandler(api: BrowserReferenceApiImpl): Handler<HostListenerEnv> {
     if (referenceOrError instanceof Response) return referenceOrError;
     const referenceId = c.req.param('referenceId');
     if (!nonEmptyString(referenceId) || referenceId.length > 128) {
-      return errorResponse('REFERENCE_INVALID', 'The reference id is missing or exceeds its bound.');
+      return errorResponse(
+        'REFERENCE_INVALID',
+        'The reference id is missing or exceeds its bound.',
+      );
     }
     try {
       const result = await referenceOrError.delete({ version: 1, referenceId });

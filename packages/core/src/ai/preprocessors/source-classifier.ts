@@ -28,7 +28,7 @@ Return a JSON array of objects with fields:
 
 // ── Zod validation for LLM response ─────────────────────────────────────────
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 const sourceContextEntrySchema = z.object({
   excerpt: z.string(),

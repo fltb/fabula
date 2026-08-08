@@ -9,7 +9,7 @@
 /** 2-chapter threshold for dangling foreshadow detection */
 export const FORESHADOW_THRESHOLD_CHAPTERS = 2;
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type {
   PostRenderInput,
   PreRenderInput,

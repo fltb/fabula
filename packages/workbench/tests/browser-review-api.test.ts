@@ -406,13 +406,13 @@ describe('browser review API routes', () => {
       at: NOW,
     });
     // comment_applied carries the native revision linkage; nothing else does.
-    expect(body.entries[2]!.kind).toBe('comment_applied');
-    expect(body.entries[2]!.revisionId).toBe('rev-3');
-    expect(body.entries[2]!.summary).toContain('applied');
+    expect(body.entries[2]?.kind).toBe('comment_applied');
+    expect(body.entries[2]?.revisionId).toBe('rev-3');
+    expect(body.entries[2]?.summary).toContain('applied');
     // Gate events carry their gate id and a rendered summary, never payloads.
-    expect(body.entries[3]!.gateId).toBe('gate-1');
-    expect(body.entries[3]!.summary).toContain('opened');
-    expect(body.entries[4]!.summary).toContain('accepted');
+    expect(body.entries[3]?.gateId).toBe('gate-1');
+    expect(body.entries[3]?.summary).toContain('opened');
+    expect(body.entries[4]?.summary).toContain('accepted');
     expect(JSON.stringify(body)).not.toContain('payload');
   });
 
@@ -903,7 +903,7 @@ describe('browser review client wire shape', () => {
 
     const list = await client.list('proj-a');
     expect(list.comments).toHaveLength(1);
-    expect(list.comments[0]!.commentId).toBe('comment-1');
+    expect(list.comments[0]?.commentId).toBe('comment-1');
 
     const one = await client.get('proj-a', 'comment-1');
     expect(one.comment.eventId).toBe('E1');
@@ -931,7 +931,7 @@ describe('browser review client wire shape', () => {
     expect(history.entries).toHaveLength(5);
 
     const gates = await client.gateList('proj-a');
-    expect(gates.gates[0]!.gateId).toBe('gate-1');
+    expect(gates.gates[0]?.gateId).toBe('gate-1');
 
     const decision = await client.gateDecide({
       version: BROWSER_API_VERSION,

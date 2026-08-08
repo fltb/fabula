@@ -2,7 +2,7 @@
 // Novalistically — Project Config Schema (nova.yaml)
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { ideaIRSchema } from './idea-ir.js';
 import { renderSurfaceConfigSchema } from './render-surface.js';
 

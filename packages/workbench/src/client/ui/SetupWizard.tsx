@@ -1,8 +1,8 @@
 import type { JSX } from 'solid-js';
 import { createSignal, For, Match, onMount, Show, Switch } from 'solid-js';
 import type { ConfigOperationReceiptV1, WorkbenchSetupStatusV1 } from '../../contracts/index.js';
+import { type ProviderPreset, providerPresets } from '../provider-presets.js';
 import type { RuntimeState } from '../runtime-client.js';
-import { providerPresets, type ProviderPreset } from '../provider-presets.js';
 import {
   isSetupApiError,
   type SetupClient,
@@ -122,7 +122,6 @@ function safeFailureMessage(error: unknown): string {
   }
   return 'The Host could not complete this setup step.';
 }
-
 
 function stepIndex(step: SetupStep): number {
   return SETUP_STEPS.findIndex((candidate) => candidate.id === step);
@@ -560,4 +559,3 @@ function StepActions(props: {
     </div>
   );
 }
-

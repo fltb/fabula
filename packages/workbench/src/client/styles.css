@@ -45,6 +45,7 @@
   --wb-nav-width: 15rem;
   --wb-nav-collapsed-width: 4.75rem;
   --wb-inspector-width: 17rem;
+  --wb-agent-drawer-width: 23.75rem;
   --wb-space-1: 0.25rem;
   --wb-space-2: 0.5rem;
   --wb-space-3: 0.75rem;
@@ -275,7 +276,7 @@ button:focus-visible {
 }
 
 .host-disconnect-banner::before {
-  content: '●';
+  content: "●";
   color: var(--wb-danger);
 }
 
@@ -311,16 +312,11 @@ button:focus-visible {
 }
 
 .skeleton::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgb(255 253 249 / 0.55),
-    transparent
-  );
+  background: linear-gradient(90deg, transparent, rgb(255 253 249 / 0.55), transparent);
   animation: skeleton-shimmer 1.5s ease-in-out infinite;
 }
 
@@ -1864,6 +1860,127 @@ h3 {
   outline-offset: 0.125rem;
 }
 
+/* ── Agent drawer ─────────────────────────────────────────────── */
+/* Global right-side surface available on every workspace view: a docked
+   grid column on desktop, a fixed overlay below the top bar on narrower
+   widths. The shell adds `.agent-shelf-open` while the drawer is open. */
+
+.agent-shelf-open .workbench-body {
+  grid-template-columns:
+    var(--wb-nav-width) minmax(0, 1fr) var(--wb-inspector-width)
+    minmax(0, var(--wb-agent-drawer-width));
+}
+
+.workbench-shell.navigator-is-collapsed.agent-shelf-open .workbench-body {
+  grid-template-columns:
+    var(--wb-nav-collapsed-width) minmax(0, 1fr) var(--wb-inspector-width)
+    minmax(0, var(--wb-agent-drawer-width));
+}
+
+.agent-drawer {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--wb-surface);
+  border-left: 0.0625rem solid var(--wb-border);
+}
+
+/* Floating variant for pages without the workspace grid (project overview):
+   fixed to the right edge below the top bar instead of a grid column. */
+.agent-drawer-floating {
+  position: fixed;
+  top: var(--wb-topbar-height, 3.5rem);
+  right: 0;
+  bottom: 0;
+  width: min(23.75rem, 100vw);
+  z-index: 40;
+  box-shadow: -0.5rem 0 1.5rem rgb(0 0 0 / 0.08);
+}
+
+.agent-drawer .agent-chat {
+  max-width: none;
+  min-width: 0;
+  min-height: 0;
+  gap: var(--wb-space-3);
+  padding: var(--wb-space-4);
+  overflow-y: auto;
+}
+
+/* Narrow drawer: stack the conversation list above the message surface
+   instead of the wide two-column layout used on a full page. */
+.agent-drawer .agent-chat-layout {
+  flex-direction: column;
+}
+
+.agent-drawer .agent-conversation-list {
+  width: 100%;
+}
+
+.agent-drawer .agent-conversation-items {
+  max-height: 11rem;
+}
+
+.agent-drawer-guidance {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: var(--wb-space-2);
+  padding: var(--wb-space-5) var(--wb-space-4);
+}
+
+.agent-drawer-guidance-copy {
+  margin: 0;
+  color: var(--wb-muted);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.agent-drawer-toggle[aria-expanded="true"] {
+  background: var(--wb-accent-wash);
+  border-color: var(--wb-accent-soft);
+}
+
+.agent-drawer-fab {
+  position: fixed;
+  right: var(--wb-space-5);
+  bottom: var(--wb-space-5);
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border: 0.0625rem solid var(--wb-border-strong);
+  border-radius: 9999px;
+  background: var(--wb-accent);
+  color: var(--wb-on-ink);
+  box-shadow: var(--wb-shadow-panel);
+  cursor: pointer;
+}
+
+.agent-context-strip {
+  margin: 0;
+  padding: var(--wb-space-2) var(--wb-space-3);
+  border: 0.0625rem solid var(--wb-border);
+  border-radius: var(--wb-radius-sm);
+  background: var(--wb-surface-muted);
+  color: var(--wb-muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 63.999rem) {
+  .agent-drawer {
+    position: fixed;
+    top: var(--wb-topbar-height);
+    right: 0;
+    bottom: 0;
+    width: min(var(--wb-agent-drawer-width), 100vw);
+    z-index: 20;
+    box-shadow: var(--wb-shadow-drawer);
+  }
+}
+
 /* ── Scene Canvas ──────────────────────────────────────────────── */
 
 .scene-canvas {
@@ -2361,7 +2478,9 @@ h3 {
   padding: var(--wb-space-4);
   border: 0.125rem dashed var(--wb-border);
   border-radius: var(--wb-radius);
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
 }
 
 .reference-list-section.reference-dragging {
@@ -2595,9 +2714,15 @@ h3 {
   white-space: nowrap;
 }
 
-.scene-chip-green { color: var(--wb-success); }
-.scene-chip-amber { color: var(--wb-warning); }
-.scene-chip-red { color: var(--wb-danger); }
+.scene-chip-green {
+  color: var(--wb-success);
+}
+.scene-chip-amber {
+  color: var(--wb-warning);
+}
+.scene-chip-red {
+  color: var(--wb-danger);
+}
 
 .scene-map-layout {
   display: grid;
@@ -2695,10 +2820,18 @@ h3 {
   box-sizing: content-box;
 }
 
-.scene-node-released::before { background: var(--wb-success); }
-.scene-node-draft::before { background: var(--wb-warning); }
-.scene-node-blocked::before { background: var(--wb-danger); }
-.scene-node-selected::before { box-shadow: 0 0 0 0.1875rem var(--wb-accent-wash); }
+.scene-node-released::before {
+  background: var(--wb-success);
+}
+.scene-node-draft::before {
+  background: var(--wb-warning);
+}
+.scene-node-blocked::before {
+  background: var(--wb-danger);
+}
+.scene-node-selected::before {
+  box-shadow: 0 0 0 0.1875rem var(--wb-accent-wash);
+}
 
 .scene-row {
   border: 0.0625rem solid var(--wb-border);
@@ -2768,8 +2901,14 @@ h3 {
   white-space: nowrap;
 }
 
-.scene-badge-changed { color: var(--wb-success); border-color: var(--wb-ready-border); }
-.scene-badge-intro { color: var(--wb-warning); border-color: var(--wb-loading-border); }
+.scene-badge-changed {
+  color: var(--wb-success);
+  border-color: var(--wb-ready-border);
+}
+.scene-badge-intro {
+  color: var(--wb-warning);
+  border-color: var(--wb-loading-border);
+}
 .scene-badge-adopt-adopted_current {
   color: var(--wb-success);
   background: var(--wb-ready-surface);
@@ -2794,8 +2933,12 @@ h3 {
   overflow-wrap: anywhere;
 }
 
-.scene-hash-label { color: var(--wb-muted); }
-.scene-hash-arrow { color: var(--wb-muted); }
+.scene-hash-label {
+  color: var(--wb-muted);
+}
+.scene-hash-arrow {
+  color: var(--wb-muted);
+}
 
 .scene-render-state {
   display: inline-flex;
@@ -2813,12 +2956,24 @@ h3 {
   display: inline-block;
 }
 
-.scene-render-state[data-tone="released"] { color: var(--wb-success); }
-.scene-render-state[data-tone="released"] .scene-render-dot { background: var(--wb-success); }
-.scene-render-state[data-tone="draft"] { color: var(--wb-warning); }
-.scene-render-state[data-tone="draft"] .scene-render-dot { background: var(--wb-warning); }
-.scene-render-state[data-tone="blocked"] { color: var(--wb-danger); }
-.scene-render-state[data-tone="blocked"] .scene-render-dot { background: var(--wb-danger); }
+.scene-render-state[data-tone="released"] {
+  color: var(--wb-success);
+}
+.scene-render-state[data-tone="released"] .scene-render-dot {
+  background: var(--wb-success);
+}
+.scene-render-state[data-tone="draft"] {
+  color: var(--wb-warning);
+}
+.scene-render-state[data-tone="draft"] .scene-render-dot {
+  background: var(--wb-warning);
+}
+.scene-render-state[data-tone="blocked"] {
+  color: var(--wb-danger);
+}
+.scene-render-state[data-tone="blocked"] .scene-render-dot {
+  background: var(--wb-danger);
+}
 
 /* ── Scene card editor (plan Step 5) ─────────────────────────────── */
 
@@ -2951,11 +3106,21 @@ h3 {
   overflow-wrap: anywhere;
 }
 
-.scene-strip-ch-group { border-top: 0.125rem solid var(--wb-accent-deep); }
-.scene-strip-cell.milestone { border-color: var(--wb-success); }
-.scene-strip-cell.high { border-color: var(--wb-danger); }
-.scene-strip-cell.high .scene-strip-val { color: var(--wb-danger); }
-.scene-strip-cell.low .scene-strip-val { color: var(--wb-success); }
+.scene-strip-ch-group {
+  border-top: 0.125rem solid var(--wb-accent-deep);
+}
+.scene-strip-cell.milestone {
+  border-color: var(--wb-success);
+}
+.scene-strip-cell.high {
+  border-color: var(--wb-danger);
+}
+.scene-strip-cell.high .scene-strip-val {
+  color: var(--wb-danger);
+}
+.scene-strip-cell.low .scene-strip-val {
+  color: var(--wb-success);
+}
 
 .scene-legend {
   display: flex;
@@ -2975,16 +3140,24 @@ h3 {
   vertical-align: baseline;
 }
 
-.scene-legend-released { background: var(--wb-success); }
-.scene-legend-draft { background: var(--wb-warning); }
-.scene-legend-blocked { background: var(--wb-danger); }
+.scene-legend-released {
+  background: var(--wb-success);
+}
+.scene-legend-draft {
+  background: var(--wb-warning);
+}
+.scene-legend-blocked {
+  background: var(--wb-danger);
+}
 .scene-legend-chapter {
   background: var(--wb-accent-deep);
   border-radius: 0.125rem;
   width: 0.625rem;
 }
 
-.scene-legend-hint { color: var(--wb-muted); }
+.scene-legend-hint {
+  color: var(--wb-muted);
+}
 
 /* ── Scene Inspector (plan 9.2.2) ─────────────────────────────── */
 
@@ -3191,12 +3364,29 @@ h3 {
   overflow-wrap: anywhere;
 }
 
-.scene-diff-ent { font-weight: 700; }
-.scene-diff-attr { color: var(--wb-muted); }
-.scene-diff-before { color: var(--wb-danger); text-decoration: line-through; opacity: 0.75; }
-.scene-diff-arrow { color: var(--wb-muted); padding: 0 0.25rem; }
-.scene-diff-after { color: var(--wb-success); font-weight: 700; }
-.scene-diff-removed { color: var(--wb-danger); font-style: italic; }
+.scene-diff-ent {
+  font-weight: 700;
+}
+.scene-diff-attr {
+  color: var(--wb-muted);
+}
+.scene-diff-before {
+  color: var(--wb-danger);
+  text-decoration: line-through;
+  opacity: 0.75;
+}
+.scene-diff-arrow {
+  color: var(--wb-muted);
+  padding: 0 0.25rem;
+}
+.scene-diff-after {
+  color: var(--wb-success);
+  font-weight: 700;
+}
+.scene-diff-removed {
+  color: var(--wb-danger);
+  font-style: italic;
+}
 
 .scene-narrative-hint {
   display: grid;
@@ -3344,7 +3534,9 @@ h3 {
   color: var(--wb-muted);
 }
 
-.scene-assertion-action { font-weight: 700; }
+.scene-assertion-action {
+  font-weight: 700;
+}
 
 .scene-assertion-pos {
   margin-left: auto;
@@ -3384,7 +3576,9 @@ h3 {
   font-family: var(--wb-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
 }
 
-.scene-edge-arrow { color: var(--wb-muted); }
+.scene-edge-arrow {
+  color: var(--wb-muted);
+}
 
 /* ── CompiledSceneContract hashes ─────────────────────────────── */
 
@@ -3413,7 +3607,9 @@ h3 {
   font-family: var(--wb-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
 }
 
-.scene-chip-discourse { color: var(--wb-focus); }
+.scene-chip-discourse {
+  color: var(--wb-focus);
+}
 
 /* ── Settings view (author LLM panel) ─────────────────────────── */
 
@@ -3488,9 +3684,9 @@ h3 {
   font-weight: 700;
 }
 
-.settings-field input[type='text'],
-.settings-field input[type='password'],
-.settings-field input[type='number'] {
+.settings-field input[type="text"],
+.settings-field input[type="password"],
+.settings-field input[type="number"] {
   padding: var(--wb-space-2) var(--wb-space-3);
   color: var(--wb-ink);
   background: var(--wb-surface);

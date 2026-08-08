@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { LocatableStoryTimestamp, StoryTimestamp } from '../types/entity.js';
 
 export const timeUnitSchema = z.enum(['minute', 'hour', 'day', 'week', 'month']);

@@ -20,7 +20,8 @@ interface MockLogicFlowInstance {
 }
 const mocks = vi.hoisted(() => {
   const instances: MockLogicFlowInstance[] = [];
-  const createInstance = (_options: unknown): MockLogicFlowInstance => {
+  // biome-ignore lint/complexity/useArrowFunction: vitest4 cannot `new` an arrow fn
+  const createInstance = function (_options: unknown): MockLogicFlowInstance {
     const instance: MockLogicFlowInstance = {
       render: vi.fn(),
       on: vi.fn(),

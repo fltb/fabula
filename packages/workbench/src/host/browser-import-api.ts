@@ -18,6 +18,7 @@
 // never holds an unregistered project.
 // ============================================================================
 
+import type { Stats } from 'node:fs';
 import { cp, readFile, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -103,7 +104,13 @@ class BrowserImportApiImpl {
       ],
       defaultProjectId: projectId,
       providers: {},
-      network: { mode: 'loopback', port: 8787, allowedHosts: [], allowedOrigins: [], unixSocket: null },
+      network: {
+        mode: 'loopback',
+        port: 8787,
+        allowedHosts: [],
+        allowedOrigins: [],
+        unixSocket: null,
+      },
       referenceLimits: { ...DEFAULT_WORKBENCH_REFERENCE_LIMITS },
       operationLimits: { ...DEFAULT_WORKBENCH_OPERATION_LIMITS },
       agent: { ...DEFAULT_WORKBENCH_AGENT_CONFIGURATION },
@@ -127,7 +134,7 @@ function importHandler(api: BrowserImportApiImpl): Handler<HostListenerEnv> {
     const sourcePath = body.sourcePath;
 
     // 404 — the source must exist and be a directory.
-    let sourceStat;
+    let sourceStat: Stats;
     try {
       sourceStat = await stat(sourcePath);
     } catch {
@@ -158,10 +165,7 @@ function importHandler(api: BrowserImportApiImpl): Handler<HostListenerEnv> {
     }
     const projectId = nova.project;
     if (!PROJECT_ID_PATTERN.test(projectId)) {
-      return errorResponse(
-        'PROJECT_IMPORT_INVALID',
-        `"${projectId}" is not a valid project id.`,
-      );
+      return errorResponse('PROJECT_IMPORT_INVALID', `"${projectId}" is not a valid project id.`);
     }
     const displayName =
       typeof nova.title === 'string' && nova.title.length > 0 ? nova.title : projectId;
@@ -169,10 +173,7 @@ function importHandler(api: BrowserImportApiImpl): Handler<HostListenerEnv> {
 
     // 409 — the managed target must not exist (on disk or in the registry).
     const active = await api.options.configuration.readActive();
-    if (
-      active !== null &&
-      active.configuration.projects.some((project) => project.projectId === projectId)
-    ) {
+    if (active?.configuration.projects.some((project) => project.projectId === projectId)) {
       return errorResponse(
         'PROJECT_IMPORT_CONFLICT',
         `Project "${projectId}" is already registered in the managed root.`,
@@ -193,9 +194,7 @@ function importHandler(api: BrowserImportApiImpl): Handler<HostListenerEnv> {
     try {
       await cp(sourcePath, target, { recursive: true });
       await Promise.all(
-        EXCLUDED_TREE_NAMES.map((name) =>
-          rm(join(target, name), { recursive: true, force: true }),
-        ),
+        EXCLUDED_TREE_NAMES.map((name) => rm(join(target, name), { recursive: true, force: true })),
       );
     } catch {
       await rm(target, { recursive: true, force: true }).catch(() => {});

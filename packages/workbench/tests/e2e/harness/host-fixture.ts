@@ -637,7 +637,7 @@ export async function startHostFixture(options: HostFixtureOptions = {}): Promis
     let healthOk = false;
     while (Date.now() < healthDeadline) {
       const response = await fetch(`${ready.endpoint}/health`).catch(() => null);
-      if (response !== null && response.ok) {
+      if (response?.ok) {
         const payload = (await response.json().catch(() => null)) as { status?: unknown } | null;
         if (payload !== null && typeof payload === 'object' && payload.status === 'ok') {
           healthOk = true;

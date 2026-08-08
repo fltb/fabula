@@ -5,6 +5,7 @@ import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { arch, platform } from 'node:os';
 import { dirname, relative, resolve } from 'node:path';
 import { build, context } from 'esbuild';
+
 const watchMode = process.argv.includes('--watch');
 
 const root = dirname(new URL(import.meta.url).pathname);

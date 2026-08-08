@@ -8,7 +8,7 @@
 // 3. WorldState.entities[entityId] — runtime instances
 // ============================================================================
 
-import type { z } from 'zod';
+import type { z } from 'zod/v3';
 import type { EntityId, EntityKind, EntityRuntimeState, EntityTypeRef } from './entity.js';
 import type { PropositionCatalog } from './knowledge.js';
 import type { RelationshipDeclaration, RelationshipTypeCatalog } from './relationship.js';

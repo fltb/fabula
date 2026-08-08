@@ -5,7 +5,7 @@
 // NarrativeNode, DiscourseNode, CoverageManifest.
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { evaluationResultSchema } from './knowledge.js';
 
 // ─── AbsenceBasis — exactly 4 values ─────────────────────────────────────────

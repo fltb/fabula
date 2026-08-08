@@ -17,7 +17,7 @@
 // ============================================================================
 
 import { describe, expect, it } from 'vitest';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { sha256 } from '../../src/cache/pure-sha256.ts';
 import { InteractionManager } from '../../src/pipeline/interaction-gate.ts';
 import {

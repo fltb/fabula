@@ -2,8 +2,12 @@ import { cleanup, render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import YAML from 'yaml';
-import type { SceneDetailViewV1, SceneMapViewV1, SceneSummaryRowV1 } from '../../src/contracts/index.js';
 import { SceneMap } from '../../src/client/SceneMap';
+import type {
+  SceneDetailViewV1,
+  SceneMapViewV1,
+  SceneSummaryRowV1,
+} from '../../src/contracts/index.js';
 
 const mocks = vi.hoisted(() => ({
   replaceWorkingDocumentText: vi.fn(),
@@ -35,7 +39,12 @@ const E1_YAML = [
   '',
 ].join('\n');
 
-function row(eventId: string, title: string, sceneType: string, storyTime: string): SceneSummaryRowV1 {
+function row(
+  eventId: string,
+  title: string,
+  sceneType: string,
+  storyTime: string,
+): SceneSummaryRowV1 {
   return {
     eventId,
     title,
@@ -64,10 +73,7 @@ const map: SceneMapViewV1 = {
       title: 'Opening',
       summary: '',
       plannedScenes: 1,
-      scenes: [
-        row('E1', 'Encounter', 'linear', 'day_1'),
-        row('E2', 'Dialogue', 'linear', 'day_2'),
-      ],
+      scenes: [row('E1', 'Encounter', 'linear', 'day_1'), row('E2', 'Dialogue', 'linear', 'day_2')],
     },
   ],
   strips: { threadProgress: [], emotionalValence: [], greyLines: [] },

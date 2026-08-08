@@ -2,7 +2,7 @@
 // Novalistically — STATE-4 Knowledge/Belief Zod Schemas
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import {
   authoredStoryTimeSchema,
   locatableStoryTimestampSchema,

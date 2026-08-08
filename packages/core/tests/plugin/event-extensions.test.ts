@@ -15,8 +15,7 @@
 
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { z } from 'zod';
-import type { ProjectSourceSnapshotV1 } from '../../src/contracts/source.ts';
+import { z } from 'zod/v3';
 import { EntityMapper } from '../../src/entity/index.js';
 import { compileCanonicalRuntime, loadCanonicalProject } from '../../src/entity/project-runtime.ts';
 import { analyzeSource, type SourceAnalysisOptions } from '../../src/entity/source-analysis.ts';

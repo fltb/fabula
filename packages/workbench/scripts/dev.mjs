@@ -66,6 +66,10 @@ const env = {
   WORKBENCH_ALLOW_BOOTSTRAP: pick(process.env.WORKBENCH_ALLOW_BOOTSTRAP, 'true'),
   WORKBENCH_DATABASE_PATH: databasePath,
   WORKBENCH_VITE_PORT: vitePort,
+  // Agent-first dev UX: the parity gate stays production-only, but the dev
+  // loop exercises the agent surface by default (override with env).
+  WORKBENCH_AGENT_READY: pick(process.env.WORKBENCH_AGENT_READY, 'true'),
+  WORKBENCH_AGENT_ENABLED: pick(process.env.WORKBENCH_AGENT_ENABLED, 'true'),
   WORKBENCH_ALLOWED_ORIGINS: pick(
     process.env.WORKBENCH_ALLOWED_ORIGINS,
     `http://127.0.0.1:${vitePort}`,
@@ -145,11 +149,15 @@ const restartHost = () => {
 // Spawn vite under node directly (no `npx` shim): the shim process would
 // orphan vite on SIGTERM in some environments, and finish()'s SIGKILL could
 // never reach the grandchild, leaving the dev port occupied after shutdown.
-const vite = spawn(process.execPath, [resolve(repoRoot, 'node_modules/vite/bin/vite.js'), '--config', 'vite.config.ts'], {
-  cwd: root,
-  env,
-  stdio: 'inherit',
-});
+const vite = spawn(
+  process.execPath,
+  [resolve(repoRoot, 'node_modules/vite/bin/vite.js'), '--config', 'vite.config.ts'],
+  {
+    cwd: root,
+    env,
+    stdio: 'inherit',
+  },
+);
 const watcher = spawn(process.execPath, ['build.host.mjs', '--watch'], {
   cwd: root,
   env,

@@ -2,7 +2,7 @@
 // Novalistically — S7a: Idea IR — Zod Schema Definitions
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 // ─── ThematicIntent ─────────────────────────────────────────────────────────
 

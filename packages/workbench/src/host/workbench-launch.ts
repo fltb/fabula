@@ -29,6 +29,8 @@ import { mkdir, readFile, stat } from 'node:fs/promises';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
+import type { StreamFn } from '@earendil-works/pi-agent-core';
+import type { Api, Model } from '@earendil-works/pi-ai';
 import {
   type LLMProvider,
   PluginExtensionSchemaRegistrar,
@@ -54,8 +56,6 @@ import {
   DEFAULT_WORKBENCH_RENDER_POLICY,
   type WorkbenchReferenceLimitsV1,
 } from '@novalistically/workbench-protocol';
-import type { Api, Model } from '@earendil-works/pi-ai';
-import type { StreamFn } from '@earendil-works/pi-agent-core';
 import {
   AUTHORING_CONTRACT_VERSION,
   type AuthoringActivityEventV1,
@@ -65,7 +65,6 @@ import type {
   BrowserSessionPrincipalV1,
   WorkbenchProjectFeatureV1,
 } from '../contracts/browser-api.js';
-import type { SceneAdoptionViewV1 } from '../contracts/scene.js';
 import type {
   ConfigChangeRequestV1,
   ConfigOperationReceiptV1,
@@ -84,6 +83,7 @@ import type {
   PersistencePayloads,
   PersistenceResults,
 } from '../contracts/persistence.js';
+import type { SceneAdoptionViewV1 } from '../contracts/scene.js';
 import type { SourceStudioStateV1 } from '../contracts/source-studio.js';
 import { createAgentStore } from '../persistence/agent-store.js';
 import type { PersistenceMessagePort, PersistenceResponse } from '../persistence/messages.js';
@@ -92,8 +92,8 @@ import { createProjectPublicationStore } from '../persistence/project-publicatio
 import { PersistenceWorkerClient } from '../persistence/worker-client.js';
 import { createAdminApi, type PluginDiscoveryAdminPort } from './admin-api.js';
 import {
-  AgentCapabilityService,
   type AgentCapabilityGrant,
+  AgentCapabilityService,
   createAgentDurableAudit,
   createCapabilityPersistence,
   createDurableAuditSink,
@@ -105,7 +105,6 @@ import {
   type WorkbenchAgentRunService,
 } from './agent/run-service.js';
 import { createAuthPersistence, DEFAULT_SESSION_TTL_MS, LocalAuthService } from './auth/index.js';
-import { projectCanonicalGraphRuntime } from './graph-projection.js';
 import { receiptFromRecord } from './authoring/coordinator.js';
 import {
   createBrowserAuthoringMutationPort,
@@ -127,15 +126,14 @@ import {
 } from './browser-authoring-api.js';
 import { createBrowserImportApi } from './browser-import-api.js';
 import { createBrowserPublicationApi } from './browser-publication-api.js';
-import { createBrowserReferenceApi } from './browser-reference-api.js';
 import { createBrowserPrincipalResolver } from './browser-read-api.js';
-import { createBrowserSceneApi } from './browser-scene-api.js';
+import { createBrowserReferenceApi } from './browser-reference-api.js';
 import { createBrowserReviewApi } from './browser-review-api.js';
+import { createBrowserSceneApi } from './browser-scene-api.js';
 import { ConfigurationFileStore } from './configuration-file-store.js';
 import { type ActiveConfiguration, ConfigurationChangeService } from './configuration-service.js';
 import { createProjectCoreRuntime } from './core-runtime.js';
-import { prepareSceneAdoption } from './scene-adoption.js';
-import { loadSceneDetail, loadSceneMap } from './scene-map-service.js';
+import { projectCanonicalGraphRuntime } from './graph-projection.js';
 import {
   createAdminMcpRegistry,
   createDeviceVerifierPersistence,
@@ -169,16 +167,15 @@ import {
   type DurableProjectMembershipService,
 } from './project-membership-service.js';
 import { createProjectSession, createProjectSessionRegistry } from './project-session.js';
-import {
-  HostProviderError,
-  HostProviderFactory,
-} from './provider-factory.js';
+import { HostProviderError, HostProviderFactory } from './provider-factory.js';
 import { createProviderCredentialStore, providerCredentialKey } from './providers/index.js';
 import {
   createProjectPublicationService,
   type ProjectPublicationService,
 } from './publication/publication-service.js';
 import { createHostReviewService, type HostReviewService } from './review/review-service.js';
+import { prepareSceneAdoption } from './scene-adoption.js';
+import { loadSceneDetail, loadSceneMap } from './scene-map-service.js';
 import { createHostServer, type HostServer, type HostServerOptions } from './server.js';
 import { createSetupApi, createSetupStatusBuilder, type SetupStatusBuilder } from './setup-api.js';
 import {
@@ -222,9 +219,7 @@ export interface WorkbenchLaunchConfig extends HostServerOptions {
    * tool-calling model for the parity fixture). Absent = production
    * construction from the project profile configuration + credential.
    */
-  readonly agentModel?:
-    | { readonly model: Model<Api>; readonly streamFn: StreamFn }
-    | undefined;
+  readonly agentModel?: { readonly model: Model<Api>; readonly streamFn: StreamFn } | undefined;
   /**
   /** Test-only provider factory injection. Production composes the
    * credential-backed {@link HostProviderFactory}; a double injected here
@@ -240,6 +235,8 @@ export interface WorkbenchLaunchConfig extends HostServerOptions {
    * the Agent surface stays fully hidden until the parity matrix passes.
    */
   readonly agentReady?: boolean | (() => boolean | Promise<boolean>);
+  /** Dev-only: force the agent-chat capability regardless of configuration. */
+  readonly agentEnabledOverride?: boolean;
   /** Absolute path to the built persistence worker entry; defaults to the bundled `dist/host/persistence/worker.js`. */
   readonly persistenceWorkerEntry?: string;
   /** Bound on persistence worker termination during close; default 5s. */
@@ -685,6 +682,14 @@ export function parseWorkbenchLaunchConfig(
     host,
     lan,
     port,
+    // Dev-only Agent override channel: production never hardcodes agentReady
+    // (parity gate), but the dev loop must exercise the agent-first UX.
+    ...(opt(env.WORKBENCH_AGENT_READY) === undefined
+      ? {}
+      : { agentReady: env.WORKBENCH_AGENT_READY === 'true' }),
+    ...(opt(env.WORKBENCH_AGENT_ENABLED) === undefined
+      ? {}
+      : { agentEnabledOverride: env.WORKBENCH_AGENT_ENABLED === 'true' }),
     mutation: {
       allowedHosts: allowedHostsRaw.split(',').map((x) => x.trim()),
       allowedOrigins: allowedOriginsRaw?.split(',').map((x) => x.trim()),
@@ -859,7 +864,8 @@ export async function startWorkbench(
     // agent.enabled is true AND the parity flag.
     const agentReadyValue = await resolveAgentReady(config.agentReady);
     const agentChatEnabled =
-      activeConfiguration?.agent.enabled === true && agentReadyValue === true;
+      (config.agentEnabledOverride === true || activeConfiguration?.agent.enabled === true) &&
+      agentReadyValue === true;
 
     // Host-only provider construction: the API key is read exclusively from
     // the credential store and passed as an explicit AI SDK option; the
@@ -1324,9 +1330,8 @@ export async function startWorkbench(
           // from registered services only). Tests/parity inject a
           // deterministic model; a missing baseUrl/model throws and the
           // Agent surface stays absent for the project.
-          let agentModel:
-            | { readonly model: Model<Api>; readonly streamFn: StreamFn }
-            | null = config.agentModel ?? null;
+          let agentModel: { readonly model: Model<Api>; readonly streamFn: StreamFn } | null =
+            config.agentModel ?? null;
           if (agentModel === null) {
             try {
               agentModel = createPiAgentModel({
@@ -1375,7 +1380,7 @@ export async function startWorkbench(
               // Reference library tools (plan 3.8): threaded only while
               // referenceLimits.enabled — referencePortFor returns undefined
               // otherwise, preserving the registry's fail-closed filter.
-              ...(await referencePortFor(project.projectId) === undefined
+              ...((await referencePortFor(project.projectId)) === undefined
                 ? {}
                 : { reference: await referencePortFor(project.projectId) }),
             });
@@ -1516,180 +1521,176 @@ export async function startWorkbench(
     // empty workspace can query the session and create the first project.
     // Every port is per-projectId and degrades to null/empty when absent.
     const browser: HostServerOptions['browser'] = {
-            access: projectAccess,
-            principal,
-            authorization,
-            catalog,
-            capabilities: {
-              loadCapabilities: async (projectId) => ({
-                version: 1 as const,
+      access: projectAccess,
+      principal,
+      authorization,
+      catalog,
+      capabilities: {
+        loadCapabilities: async (projectId) => ({
+          version: 1 as const,
+          projectId,
+          // Derived from registered services only: a project whose
+          // Agent run service could not be constructed (e.g. missing
+          // provider credential) never claims the capability.
+          features: launchFeatures.filter(
+            (feature) => feature !== 'agent-chat' || agentRunServices.has(projectId),
+          ),
+        }),
+      },
+      overview: {
+        loadOverview: async (projectId) => {
+          const session = sessions.get(projectId);
+          const project = projectConfiguration.get(projectId);
+          const record = await persistence.client.request('getProject', { projectId });
+          if (session === null || project === undefined || record === null) return null;
+          return {
+            version: 1 as const,
+            projectId,
+            metadata: {
+              displayName: project.displayName,
+              createdAt: record.createdAt,
+              updatedAt: record.updatedAt,
+            },
+            projection: session.projection,
+            activity: { busy: session.busy, hasHumanPresence: session.hasHumanPresence },
+            generatedAt: new Date().toISOString(),
+          };
+        },
+      },
+      graph: {
+        project: async (
+          projectId,
+          selector: Parameters<typeof projectCanonicalGraphRuntime>[1],
+        ) => {
+          const session = sessions.get(projectId);
+          if (session === null || session.source === null) throw new Error('project unavailable');
+          return projectCanonicalGraphRuntime(session.source, selector);
+        },
+      },
+      source: {
+        loadSourceStudio: async (projectId): Promise<SourceStudioStateV1 | null> => {
+          const session = sessions.get(projectId);
+          const runtime = authoring.get(projectId);
+          if (session === null || runtime === undefined) return null;
+          return {
+            version: 1,
+            projectId,
+            accepted: session.projection,
+            working: {
+              documents: runtime.documents.descriptors().map((document) => ({
                 projectId,
-                // Derived from registered services only: a project whose
-                // Agent run service could not be constructed (e.g. missing
-                // provider credential) never claims the capability.
-                features: launchFeatures.filter(
-                  (feature) => feature !== 'agent-chat' || agentRunServices.has(projectId),
-                ),
-              }),
+                documentId: document.documentId,
+                kind: document.kind,
+                available: document.available,
+              })),
             },
-            overview: {
-              loadOverview: async (projectId) => {
-                const session = sessions.get(projectId);
-                const project = projectConfiguration.get(projectId);
-                const record = await persistence.client.request('getProject', { projectId });
-                if (session === null || project === undefined || record === null) return null;
-                return {
-                  version: 1 as const,
-                  projectId,
-                  metadata: {
-                    displayName: project.displayName,
-                    createdAt: record.createdAt,
-                    updatedAt: record.updatedAt,
-                  },
-                  projection: session.projection,
-                  activity: { busy: session.busy, hasHumanPresence: session.hasHumanPresence },
-                  generatedAt: new Date().toISOString(),
-                };
-              },
-            },
-            graph: {
-              project: async (
-                projectId,
-                selector: Parameters<typeof projectCanonicalGraphRuntime>[1],
-              ) => {
-                const session = sessions.get(projectId);
-                if (session === null || session.source === null)
-                  throw new Error('project unavailable');
-                return projectCanonicalGraphRuntime(session.source, selector);
-              },
-            },
-            source: {
-              loadSourceStudio: async (projectId): Promise<SourceStudioStateV1 | null> => {
-                const session = sessions.get(projectId);
-                const runtime = authoring.get(projectId);
-                if (session === null || runtime === undefined) return null;
+            generatedAt: new Date().toISOString(),
+          };
+        },
+      },
+      // Reference library surface (plan 9.1): present only while
+      // referenceLimits.enabled, so a disabled library registers no
+      // read or mutation route at all (the feature also disappears).
+      ...(referencesEnabled
+        ? {
+            references: {
+              loadReferences: async (projectId, query) => {
+                const reference = await referencePortFor(projectId);
+                if (reference === undefined) return null;
+                const listed = await reference.list({ version: 1, ...query });
                 return {
                   version: 1,
                   projectId,
-                  accepted: session.projection,
-                  working: {
-                    documents: runtime.documents.descriptors().map((document) => ({
-                      projectId,
-                      documentId: document.documentId,
-                      kind: document.kind,
-                      available: document.available,
-                    })),
-                  },
-                  generatedAt: new Date().toISOString(),
+                  items: listed.items,
+                  nextCursor: listed.nextCursor,
                 };
               },
+              get: async (projectId, referenceId) => {
+                const reference = await referencePortFor(projectId);
+                if (reference === undefined) return null;
+                const result = await reference.get({ version: 1, referenceId });
+                return result === null
+                  ? { version: 1, projectId, item: null }
+                  : { version: 1, projectId, item: result.item };
+              },
+              readContent: async (projectId, referenceId, query) => {
+                const reference = await referencePortFor(projectId);
+                if (reference === undefined) return null;
+                const result = await reference.readContent({
+                  version: 1,
+                  referenceId,
+                  offset: query.offset,
+                  limit: query.limit,
+                });
+                return { version: 1, projectId, content: result.content };
+              },
             },
-            // Reference library surface (plan 9.1): present only while
-            // referenceLimits.enabled, so a disabled library registers no
-            // read or mutation route at all (the feature also disappears).
-            ...(referencesEnabled
-              ? {
-                  references: {
-                    loadReferences: async (projectId, query) => {
-                      const reference = await referencePortFor(projectId);
-                      if (reference === undefined) return null;
-                      const listed = await reference.list({ version: 1, ...query });
-                      return {
-                        version: 1,
-                        projectId,
-                        items: listed.items,
-                        nextCursor: listed.nextCursor,
-                      };
-                    },
-                    get: async (projectId, referenceId) => {
-                      const reference = await referencePortFor(projectId);
-                      if (reference === undefined) return null;
-                      const result = await reference.get({ version: 1, referenceId });
-                      return result === null
-                        ? { version: 1, projectId, item: null }
-                        : { version: 1, projectId, item: result.item };
-                    },
-                    readContent: async (projectId, referenceId, query) => {
-                      const reference = await referencePortFor(projectId);
-                      if (reference === undefined) return null;
-                      const result = await reference.readContent({
-                        version: 1,
-                        referenceId,
-                        offset: query.offset,
-                        limit: query.limit,
-                      });
-                      return { version: 1, projectId, content: result.content };
-                    },
-                  },
-                }
-              : {}),
-            // Scene Canvas adoption preview (plan 5.2): the route mounts only
-            // under the `scene-canvas` feature (always-on today). The port
-            // bridges the Host-only `prepareSceneAdoption` service, so the
-            // preview is always derived from the persisted released revision
-            // by the project session's Core execution repository.
-            sceneAdoption: launchFeatures.includes('scene-canvas')
-              ? {
-                  prepare: async (input) => {
-                    const session = sessions.get(input.projectId);
-                    if (session === null) {
-                      return {
-                        ok: false as const,
-                        code: 'REVISION_NOT_FOUND' as const,
-                        message: 'The project session is not open.',
-                      };
-                    }
-                    return prepareSceneAdoption(
-                      { execution: session.runtime.services.execution },
-                      input,
-                    );
-                  },
-                }
-              : undefined,
-            // Scene Map surface (plan 9.2): the scene-map / scene-detail GET
-            // routes mount under the `scene-map` feature (always-on). The
-            // port derives every row from the session's accepted source, the
-            // per-project canonical state projection (diff counts) and the
-            // session's Core execution repository (accepted scene hashes).
-            sceneMap: launchFeatures.includes('scene-map')
-              ? {
-                  loadSceneMap: async (projectId) => {
-                    const session = sessions.get(projectId);
-                    const projection = stateProjections.get(projectId);
-                    if (session === null || projection === undefined) return null;
-                    return loadSceneMap({
-                      projectId,
-                      session,
-                      projection,
-                      execution: session.runtime.services.execution,
-                    });
-                  },
-                  loadSceneDetail: async (projectId, eventId) => {
-                    const session = sessions.get(projectId);
-                    const projection = stateProjections.get(projectId);
-                    if (session === null || projection === undefined) {
-                      return {
-                        ok: false as const,
-                        code: 'SCENE_UNAVAILABLE' as const,
-                        message: 'The project session is not open.',
-                      };
-                    }
-                    return loadSceneDetail({
-                      projectId,
-                      session,
-                      projection,
-                      execution: session.runtime.services.execution,
-                      eventId,
-                      // The scene card form edits the working layer; the
-                      // authoring runtime's document store materializes it
-                      // (seeded document id === manifest logical path).
-                      workingContent: async (documentId) =>
-                        authoring.get(projectId)?.documents.materializeDocument(documentId) ?? null,
-                    });
-                  },
-                }
-              : undefined,
-          };
+          }
+        : {}),
+      // Scene Canvas adoption preview (plan 5.2): the route mounts only
+      // under the `scene-canvas` feature (always-on today). The port
+      // bridges the Host-only `prepareSceneAdoption` service, so the
+      // preview is always derived from the persisted released revision
+      // by the project session's Core execution repository.
+      sceneAdoption: launchFeatures.includes('scene-canvas')
+        ? {
+            prepare: async (input) => {
+              const session = sessions.get(input.projectId);
+              if (session === null) {
+                return {
+                  ok: false as const,
+                  code: 'REVISION_NOT_FOUND' as const,
+                  message: 'The project session is not open.',
+                };
+              }
+              return prepareSceneAdoption({ execution: session.runtime.services.execution }, input);
+            },
+          }
+        : undefined,
+      // Scene Map surface (plan 9.2): the scene-map / scene-detail GET
+      // routes mount under the `scene-map` feature (always-on). The
+      // port derives every row from the session's accepted source, the
+      // per-project canonical state projection (diff counts) and the
+      // session's Core execution repository (accepted scene hashes).
+      sceneMap: launchFeatures.includes('scene-map')
+        ? {
+            loadSceneMap: async (projectId) => {
+              const session = sessions.get(projectId);
+              const projection = stateProjections.get(projectId);
+              if (session === null || projection === undefined) return null;
+              return loadSceneMap({
+                projectId,
+                session,
+                projection,
+                execution: session.runtime.services.execution,
+              });
+            },
+            loadSceneDetail: async (projectId, eventId) => {
+              const session = sessions.get(projectId);
+              const projection = stateProjections.get(projectId);
+              if (session === null || projection === undefined) {
+                return {
+                  ok: false as const,
+                  code: 'SCENE_UNAVAILABLE' as const,
+                  message: 'The project session is not open.',
+                };
+              }
+              return loadSceneDetail({
+                projectId,
+                session,
+                projection,
+                execution: session.runtime.services.execution,
+                eventId,
+                // The scene card form edits the working layer; the
+                // authoring runtime's document store materializes it
+                // (seeded document id === manifest logical path).
+                workingContent: async (documentId) =>
+                  authoring.get(projectId)?.documents.materializeDocument(documentId) ?? null,
+              });
+            },
+          }
+        : undefined,
+    };
     const yjs =
       configuredProjects.length === 0
         ? undefined
@@ -1732,7 +1733,9 @@ export async function startWorkbench(
         const project =
           active?.configuration.projects.find((entry) => entry.projectId === projectId) ??
           configuredProjects.find((entry) => entry.projectId === projectId);
-        return project === undefined ? null : managedProjectRoot(config.hostHome, project.projectId);
+        return project === undefined
+          ? null
+          : managedProjectRoot(config.hostHome, project.projectId);
       },
     });
     const adminConfiguration: McpAdminPort = createLaunchAdminPort({
@@ -1804,7 +1807,7 @@ export async function startWorkbench(
                 // Plugin activation health (plan 7.3): a live accessor so
                 // `nova_status` reports the current activation snapshot at
                 // call time; null when plugins were never activated.
-                ...(await referencePortFor(projectId) === undefined
+                ...((await referencePortFor(projectId)) === undefined
                   ? {}
                   : { reference: await referencePortFor(projectId) }),
                 plugins: () => pluginActivations.get(projectId) ?? null,
@@ -1879,6 +1882,7 @@ export async function startWorkbench(
       runtime: runtimeLifecycle,
     }).register(hostServer);
     createAdminApi({
+      hostHome: config.hostHome,
       resolver: principal,
       configuration: configurationService,
       auth,
@@ -2108,9 +2112,7 @@ export async function startWorkbench(
               });
               const source = session.source;
               const adoption: SceneAdoptionViewV1 | undefined =
-                record !== null &&
-                source !== null &&
-                record.value.sourceHash === source.sourceHash
+                record !== null && source !== null && record.value.sourceHash === source.sourceHash
                   ? {
                       version: 1,
                       eventId,
@@ -2195,7 +2197,7 @@ export async function startWorkbench(
     // Loopback device trust: passwordless owners cannot log in interactively
     // (dummy unverifiable hash), so a local process may mint a fresh session.
     // Registered only for pure loopback bindings; LAN/unix never expose it.
-    hostServer.registerPublicAuthPostRoute('/api/v1/auth/loopback', async (c) => {
+    hostServer.registerPublicAuthPostRoute('/api/v1/auth/loopback', async (_c) => {
       if (config.lan === true || config.unixSocket !== undefined) {
         return json({ error: 'loopback_only' }, 403);
       }
@@ -2335,10 +2337,12 @@ function v1Candidate(
     defaultProjectId,
     providers: active?.configuration.providers ?? {},
     network: active?.configuration.network ?? { ...DEFAULT_WORKBENCH_NETWORK },
-    referenceLimits:
-      active?.configuration.referenceLimits ?? { ...DEFAULT_WORKBENCH_REFERENCE_LIMITS },
-    operationLimits:
-      active?.configuration.operationLimits ?? { ...DEFAULT_WORKBENCH_OPERATION_LIMITS },
+    referenceLimits: active?.configuration.referenceLimits ?? {
+      ...DEFAULT_WORKBENCH_REFERENCE_LIMITS,
+    },
+    operationLimits: active?.configuration.operationLimits ?? {
+      ...DEFAULT_WORKBENCH_OPERATION_LIMITS,
+    },
     agent: active?.configuration.agent ?? { ...DEFAULT_WORKBENCH_AGENT_CONFIGURATION },
     renderPolicy: active?.configuration.renderPolicy ?? { ...DEFAULT_WORKBENCH_RENDER_POLICY },
   };

@@ -51,6 +51,7 @@ import {
   assertSafePublicationRelativePath,
   CANONICAL_PUBLICATION_ID,
   derivePublicationRelativePath,
+  type FilePublicationWriteResult,
   FilePublicationWriter,
 } from '@novalistically/node-host';
 import type { BrowserPublicationStaleReasonV1 } from '../../contracts/browser-api.js';
@@ -282,7 +283,7 @@ function parseAcceptedEnvelope(value: unknown): SceneRevisionEnvelopeV1 | null {
   return envelope as unknown as SceneRevisionEnvelopeV1;
 }
 
-function errorCodeOf(error: unknown): string {
+function _errorCodeOf(error: unknown): string {
   const code = (error as { code?: unknown } | null)?.code;
   return typeof code === 'string' && code.length > 0 ? code : 'INTERNAL_ERROR';
 }
@@ -530,7 +531,7 @@ export function createProjectPublicationService(
       if (caller.signal?.aborted === true) return { status: 'cancelled' };
       const existing = await publicationStore.get(projectId, publicationId);
       const previousBytes = existing === null ? null : await readArtifactBytes(existing);
-      let writeResult;
+      let writeResult: FilePublicationWriteResult | undefined;
       try {
         writeResult = await writer.write({ publicationId, markdown: outcome.markdown });
       } catch (error) {

@@ -8,15 +8,8 @@
 // deterministic executor/model/operation doubles.
 // ============================================================================
 
-import type { Api, AssistantMessage, AssistantMessageEvent, Model } from '@earendil-works/pi-ai';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
-import {
-  assistantPartial,
-  doneEvent,
-  scriptedStream,
-  textDelta,
-  toolCallEnd,
-} from './helpers/scripted-stream.js';
+import type { Api, AssistantMessage, AssistantMessageEvent, Model } from '@earendil-works/pi-ai';
 import { Hono } from 'hono';
 import { afterAll, describe, expect, it } from 'vitest';
 import type {
@@ -34,7 +27,6 @@ import {
   BROWSER_AGENT_RUN_RETRY_PATH,
 } from '../src/contracts/agent-chat.js';
 import { BROWSER_SESSION_HEADER } from '../src/contracts/browser-api.js';
-import type { ProjectAccessRole } from '../src/contracts/configuration.js';
 import { PROJECT_ACCESS_ROLE_GRANTS } from '../src/contracts/configuration.js';
 import type {
   ProjectToolExecutor,
@@ -55,6 +47,13 @@ import type { McpToolDefinition, McpToolResult } from '../src/host/mcp/registry.
 import type { HostServer } from '../src/host/server.js';
 import { createAgentStore } from '../src/persistence/agent-store.js';
 import { createRealPersistence } from './helpers/real-persistence.js';
+import {
+  assistantPartial,
+  doneEvent,
+  scriptedStream,
+  textDelta,
+  toolCallEnd,
+} from './helpers/scripted-stream.js';
 
 const harnesses: ReturnType<typeof createRealPersistence>[] = [];
 afterAll(async () => {
@@ -109,7 +108,7 @@ const catalog: BrowserProjectCatalog = {
 const roleResolver: BrowserAgentChatApiOptions['roleResolver'] = async (userId, projectId) =>
   userId === 'u-owner' && projectId === 'proj-a' ? 'maintainer' : null;
 
-const PRINCIPAL: ProjectToolExecutorPrincipal = {
+const _PRINCIPAL: ProjectToolExecutorPrincipal = {
   userId: 'u-owner',
   role: 'maintainer',
   capabilityVersion: 4,
@@ -205,11 +204,7 @@ function toolTurn(
 function textTurn(text: string): ScriptedTurn {
   const final = assistantPartial([{ type: 'text', text }]);
   return {
-    events: [
-      { type: 'start', partial: final },
-      textDelta(text, final),
-      doneEvent('stop', final),
-    ],
+    events: [{ type: 'start', partial: final }, textDelta(text, final), doneEvent('stop', final)],
     final,
   };
 }
@@ -457,10 +452,7 @@ describe('Browser Agent Chat API conversation/run surface', () => {
   });
 
   it('serves durable history with tool-call receipts after a completed run', async () => {
-    const h = harness([
-      toolTurn('t1', 'nova_status', {}),
-      textTurn('done'),
-    ]);
+    const h = harness([toolTurn('t1', 'nova_status', {}), textTurn('done')]);
     const conversationId = await createConversation(h.app);
     const sent = await h.app.request(
       BROWSER_AGENT_CONVERSATION_RUNS_PATH.replace(':projectId', 'proj-a').replace(
@@ -473,7 +465,7 @@ describe('Browser Agent Chat API conversation/run surface', () => {
         body: JSON.stringify({ version: 1, message: 'run me' }),
       },
     );
-    const sendBody = (await sent.json()) as AgentChatSendMessageResultV1;
+    const _sendBody = (await sent.json()) as AgentChatSendMessageResultV1;
     const outcome = await h.operations.runEntry(0);
     expect(outcome.status).toBe('succeeded');
 
@@ -502,10 +494,7 @@ describe('Browser Agent Chat API conversation/run surface', () => {
 
 describe('Browser Agent Chat API progress and cancel', () => {
   it('replays the durable store before streaming and closes for terminal runs', async () => {
-    const h = harness([
-      toolTurn('t1', 'nova_status', {}),
-      textTurn('ok'),
-    ]);
+    const h = harness([toolTurn('t1', 'nova_status', {}), textTurn('ok')]);
     const conversationId = await createConversation(h.app);
     const sent = await h.app.request(
       BROWSER_AGENT_CONVERSATION_RUNS_PATH.replace(':projectId', 'proj-a').replace(

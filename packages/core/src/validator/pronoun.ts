@@ -5,7 +5,7 @@
 // Uses structured Pass 2 analysis (narrativeChecks) for entity-scoped
 // pronoun consistency detection. No regex prose scanning.
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { PostRenderInput, ValidationIssue, Validator } from '../types/index.js';
 import {
   consumeNarrativeChecks,

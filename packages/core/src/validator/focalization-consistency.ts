@@ -7,7 +7,7 @@
 //   Pass 2's focalizationDetected. Mismatch = warning.
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type {
   AnalysisBlockRequirement,
   PostRenderInput,

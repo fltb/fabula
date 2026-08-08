@@ -2,7 +2,7 @@
 // Novalistically — Event-local game dialogue choice schemas
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { postconditionSchema } from './primitives.js';
 
 /**

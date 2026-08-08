@@ -156,7 +156,7 @@ describe('createBrowserReviewClient', () => {
       supersededAt: null,
     };
     const client = createBrowserReviewClient({
-      fetch: async (input, init) => {
+      fetch: async (input, _init) => {
         requested.push(String(input));
         return String(input).includes('/decision')
           ? json({

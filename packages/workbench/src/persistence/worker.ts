@@ -4,8 +4,8 @@ import { Kysely, SqliteDialect } from 'kysely';
 import { AUTHORING_PHASE_VALUES } from '../contracts/authoring.js';
 import { PROJECT_ACCESS_ROLES } from '../contracts/configuration.js';
 import type {
-  AgentConversationRecordV1,
   AgentConversationMessageRecordV1,
+  AgentConversationRecordV1,
   AgentRunRecordV1,
   AgentRunStatusV1,
   AgentToolCallRecordV1,
@@ -1393,10 +1393,7 @@ function requireAgentMessageContent(value: unknown): string {
 function requireAgentOptionalCallIndex(value: unknown): number | null {
   if (value == null) return null;
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 1_000_000) {
-    agentInputError(
-      'INVALID_INPUT',
-      'callIndex must be null or an integer between 0 and 1000000.',
-    );
+    agentInputError('INVALID_INPUT', 'callIndex must be null or an integer between 0 and 1000000.');
   }
   return value;
 }
@@ -3758,7 +3755,7 @@ function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
         const callIndex = requireAgentCallIndex(x.callIndex);
         const status = requireAgentToolCallStatus(x.status);
         const resultRef = requireAgentOptionalString(x.resultRef, 'resultRef', 1024);
-        const at = requireAgentTimestamp(x.at, 'at');
+        const _at = requireAgentTimestamp(x.at, 'at');
         if (status === 'pending') {
           agentInputError(
             'INVALID_INPUT',

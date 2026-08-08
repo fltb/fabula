@@ -1,4 +1,4 @@
-import type { ZodType } from 'zod';
+import type { ZodType } from 'zod/v3';
 import { compileGameDialogueTree } from '../branch/game-dialogue-tree.ts';
 import type { ProjectSourceSnapshotV1 } from '../contracts/source.js';
 import { ConfigError } from '../errors.ts';

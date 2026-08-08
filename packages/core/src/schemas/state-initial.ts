@@ -2,7 +2,7 @@
 // Novalistically — World Initial State Schema
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { knowledgeInitialStateSchema } from './knowledge.js';
 import { threadDeclarationSchema } from './thread.js';
 import { authoredLocatableStoryTimeSchema } from './timestamp.js';

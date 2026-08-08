@@ -10,7 +10,7 @@
 //   5. runtime   — programmatic in-memory overrides
 // ============================================================================
 
-import type { z } from 'zod';
+import type { z } from 'zod/v3';
 import { DEFAULT_CONFIG, type DefaultConfig } from './defaults.js';
 
 export interface ConfigLayer {

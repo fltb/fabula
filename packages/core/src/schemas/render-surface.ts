@@ -8,7 +8,7 @@
 //   (see types/render-surface.ts header for full list)
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 const branchPathSchema = z.object({
   decisions: z.array(

@@ -14,6 +14,7 @@ import { cp, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import type { Api, Model } from '@earendil-works/pi-ai';
 import type { WorkflowStatusV1 } from '@novalistically/core';
 import {
   CANONICAL_WORLD_SCHEMA,
@@ -51,7 +52,6 @@ import {
   type WorkbenchLaunchConfig,
   type WorkbenchLaunchHandle,
 } from '../src/host/workbench-launch.js';
-import type { Api, Model } from '@earendil-works/pi-ai';
 import { assistantPartial, doneEvent, scriptedStream } from './helpers/scripted-stream.js';
 
 // ─── Temp workspace helper ──────────────────────────────────────────────────
@@ -265,7 +265,6 @@ describe('parseWorkbenchLaunchConfig env policy', () => {
     expect(config.hostHome).toBe(resolve('/custom/home'));
     expect(config.databasePath).toBe(resolve('/custom/db/workbench.sqlite'));
   });
-
 
   it('keeps an unconfigured first startup loopback-only', async () => {
     // Env parsing no longer carries project/root state; the loopback-only
@@ -611,10 +610,7 @@ describe('startWorkbench setup runtime', () => {
       }),
     );
     const configuration = launchConfiguration(
-      [
-        launchProject('project-a', 'Project A'),
-        launchProject('project-b', 'Project B'),
-      ],
+      [launchProject('project-a', 'Project A'), launchProject('project-b', 'Project B')],
       { defaultProjectId: 'project-a' },
     );
     await mkdir(join(hostHome, 'config'), { recursive: true });
@@ -726,9 +722,7 @@ describe('startWorkbench setup runtime', () => {
     const fixtureRoot = resolve(packageRoot, '..', '..', 'fixtures', 'workbench-authoring');
     const projectRoot = join(hostHome, 'projects', 'launch-project');
     await cp(fixtureRoot, projectRoot, { recursive: true });
-    const configuration = launchConfiguration([
-      launchProject('launch-project', 'Launch Project'),
-    ]);
+    const configuration = launchConfiguration([launchProject('launch-project', 'Launch Project')]);
     await mkdir(join(hostHome, 'config'), { recursive: true });
     await writeFile(
       join(hostHome, 'config', 'workbench.yaml'),
@@ -1514,7 +1508,10 @@ describe('project write authority lease', () => {
   }
 
   /** Register the project in `$hostHome/config/workbench.yaml` and return the launch config. */
-  async function leaseLaunchConfig(hostHome: string, projectId: string): Promise<WorkbenchLaunchConfig> {
+  async function leaseLaunchConfig(
+    hostHome: string,
+    projectId: string,
+  ): Promise<WorkbenchLaunchConfig> {
     const assetsRoot = join(hostHome, 'assets');
     await mkdir(assetsRoot, { recursive: true });
     await writeFile(join(assetsRoot, 'index.html'), '<!doctype html><title>wb</title>');
@@ -1614,8 +1611,8 @@ describe('project write authority lease', () => {
     const assetsRoot = join(hostHome, 'assets');
     await mkdir(assetsRoot, { recursive: true });
     await writeFile(join(assetsRoot, 'index.html'), '<!doctype html><title>wb</title>');
-    const rootA = await leaseProjectRoot(hostHome, 'profile-a');
-    const rootB = await leaseProjectRoot(hostHome, 'profile-b');
+    const _rootA = await leaseProjectRoot(hostHome, 'profile-a');
+    const _rootB = await leaseProjectRoot(hostHome, 'profile-b');
     const configuration = {
       version: 1 as const,
       projects: [
@@ -2075,9 +2072,7 @@ describe('agent-chat launch capability gate', () => {
         'project: agent-project',
       ),
     );
-    const configuration = launchConfiguration([
-      launchProject('agent-project', 'Agent Project'),
-    ]);
+    const configuration = launchConfiguration([launchProject('agent-project', 'Agent Project')]);
     await mkdir(join(hostHome, 'config'), { recursive: true });
     await writeFile(
       join(hostHome, 'config', 'workbench.yaml'),

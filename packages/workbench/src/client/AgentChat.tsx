@@ -1,15 +1,17 @@
 /**
- * Agent Chat view (plan 5.1): a conversation list + message surface.
+ * Agent Chat surface (plan 5.1): a conversation list + message surface.
  *
- * Rendered only when the Host-derived features include `agent-chat`. The view
- * owns the conversation list (newest-updated first) and one active
- * conversation whose messages are loaded from the durable history and streamed
- * live over SSE: assistant text accumulates into ONE message per run (not one
- * per delta), tool-call receipts fold into that run's `<details>`, cancel /
- * retry controls cover queued/running/interrupted/failed runs, artifact chips
- * link succeeded nova_publish / nova_render calls to the publication and
- * review surfaces, and an empty-conversation welcome card set fills the
- * composer with agent-first example prompts.
+ * Rendered as a global right-side drawer on every workspace view (the shell
+ * owns the drawer shell; this component owns the chat). The surface owns the
+ * conversation list (newest-updated first) and one active conversation whose
+ * messages are loaded from the durable history and streamed live over SSE:
+ * assistant text accumulates into ONE message per run (not one per delta),
+ * tool-call receipts fold into that run's `<details>`, cancel / retry
+ * controls cover queued/running/interrupted/failed runs, artifact chips link
+ * succeeded nova_publish / nova_render calls to the publication and review
+ * surfaces, and an empty-conversation welcome card set fills the composer
+ * with agent-first example prompts. An optional view-context strip shows what
+ * the agent knows about the caller's current view.
  */
 
 import type { JSX } from 'solid-js';
@@ -22,10 +24,11 @@ import type {
   AgentChatRunHistoryEntryV1,
   AgentChatRunViewV1,
   AgentChatToolCallReceiptV1,
+  AgentViewContextV1,
 } from '../contracts/index.js';
-import { BrowserAgentChatApiError } from './agent-chat-client.js';
-import type { AgentChatClient } from './agent-chat-client.js';
 import type { HostStatus } from './App.js';
+import type { AgentChatClient } from './agent-chat-client.js';
+import { BrowserAgentChatApiError } from './agent-chat-client.js';
 
 interface ChatMessage {
   readonly id: string;
@@ -45,7 +48,11 @@ interface ArtifactChip {
 }
 
 /** Agent-first onboarding prompts; clicking one fills the composer. */
-const WELCOME_PROMPTS: readonly { readonly glyph: string; readonly prompt: string; readonly hint: string }[] = [
+const WELCOME_PROMPTS: readonly {
+  readonly glyph: string;
+  readonly prompt: string;
+  readonly hint: string;
+}[] = [
   {
     glyph: '✳',
     prompt: '查看项目当前状态并告诉我下一步',
@@ -98,6 +105,13 @@ export interface AgentChatProps {
   readonly hostStatus?: HostStatus;
   /** Open the admin Provider settings; absent → the banner renders text only. */
   readonly onOpenSettings?: () => void;
+  /**
+   * Secret-free snapshot of what the caller is looking at. Passed through to
+   * every `sendMessage` and shown read-only in the context strip.
+   */
+  readonly context?: AgentViewContextV1;
+  /** Whether the panel body starts expanded; the drawer renders open by default. */
+  readonly defaultOpen?: boolean;
 }
 
 function runLabel(run: AgentChatRunViewV1): string {
@@ -113,6 +127,45 @@ const TOOL_ACTION_NAMES: Readonly<Record<string, string>> = {
 };
 function toolActionName(toolName: string): string {
   return TOOL_ACTION_NAMES[toolName] ?? toolName;
+}
+
+/** Chinese labels for known workspace views, shown in the agent context strip. */
+const AGENT_VIEW_LABELS: Readonly<Record<string, string>> = {
+  'project-home': '项目首页',
+  'source-studio': '文稿',
+  'graph-route': '图谱',
+  'scene-map': '场景图',
+  'review-hub': '审校',
+  'scene-canvas': '场景画布',
+  publication: '发布',
+  references: '参考资料',
+  settings: '设置',
+};
+/** Human-readable view label for a view id; unknown ids keep their wire name. */
+export function agentViewLabel(view: string): string {
+  return AGENT_VIEW_LABELS[view] ?? view;
+}
+
+/**
+ * Compact read-only strip of what the agent currently knows about the
+ * caller's context. Only non-empty fields are shown.
+ */
+function AgentContextStrip(props: { readonly context: AgentViewContextV1 }): JSX.Element {
+  const items = (): string[] => {
+    const out: string[] = [];
+    const view = props.context.view;
+    if (view.length > 0) out.push(`当前视图: ${agentViewLabel(view)}`);
+    const projectName = props.context.projectName;
+    if (projectName !== undefined && projectName.length > 0) out.push(`项目: ${projectName}`);
+    const actions = props.context.actions;
+    if (actions !== undefined && actions.length > 0) out.push(`可执行: ${actions.join('、')}`);
+    return out;
+  };
+  return (
+    <p class="agent-context-strip" data-testid="agent-context-strip">
+      {items().join(' · ')}
+    </p>
+  );
 }
 
 function receiptLabel(call: AgentChatToolCallReceiptV1): string {
@@ -137,7 +190,6 @@ function failedRunOf(
     ) ?? null
   );
 }
-
 
 function messageViewOf(message: AgentChatMessageViewV1): ChatMessage {
   return {
@@ -175,7 +227,9 @@ function artifactChipsOf(entry: AgentChatRunHistoryEntryV1): readonly ArtifactCh
 }
 
 export function AgentChat(props: AgentChatProps): JSX.Element {
-  const [conversations, setConversations] = createSignal<readonly AgentChatConversationViewV1[]>([]);
+  const [conversations, setConversations] = createSignal<readonly AgentChatConversationViewV1[]>(
+    [],
+  );
   const [conversation, setConversation] = createSignal<AgentChatConversationViewV1 | null>(null);
   const [messages, setMessages] = createSignal<readonly ChatMessage[]>([]);
   const [runs, setRuns] = createSignal<readonly AgentChatRunHistoryEntryV1[]>([]);
@@ -183,12 +237,13 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
   const [sending, setSending] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [streamingRun, setStreamingRun] = createSignal<string | null>(null);
+  const [open, setOpen] = createSignal(props.defaultOpen ?? true);
   let activeRunId: string | null = null;
   let stopProgress: (() => void) | null = null;
   let loadToken = 0;
-  const [historyState, setHistoryState] = createSignal<
-    'loading' | 'empty' | 'populated' | 'error'
-  >('loading');
+  const [historyState, setHistoryState] = createSignal<'loading' | 'empty' | 'populated' | 'error'>(
+    'loading',
+  );
   const [agentUnavailable, setAgentUnavailable] = createSignal(false);
   const [tourStep, setTourStep] = createSignal(0);
   const [tourDismissed, setTourDismissed] = createSignal(
@@ -384,13 +439,20 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
     ]);
     setDraft('');
     try {
-      const run = await props.client.sendMessage(props.projectId, current.conversationId, message);
+      const run = await props.client.sendMessage(
+        props.projectId,
+        current.conversationId,
+        message,
+        props.context,
+      );
       setMessages((all) =>
         all.map((entry) => (entry.id === optimisticId ? { ...entry, runId: run.runId } : entry)),
       );
       setRuns((all) =>
         all.some((entry) => entry.run.runId === run.runId)
-          ? all.map((entry) => (entry.run.runId === run.runId ? { run, toolCalls: entry.toolCalls } : entry))
+          ? all.map((entry) =>
+              entry.run.runId === run.runId ? { run, toolCalls: entry.toolCalls } : entry,
+            )
           : [...all, { run, toolCalls: [] }],
       );
       activeRunId = run.runId;
@@ -458,365 +520,387 @@ export function AgentChat(props: AgentChatProps): JSX.Element {
           <p class="region-kicker">Agent / Conversation</p>
           <h2>Agent Chat</h2>
         </div>
-        <Show when={conversation() !== null}>
-          <span
-            class="text-xs text-[var(--wb-text-muted)]"
-            data-testid="agent-chat-conversation-id"
-          >
-            {conversation()?.conversationId}
-          </span>
-        </Show>
-      </div>
-      <Show when={showTour()}>
-        <aside
-          class="agent-onboarding-tour"
-          data-testid="agent-onboarding-tour"
-          aria-label="首次使用引导"
-        >
-          <div class="agent-onboarding-step">
-            <span class="agent-onboarding-index" aria-hidden="true">
-              {tourStep() + 1}/{TOUR_STEPS.length}
+        <div class="flex items-center gap-[var(--wb-space-3)]">
+          <Show when={conversation() !== null}>
+            <span
+              class="text-xs text-[var(--wb-text-muted)]"
+              data-testid="agent-chat-conversation-id"
+            >
+              {conversation()?.conversationId}
             </span>
-            <div class="agent-onboarding-copy">
-              <h3 class="agent-onboarding-title">{TOUR_STEPS[tourStep()]?.title}</h3>
-              <p class="agent-onboarding-body">{TOUR_STEPS[tourStep()]?.body}</p>
-            </div>
-          </div>
-          <div class="agent-onboarding-actions">
-            <button
-              class="text-button"
-              type="button"
-              data-testid="agent-tour-skip"
-              onClick={dismissTour}
-            >
-              跳过
-            </button>
-            <button
-              class="text-button"
-              type="button"
-              data-testid="agent-tour-next"
-              onClick={nextTourStep}
-            >
-              下一步
-            </button>
-          </div>
-          <div class="agent-onboarding-dots" aria-hidden="true">
-            <For each={TOUR_STEPS}>
-              {(_, index) => (
-                <span
-                  class="agent-onboarding-dot"
-                  classList={{ 'is-active': index() === tourStep() }}
-                />
-              )}
-            </For>
-          </div>
-        </aside>
-      </Show>
-
-      <Show when={agentUnavailable() || props.hostStatus === 'error'}>
-        <div class="agent-unavailable-banner" role="alert" data-testid="agent-unavailable-banner">
-          <span>{AGENT_UNAVAILABLE_COPY}</span>
-          <Show when={props.onOpenSettings !== undefined}>
-            <button
-              class="text-button"
-              type="button"
-              data-testid="agent-open-settings"
-              onClick={() => props.onOpenSettings?.()}
-            >
-              打开设置
-            </button>
           </Show>
+          <button
+            class="icon-button"
+            type="button"
+            aria-label={open() ? '收起 Agent 面板' : '展开 Agent 面板'}
+            aria-expanded={open()}
+            data-testid="agent-panel-toggle"
+            onClick={() => setOpen((current) => !current)}
+          >
+            <span aria-hidden="true">{open() ? '–' : '✳'}</span>
+          </button>
         </div>
-      </Show>
-
-      <Show when={error() !== null}>
-        <p class="agent-chat-error" role="alert" data-testid="agent-chat-error">
-          {error()}
-        </p>
-      </Show>
-
-      <div class="agent-chat-layout flex items-start gap-[var(--wb-space-3)]">
-        <aside class="agent-conversation-list w-64 shrink-0" aria-label="Conversations">
-          <div class="flex flex-wrap items-center justify-between gap-[var(--wb-space-2)]">
-            <h3>Conversations</h3>
-            <button
-              class="text-button"
-              type="button"
-              data-testid="agent-chat-new-conversation"
-              onClick={() => void createConversation()}
-            >
-              + 新会话
-            </button>
-          </div>
-          <Show
-            when={conversations().length > 0}
-            fallback={<p class="text-xs text-[var(--wb-text-muted)]">暂无会话</p>}
+      </div>
+      <Show when={props.context}>{(ctx) => <AgentContextStrip context={ctx()} />}</Show>
+      <Show when={open()}>
+        <Show when={showTour()}>
+          <aside
+            class="agent-onboarding-tour"
+            data-testid="agent-onboarding-tour"
+            aria-label="首次使用引导"
           >
-            <ul class="agent-conversation-items max-h-[60vh] overflow-y-auto">
-              <For each={conversations()}>
-                {(entry) => (
-                  <li>
-                    <button
-                      class="agent-conversation-item"
-                      classList={{
-                        'is-active': conversation()?.conversationId === entry.conversationId,
-                      }}
-                      type="button"
-                      data-testid={`agent-conversation-${entry.conversationId}`}
-                      onClick={() => void openConversation(entry)}
-                    >
-                      <span class="agent-conversation-title">
-                        {entry.title ?? entry.conversationId}
-                      </span>
-                      <span class="text-xs text-[var(--wb-text-muted)]">
-                        {new Date(entry.updatedAt).toLocaleString()}
-                      </span>
-                    </button>
-                  </li>
-                )}
-              </For>
-            </ul>
-          </Show>
-        </aside>
-
-        <div class="agent-chat-main min-w-0 flex-1">
-          <div class="agent-chat-messages" data-testid="agent-chat-messages">
-            <Show
-              when={messages().length > 0}
-              fallback={
-                <div class="agent-chat-welcome" data-testid="agent-chat-welcome">
-                  <p class="agent-chat-welcome-title">不知道从哪开始？试试这些</p>
-                  <div class="grid gap-[var(--wb-space-2)]">
-                    <For each={WELCOME_PROMPTS}>
-                      {(example, index) => (
-                        <button
-                          class="agent-chat-welcome-card"
-                          type="button"
-                          data-testid={`agent-chat-welcome-card-${index()}`}
-                          onClick={() => setDraft(example.prompt)}
-                        >
-                          <span class="agent-chat-welcome-glyph" aria-hidden="true">
-                            {example.glyph}
-                          </span>
-                          <span class="agent-chat-welcome-text">
-                            <span class="agent-chat-welcome-prompt">{example.prompt}</span>
-                            <span class="agent-chat-welcome-hint">{example.hint}</span>
-                          </span>
-                        </button>
-                      )}
-                    </For>
-                  </div>
-                </div>
-              }
-            >
-              <For each={messages()}>
-                {(message) => (
-                  <Show when={message.role !== 'tool_result'}>
-                    <article class={`agent-message agent-message-${message.role}`}>
-                      <span class="agent-message-role">{message.role}</span>
-                      {message.role === 'assistant' ? (
-                        <div class="agent-message-markdown">
-                          <SolidMarkdown children={message.content} />
-                        </div>
-                      ) : (
-                        <p>{message.content}</p>
-                      )}
-                      <Show
-                        when={
-                          message.role === 'assistant'
-                            ? failedRunOf(runs(), message.runId)
-                            : null
-                        }
-                      >
-                        {(failed) => (
-                          <div
-                            class="agent-run-error-chip"
-                            role="alert"
-                            data-testid={`agent-run-error-chip-${message.runId}`}
-                          >
-                            <span class="agent-run-error-code" data-testid="agent-run-error-inline">
-                              {failed().run.errorCode ?? '运行失败'}
-                            </span>
-                            <button
-                              class="text-button"
-                              type="button"
-                              data-testid={`agent-retry-inline-${message.runId}`}
-                              onClick={() => void retryRun(message.runId)}
-                            >
-                              重试
-                            </button>
-                          </div>
-                        )}
-                      </Show>
-                    </article>
-                  </Show>
-                )}
-              </For>
-            </Show>
-          </div>
-
-          <Show when={runs().length > 0}>
-            <div class="agent-runs" data-testid="agent-chat-runs">
-              <h3>工具调用记录</h3>
-              <ul class="grid gap-[var(--wb-space-2)]">
-                <For each={runs()}>
-                  {(entry) => {
-                    const chips = artifactChipsOf(entry);
-                    return (
-                      <li>
-                        <details
-                          class="agent-run"
-                          data-testid={`agent-run-${entry.run.runId}`}
-                          open={
-                            entry.run.status === 'queued' ||
-                            entry.run.status === 'running' ||
-                            streamingRun() === entry.run.runId
-                          }
-                        >
-                          <summary class="flex flex-wrap items-center justify-between gap-[var(--wb-space-2)]">
-                            <span class="agent-run-label" data-testid="agent-run-status">
-                              {runLabel(entry.run)}
-                            </span>
-                            <span class="flex gap-[var(--wb-space-2)]">
-                              <Show
-                                when={
-                                  entry.run.status === 'queued' || entry.run.status === 'running'
-                                }
-                              >
-                                <button
-                                  class="text-button"
-                                  type="button"
-                                  data-testid={`agent-cancel-${entry.run.runId}`}
-                                  onClick={() => void cancelRun(entry.run.runId)}
-                                >
-                                  Cancel
-                                </button>
-                              </Show>
-                              <Show
-                                when={
-                                  entry.run.status === 'interrupted' || entry.run.status === 'failed'
-                                }
-                              >
-                                <button
-                                  class="text-button"
-                                  type="button"
-                                  data-testid={`agent-retry-${entry.run.runId}`}
-                                  onClick={() => void retryRun(entry.run.runId)}
-                                >
-                                  重试
-                                </button>
-                              </Show>
-                              <Show when={streamingRun() === entry.run.runId}>
-                                <span class="agent-streaming" data-testid="agent-streaming">
-                                  streaming…
-                                </span>
-                              </Show>
-                            </span>
-                          </summary>
-                          <Show when={entry.run.errorCode !== null}>
-                            <p
-                              class="text-xs text-[var(--wb-text-muted)]"
-                              data-testid="agent-run-error"
-                            >
-                              {entry.run.errorCode}
-                            </p>
-                          </Show>
-                          <Show when={entry.toolCalls.length > 0}>
-                            <ul class="agent-tool-calls">
-                              <For each={entry.toolCalls}>
-                                {(call) => (
-                                  <li
-                                    data-testid={`agent-tool-call-${entry.run.runId}-${call.callIndex}`}
-                                  >
-                                    <span class="agent-tool-call-name">{toolActionName(call.toolName)}</span>
-                                    <span class="agent-tool-call-status" data-status={call.status}>
-                                      {receiptLabel(call)}
-                                    </span>
-                                    <span class="text-xs text-[var(--wb-text-muted)]">
-                                      {new Date(call.createdAt).toLocaleTimeString()}
-                                    </span>
-                                    <code class="agent-tool-call-hash">
-                                      {call.sanitizedArgsHash.slice(0, 12)}
-                                    </code>
-                                  </li>
-                                )}
-                              </For>
-                            </ul>
-                          </Show>
-                          <Show when={chips.length > 0}>
-                            <div class="agent-artifact-chips">
-                              <For each={chips}>
-                                {(chip) => (
-                                  <button
-                                    class="agent-artifact-chip"
-                                    type="button"
-                                    title={chip.hint}
-                                    data-testid={`agent-artifact-${chip.key}-${entry.run.runId}`}
-                                    onClick={() => props.onViewChange?.(chip.view)}
-                                  >
-                                    {chip.label}
-                                  </button>
-                                )}
-                              </For>
-                            </div>
-                          </Show>
-                        </details>
-                      </li>
-                    );
-                  }}
-                </For>
-              </ul>
+            <div class="agent-onboarding-step">
+              <span class="agent-onboarding-index" aria-hidden="true">
+                {tourStep() + 1}/{TOUR_STEPS.length}
+              </span>
+              <div class="agent-onboarding-copy">
+                <h3 class="agent-onboarding-title">{TOUR_STEPS[tourStep()]?.title}</h3>
+                <p class="agent-onboarding-body">{TOUR_STEPS[tourStep()]?.body}</p>
+              </div>
             </div>
-          </Show>
-
-          <form
-            class="agent-chat-composer"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void send();
-            }}
-          >
-            <label class="sr-only" for="agent-chat-input">
-              Message the Agent
-            </label>
-            <textarea
-              id="agent-chat-input"
-              rows={3}
-              value={draft()}
-              onInput={(event) => setDraft(event.currentTarget.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
-                  event.preventDefault();
-                  void send();
-                }
-              }}
-              placeholder="描述要运行的写作任务…（Enter 发送，Shift+Enter 换行）"
-              disabled={sending()}
-              data-testid="agent-chat-input"
-            />
-            <div class="flex gap-[var(--wb-space-2)]">
-              <Show when={streamingRun() !== null}>
-                <button
-                  class="text-button"
-                  type="button"
-                  data-testid="agent-chat-cancel"
-                  onClick={() => void cancelCurrent()}
-                >
-                  Cancel
-                </button>
-              </Show>
+            <div class="agent-onboarding-actions">
               <button
                 class="text-button"
-                type="submit"
-                disabled={sending() || draft().trim().length === 0}
-                data-testid="agent-chat-send"
+                type="button"
+                data-testid="agent-tour-skip"
+                onClick={dismissTour}
               >
-                {sending() ? 'Sending…' : 'Send'}
+                跳过
+              </button>
+              <button
+                class="text-button"
+                type="button"
+                data-testid="agent-tour-next"
+                onClick={nextTourStep}
+              >
+                下一步
               </button>
             </div>
-          </form>
+            <div class="agent-onboarding-dots" aria-hidden="true">
+              <For each={TOUR_STEPS}>
+                {(_, index) => (
+                  <span
+                    class="agent-onboarding-dot"
+                    classList={{ 'is-active': index() === tourStep() }}
+                  />
+                )}
+              </For>
+            </div>
+          </aside>
+        </Show>
+
+        <Show when={agentUnavailable() || props.hostStatus === 'error'}>
+          <div class="agent-unavailable-banner" role="alert" data-testid="agent-unavailable-banner">
+            <span>{AGENT_UNAVAILABLE_COPY}</span>
+            <Show when={props.onOpenSettings !== undefined}>
+              <button
+                class="text-button"
+                type="button"
+                data-testid="agent-open-settings"
+                onClick={() => props.onOpenSettings?.()}
+              >
+                打开设置
+              </button>
+            </Show>
+          </div>
+        </Show>
+
+        <Show when={error() !== null}>
+          <p class="agent-chat-error" role="alert" data-testid="agent-chat-error">
+            {error()}
+          </p>
+        </Show>
+
+        <div class="agent-chat-layout flex items-start gap-[var(--wb-space-3)]">
+          <aside class="agent-conversation-list w-64 shrink-0" aria-label="Conversations">
+            <div class="flex flex-wrap items-center justify-between gap-[var(--wb-space-2)]">
+              <h3>Conversations</h3>
+              <button
+                class="text-button"
+                type="button"
+                data-testid="agent-chat-new-conversation"
+                onClick={() => void createConversation()}
+              >
+                + 新会话
+              </button>
+            </div>
+            <Show
+              when={conversations().length > 0}
+              fallback={<p class="text-xs text-[var(--wb-text-muted)]">暂无会话</p>}
+            >
+              <ul class="agent-conversation-items max-h-[60vh] overflow-y-auto">
+                <For each={conversations()}>
+                  {(entry) => (
+                    <li>
+                      <button
+                        class="agent-conversation-item"
+                        classList={{
+                          'is-active': conversation()?.conversationId === entry.conversationId,
+                        }}
+                        type="button"
+                        data-testid={`agent-conversation-${entry.conversationId}`}
+                        onClick={() => void openConversation(entry)}
+                      >
+                        <span class="agent-conversation-title">
+                          {entry.title ?? entry.conversationId}
+                        </span>
+                        <span class="text-xs text-[var(--wb-text-muted)]">
+                          {new Date(entry.updatedAt).toLocaleString()}
+                        </span>
+                      </button>
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </Show>
+          </aside>
+
+          <div class="agent-chat-main min-w-0 flex-1">
+            <div class="agent-chat-messages" data-testid="agent-chat-messages">
+              <Show
+                when={messages().length > 0}
+                fallback={
+                  <div class="agent-chat-welcome" data-testid="agent-chat-welcome">
+                    <p class="agent-chat-welcome-title">不知道从哪开始？试试这些</p>
+                    <div class="grid gap-[var(--wb-space-2)]">
+                      <For each={WELCOME_PROMPTS}>
+                        {(example, index) => (
+                          <button
+                            class="agent-chat-welcome-card"
+                            type="button"
+                            data-testid={`agent-chat-welcome-card-${index()}`}
+                            onClick={() => setDraft(example.prompt)}
+                          >
+                            <span class="agent-chat-welcome-glyph" aria-hidden="true">
+                              {example.glyph}
+                            </span>
+                            <span class="agent-chat-welcome-text">
+                              <span class="agent-chat-welcome-prompt">{example.prompt}</span>
+                              <span class="agent-chat-welcome-hint">{example.hint}</span>
+                            </span>
+                          </button>
+                        )}
+                      </For>
+                    </div>
+                  </div>
+                }
+              >
+                <For each={messages()}>
+                  {(message) => (
+                    <Show when={message.role !== 'tool_result'}>
+                      <article class={`agent-message agent-message-${message.role}`}>
+                        <span class="agent-message-role">{message.role}</span>
+                        {message.role === 'assistant' ? (
+                          <div class="agent-message-markdown">
+                            <SolidMarkdown children={message.content} />
+                          </div>
+                        ) : (
+                          <p>{message.content}</p>
+                        )}
+                        <Show
+                          when={
+                            message.role === 'assistant' ? failedRunOf(runs(), message.runId) : null
+                          }
+                        >
+                          {(failed) => (
+                            <div
+                              class="agent-run-error-chip"
+                              role="alert"
+                              data-testid={`agent-run-error-chip-${message.runId}`}
+                            >
+                              <span
+                                class="agent-run-error-code"
+                                data-testid="agent-run-error-inline"
+                              >
+                                {failed().run.errorCode ?? '运行失败'}
+                              </span>
+                              <button
+                                class="text-button"
+                                type="button"
+                                data-testid={`agent-retry-inline-${message.runId}`}
+                                onClick={() => void retryRun(message.runId)}
+                              >
+                                重试
+                              </button>
+                            </div>
+                          )}
+                        </Show>
+                      </article>
+                    </Show>
+                  )}
+                </For>
+              </Show>
+            </div>
+
+            <Show when={runs().length > 0}>
+              <div class="agent-runs" data-testid="agent-chat-runs">
+                <h3>工具调用记录</h3>
+                <ul class="grid gap-[var(--wb-space-2)]">
+                  <For each={runs()}>
+                    {(entry) => {
+                      const chips = artifactChipsOf(entry);
+                      return (
+                        <li>
+                          <details
+                            class="agent-run"
+                            data-testid={`agent-run-${entry.run.runId}`}
+                            open={
+                              entry.run.status === 'queued' ||
+                              entry.run.status === 'running' ||
+                              streamingRun() === entry.run.runId
+                            }
+                          >
+                            <summary class="flex flex-wrap items-center justify-between gap-[var(--wb-space-2)]">
+                              <span class="agent-run-label" data-testid="agent-run-status">
+                                {runLabel(entry.run)}
+                              </span>
+                              <span class="flex gap-[var(--wb-space-2)]">
+                                <Show
+                                  when={
+                                    entry.run.status === 'queued' || entry.run.status === 'running'
+                                  }
+                                >
+                                  <button
+                                    class="text-button"
+                                    type="button"
+                                    data-testid={`agent-cancel-${entry.run.runId}`}
+                                    onClick={() => void cancelRun(entry.run.runId)}
+                                  >
+                                    Cancel
+                                  </button>
+                                </Show>
+                                <Show
+                                  when={
+                                    entry.run.status === 'interrupted' ||
+                                    entry.run.status === 'failed'
+                                  }
+                                >
+                                  <button
+                                    class="text-button"
+                                    type="button"
+                                    data-testid={`agent-retry-${entry.run.runId}`}
+                                    onClick={() => void retryRun(entry.run.runId)}
+                                  >
+                                    重试
+                                  </button>
+                                </Show>
+                                <Show when={streamingRun() === entry.run.runId}>
+                                  <span class="agent-streaming" data-testid="agent-streaming">
+                                    streaming…
+                                  </span>
+                                </Show>
+                              </span>
+                            </summary>
+                            <Show when={entry.run.errorCode !== null}>
+                              <p
+                                class="text-xs text-[var(--wb-text-muted)]"
+                                data-testid="agent-run-error"
+                              >
+                                {entry.run.errorCode}
+                              </p>
+                            </Show>
+                            <Show when={entry.toolCalls.length > 0}>
+                              <ul class="agent-tool-calls">
+                                <For each={entry.toolCalls}>
+                                  {(call) => (
+                                    <li
+                                      data-testid={`agent-tool-call-${entry.run.runId}-${call.callIndex}`}
+                                    >
+                                      <span class="agent-tool-call-name">
+                                        {toolActionName(call.toolName)}
+                                      </span>
+                                      <span
+                                        class="agent-tool-call-status"
+                                        data-status={call.status}
+                                      >
+                                        {receiptLabel(call)}
+                                      </span>
+                                      <span class="text-xs text-[var(--wb-text-muted)]">
+                                        {new Date(call.createdAt).toLocaleTimeString()}
+                                      </span>
+                                      <code class="agent-tool-call-hash">
+                                        {call.sanitizedArgsHash.slice(0, 12)}
+                                      </code>
+                                    </li>
+                                  )}
+                                </For>
+                              </ul>
+                            </Show>
+                            <Show when={chips.length > 0}>
+                              <div class="agent-artifact-chips">
+                                <For each={chips}>
+                                  {(chip) => (
+                                    <button
+                                      class="agent-artifact-chip"
+                                      type="button"
+                                      title={chip.hint}
+                                      data-testid={`agent-artifact-${chip.key}-${entry.run.runId}`}
+                                      onClick={() => props.onViewChange?.(chip.view)}
+                                    >
+                                      {chip.label}
+                                    </button>
+                                  )}
+                                </For>
+                              </div>
+                            </Show>
+                          </details>
+                        </li>
+                      );
+                    }}
+                  </For>
+                </ul>
+              </div>
+            </Show>
+
+            <form
+              class="agent-chat-composer"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void send();
+              }}
+            >
+              <label class="sr-only" for="agent-chat-input">
+                Message the Agent
+              </label>
+              <textarea
+                id="agent-chat-input"
+                rows={3}
+                value={draft()}
+                onInput={(event) => setDraft(event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+                    event.preventDefault();
+                    void send();
+                  }
+                }}
+                placeholder="描述要运行的写作任务…（Enter 发送，Shift+Enter 换行）"
+                disabled={sending()}
+                data-testid="agent-chat-input"
+              />
+              <div class="flex gap-[var(--wb-space-2)]">
+                <Show when={streamingRun() !== null}>
+                  <button
+                    class="text-button"
+                    type="button"
+                    data-testid="agent-chat-cancel"
+                    onClick={() => void cancelCurrent()}
+                  >
+                    Cancel
+                  </button>
+                </Show>
+                <button
+                  class="text-button"
+                  type="submit"
+                  disabled={sending() || draft().trim().length === 0}
+                  data-testid="agent-chat-send"
+                >
+                  {sending() ? 'Sending…' : 'Send'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
+      </Show>
     </section>
   );
 }

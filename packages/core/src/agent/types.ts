@@ -1,7 +1,7 @@
 // ============================================================================
 // Agent System — Type Definitions
 // ============================================================================
-import type { z } from 'zod';
+import type { z } from 'zod/v3';
 
 /**
  * The role an agent plays in the pipeline.

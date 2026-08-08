@@ -12,7 +12,7 @@
 
 import * as crypto from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { PromoteCandidateInput } from '../src/editorial/index.js';
 import { compilePlannedDiscourseLedger } from '../src/state/discourse-ledger.ts';
 import { compileDiscourseSceneSequence } from '../src/state/discourse-sequence.ts';

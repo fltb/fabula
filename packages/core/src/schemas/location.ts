@@ -2,7 +2,7 @@
 // Novalistically — Location Definition Schema
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 export const locationDefinitionSchema = z
   .object({

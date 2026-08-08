@@ -8,7 +8,7 @@
 // - arcPosition should not regress (e.g., climax → rising)
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type {
   PostRenderInput,
   PreRenderInput,

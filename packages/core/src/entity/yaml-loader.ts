@@ -1,5 +1,5 @@
 import YAML from 'yaml';
-import type { ZodType } from 'zod';
+import type { ZodType } from 'zod/v3';
 import type { ProjectSourceSnapshotV1 } from '../contracts/source.js';
 import { ConfigError } from '../errors.js';
 import { projectConfigSchema } from '../schemas/project.js';

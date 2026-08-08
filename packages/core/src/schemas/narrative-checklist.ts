@@ -2,7 +2,7 @@
 // Narrative Checklist Zod Schemas
 // ============================================================================
 
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 /**
  * Schema for a single narrative checklist item.

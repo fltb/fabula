@@ -20,6 +20,19 @@ fnm exec --using=26.5.0 -- npm start
 
 Provider API keys are stored through the **settings UI**, never in `.env`: environment variables only control launch location, listener, and explicit development mocks. See [docs/reference/workbench-host.md](docs/reference/workbench-host.md) for the run and configuration reference.
 
+## 入口与免密登录
+
+一共四个入口,全部默认绑定 loopback(`127.0.0.1`),局域网暴露需要显式配置:
+
+| 入口 | 命令 | 地址 | 用途 |
+| --- | --- | --- | --- |
+| 生产 Workbench | `npm start` | `http://127.0.0.1:8787` | 产品界面(浏览器) |
+| 开发 Workbench | `npm run start:dev` | `http://127.0.0.1:5173`(Vite,代理到 8787) | HMR 开发流,mock provider |
+| 冒烟监听 | `node packages/workbench/scripts/start.mjs listener` | `http://127.0.0.1:8787/health`、`/status` | 健康检查,无 UI |
+| MCP 服务 | 随 `npm start` 启动 | `/mcp/projects/:projectId`(Streamable HTTP) | 外部 agent(codex CLI / Claude Code 等)接入,`nova_*` 工具按角色过滤 |
+
+认证只有一条免密链:首次运行向导里 owner 密码**留空即免密**(设置了密码才会出现登录表单);此后浏览器通过 loopback 设备信任自动登录,不再询问密码。交互式密码登录表单只在两种情况下出现:owner 设置了密码,或 Host 绑定到了非 loopback(LAN/unix)地址。
+
 ## 内置创作代理
 
 The built-in agent completes the whole creation loop through its tools — view status, edit, validate, submit, render, review, publish — while you chat and inspect the artifacts.
@@ -53,7 +66,7 @@ npx fabula graph --format mermaid
 
 `project init` creates `nova.yaml`, the required initial-state and entity-type files, a narrator, an optional discourse ledger, and a first chapter/event. `validate` must pass before treating a project as render-ready.
 
-Render deliberately — `render` defaults to the `ai-sdk` provider. Configure it explicitly in the invoking shell; the CLI does **not** auto-load `.env`:
+Render deliberately — `render` defaults to the `pi` provider (an OpenAI-compatible endpoint configured through `NOVALISTICALLY_AI_*`). Configure it explicitly in the invoking shell; the CLI does **not** auto-load `.env`:
 
 ```bash
 export NOVALISTICALLY_AI_API_KEY='<provider-key>'
@@ -127,12 +140,15 @@ The workspace requires Node `26.5.0` through `fnm`.
 fnm exec --using=26.5.0 -- npm install
 fnm exec --using=26.5.0 -- npm test
 fnm exec --using=26.5.0 -- npm run typecheck
+fnm exec --using=26.5.0 -- npm run typecheck:dead-code
 fnm exec --using=26.5.0 -- npm run build
+fnm exec --using=26.5.0 -- npm run bundle-check
 fnm exec --using=26.5.0 -- npm run lint
 fnm exec --using=26.5.0 -- npm run bench
 ```
 
-`npm test` runs the unit/component suites plus the Workbench Playwright e2e suite (requires built assets and Playwright browsers: `npx playwright install chromium`). For the Workbench Vite development flow (HMR, mock provider, env-file discovery), run `npm run start:dev`; `start:listener` is only a loopback health/status smoke listener, not the Workbench UI. See [docs/reference/workbench-host.md](docs/reference/workbench-host.md).
+`npm test` runs the unit/component suites plus the Workbench Playwright e2e suite (requires built assets and Playwright browsers: `npx playwright install chromium`). For the Workbench Vite development flow (HMR, mock provider, env-file discovery), run `npm run start:dev`; the production Host is `npm start` (Workbench UI on `http://127.0.0.1:8787`), and `node packages/workbench/scripts/start.mjs listener` is only a loopback health/status smoke listener, not the Workbench UI. See [docs/reference/workbench-host.md](docs/reference/workbench-host.md).
+
 
 Agent guidance and durable memory:
 

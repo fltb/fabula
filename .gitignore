@@ -42,3 +42,4 @@ packages/workbench/.nova/
 # development (projects/, config/workbench.yaml, reference-jobs/, staging/)
 .workbench/
 **/.workbench/
+packages/workbench/test-results/

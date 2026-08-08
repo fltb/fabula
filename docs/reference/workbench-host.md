@@ -14,11 +14,10 @@ fnm exec --using=26.5.0 -- npm run -w @novalistically/workbench dev
 
 ```bash
 WORKBENCH_PORT=8790 WORKBENCH_VITE_PORT=5174 \
-  WORKBENCH_PROJECT_ROOT=/absolute/path/to/project \
   fnm exec --using=26.5.0 -- npm run -w @novalistically/workbench dev
 ```
 
-`WORKBENCH_PROJECT_ROOT` 是兼容旧的单项目启动预填项，不是作者历史或多项目配置来源。未显式指定时，开发脚本会把演示 fixture 复制到临时外部目录；退出时清理该副本。配置验证要求 `nova.yaml.project` 与 configured `projectId` 完全一致。
+项目根是 Host 托管的（`$WORKBENCH_HOME/projects/<id>`），`WORKBENCH_PROJECT_ROOT` 已不再被读取。`dev` 会把托管根固定到仓库内 `./.nova/workbench/`（gitignored；projects/、config/workbench.yaml、reference-jobs/、workbench.sqlite 全部在其下），可用 `WORKBENCH_HOME` 覆盖到其他路径。配置验证要求 `nova.yaml.project` 与 configured `projectId` 完全一致。
 
 生产先构建，再以产品入口 `npm start` 启动（等价于 `npm run -w @novalistically/workbench build:host` + `node packages/workbench/scripts/start.mjs workbench`；打印 URL 并在支持的平台上自动打开浏览器，`WORKBENCH_OPEN_BROWSER=false` 可关闭自动打开）：
 

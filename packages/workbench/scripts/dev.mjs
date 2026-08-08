@@ -6,9 +6,14 @@
 // overrides variables already present in the shell, so shell values always
 // win. Configuration thereafter belongs to the Host configuration service,
 // not to this launcher.
+//
+// Author Mode: all project roots are Host-managed under one home. Dev pins a
+// concrete repo-local home (`.nova/workbench/`, gitignored) so every
+// development run writes to a deterministic path — projects/,
+// config/workbench.yaml, reference-jobs/ and the SQLite — regardless of
+// working directory. Override with WORKBENCH_HOME to point elsewhere.
 import { spawn, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, fstatSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, fstatSync, mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
@@ -33,35 +38,19 @@ if (envFile) {
 
 // Empty values in .env count as unset so a copied template cannot break dev.
 const unset = (value) => value === undefined || value.trim() === '';
-const rawProjectRoot = process.env.WORKBENCH_PROJECT_ROOT;
-const explicitProjectRoot = !unset(rawProjectRoot);
-let copiedDemoRoot;
-const projectRoot = explicitProjectRoot
-  ? resolve(rawProjectRoot)
-  : (() => {
-      const source = resolve(repoRoot, 'fixtures/zhu-fu');
-      const workspace = mkdtempSync(join(tmpdir(), 'fabula-workbench-dev-'));
-      const destination = join(workspace, 'zhu-fu');
-      cpSync(source, destination, { recursive: true });
-      copiedDemoRoot = workspace;
-      return destination;
-    })();
-if (!existsSync(join(projectRoot, 'nova.yaml'))) {
-  console.error(
-    explicitProjectRoot
-      ? `WORKBENCH_PROJECT_ROOT has no nova.yaml: ${projectRoot}`
-      : 'No WORKBENCH_PROJECT_ROOT and the demo fixtures/zhu-fu project is unavailable. Set WORKBENCH_PROJECT_ROOT to a project directory containing nova.yaml.',
-  );
-  process.exit(2);
-}
-if (!explicitProjectRoot) {
+const workbenchHome = unset(process.env.WORKBENCH_HOME)
+  ? resolve(repoRoot, '.nova/workbench')
+  : resolve(process.env.WORKBENCH_HOME);
+mkdirSync(workbenchHome, { recursive: true });
+
+if (!unset(process.env.WORKBENCH_PROJECT_ROOT)) {
   console.warn(
-    `[workbench dev] WORKBENCH_PROJECT_ROOT unset; copied demo project to ${projectRoot}. Set WORKBENCH_PROJECT_ROOT to override.`,
+    '[workbench dev] WORKBENCH_PROJECT_ROOT is ignored: project roots are managed as $WORKBENCH_HOME/projects/<id>. Use the setup wizard or project import instead.',
   );
 }
 
 const databasePath = unset(process.env.WORKBENCH_DATABASE_PATH)
-  ? resolve(process.cwd(), '.nova/workbench.sqlite')
+  ? join(workbenchHome, 'workbench.sqlite')
   : resolve(process.env.WORKBENCH_DATABASE_PATH);
 mkdirSync(dirname(databasePath), { recursive: true });
 
@@ -71,7 +60,7 @@ const env = {
   ...process.env,
   WORKBENCH_MODE: 'workbench',
   WORKBENCH_DEV: 'true',
-  WORKBENCH_PROJECT_ROOT: projectRoot,
+  WORKBENCH_HOME: workbenchHome,
   WORKBENCH_PROVIDER: pick(process.env.WORKBENCH_PROVIDER, 'mock'),
   WORKBENCH_ALLOW_MOCK_PROVIDER: pick(process.env.WORKBENCH_ALLOW_MOCK_PROVIDER, 'true'),
   WORKBENCH_ALLOW_BOOTSTRAP: pick(process.env.WORKBENCH_ALLOW_BOOTSTRAP, 'true'),
@@ -83,6 +72,7 @@ const env = {
   ),
   WORKBENCH_ALLOWED_HOSTS: pick(process.env.WORKBENCH_ALLOWED_HOSTS, '127.0.0.1'),
 };
+console.log(`[workbench dev] managed home: ${workbenchHome}`);
 
 const built = spawnSync('npm', ['run', 'build:host'], { cwd: root, env, stdio: 'inherit' });
 if (built.status !== 0) process.exit(built.status ?? 1);
@@ -115,7 +105,6 @@ let shutdownCode = 0;
 let shutdownDeadline;
 const finish = () => {
   if (shutdownDeadline !== undefined) clearTimeout(shutdownDeadline);
-  if (copiedDemoRoot !== undefined) rmSync(copiedDemoRoot, { recursive: true, force: true });
   process.exit(shutdownCode);
 };
 const close = (code = 0) => {
